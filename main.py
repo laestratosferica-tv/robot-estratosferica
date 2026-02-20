@@ -45,9 +45,19 @@ def get_articles():
         feed = feedparser.parse(url)
 
         for entry in feed.entries:
+            title_lower = entry.title.lower()
+
+            # Excluir deportes tradicionales
+            if any(bad in title_lower for bad in KEYWORDS_EXCLUDE):
+                continue
+
+            # Incluir solo esports / gaming
+            if not any(ok in title_lower for ok in KEYWORDS_INCLUDE):
+                continue
+
             try:
                 published = parser.parse(entry.published)
-            except:
+            except Exception:
                 published = datetime.utcnow()
 
             articles.append({

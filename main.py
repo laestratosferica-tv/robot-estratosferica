@@ -4,19 +4,19 @@ import re
 import requests
 import feedparser
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 from dateutil import parser as dtparser
 from openai import OpenAI
 
 # ============================================================
 # LA ESTRATOSFÉRICA TV – ROBOT EDITORIAL ESPORTS
-# Archivo único: main.py (copiar y pegar tal cual)
+# Archivo único: main.py (REEMPLAZAR TODO por este contenido)
 # ============================================================
 
 # ==============================
 # VARIABLES DE ENTORNO (Railway)
 # ==============================
-# Requeridas (ya las tienes):
+# Requeridas:
 # - BUCKET_NAME
 # - R2_ENDPOINT_URL
 # - AWS_ACCESS_KEY_ID
@@ -24,7 +24,7 @@ from openai import OpenAI
 # - AWS_DEFAULT_REGION (opcional; si no, usa "auto")
 # - OPENAI_API_KEY
 #
-# Recomendadas (agregar en Railway):
+# Recomendadas:
 # - OPENAI_MODEL = gpt-4o-mini
 # - OPENAI_TEMPERATURE = 0.4
 # - MAX_HIGH = 3
@@ -57,11 +57,6 @@ RSS_FEEDS = [
 # ==============================
 # FILTROS DE CONTENIDO
 # ==============================
-# IMPORTANTE:
-# - Este robot está pensado para esports / gaming competitivo.
-# - Si quieres incluir "juegos de moda" (Minecraft/Roblox) aunque no sean esports,
-#   los agregamos igual para que pasen al flujo editorial, y la IA decide prioridad.
-
 KEYWORDS_INCLUDE = [
     # términos esports generales
     "esports", "e-sports", "competitive", "competition", "pro scene", "tournament",
@@ -95,7 +90,7 @@ KEYWORDS_INCLUDE = [
     # baile / ritmo
     "ddr", "dance dance revolution", "just dance",
 
-    # juegos de moda / comunidad (aunque no sean esports estrictos)
+    # juegos de moda / comunidad
     "minecraft", "roblox", "roleplay", "rp",
     "gta", "gta v", "gta 6",
     "fortnite",
@@ -172,7 +167,6 @@ def try_get_excerpt(url: str, timeout: int = 8) -> str:
             return ""
         html = r.text
 
-        # meta description
         m = re.search(
             r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']',
             html,
@@ -189,17 +183,6 @@ def try_get_excerpt(url: str, timeout: int = 8) -> str:
 # OPENAI: CLASIFICACIÓN + 6 POSTS THREADS
 # ==============================
 def openai_editorial(article: dict) -> dict:
-    """
-    Devuelve JSON editorial estricto:
-    {
-      is_esports: bool,
-      priority: "alta"|"media"|"baja",
-      reason: str,
-      threads_posts: [6 strings],
-      topic_tags: [3 strings],
-      source_quality: "alta"|"media"|"baja"
-    }
-    """
     title = article.get("title", "")
     url = article.get("link", "")
     excerpt = article.get("excerpt", "")
@@ -236,14 +219,17 @@ excerpt: "{excerpt}"
 url: "{url}"
 """.strip()
 
-    resp = client.responses.create(
+    resp = client.chat.completions.create(
         model=OPENAI_MODEL,
-        input=prompt,
+        messages=[
+            {"role": "system", "content": "Devuelve SOLO JSON válido. No incluyas texto fuera del JSON."},
+            {"role": "user", "content": prompt},
+        ],
         temperature=OPENAI_TEMPERATURE,
         response_format={"type": "json_object"},
     )
 
-    text = resp.output_text
+    text = resp.choices[0].message.content
 
     try:
         data = json.loads(text)
@@ -295,11 +281,9 @@ def apply_hard_rules(article: dict) -> dict:
 # CONTROL EDITORIAL (LIMITES)
 # ==============================
 def enforce_limits(enriched: list) -> tuple[list, dict]:
-    # Orden por fecha (más reciente primero)
     enriched_sorted = sorted(enriched, key=lambda a: a.get("published", ""), reverse=True)
 
     highs, meds, lows = [], [], []
-
     for a in enriched_sorted:
         p = a["editorial"].get("priority", "baja")
         if p == "alta":
@@ -309,7 +293,6 @@ def enforce_limits(enriched: list) -> tuple[list, dict]:
         else:
             lows.append(a)
 
-    # Si hay demasiadas altas -> bajar excedente a media
     if len(highs) > MAX_HIGH:
         overflow = highs[MAX_HIGH:]
         highs = highs[:MAX_HIGH]
@@ -317,7 +300,6 @@ def enforce_limits(enriched: list) -> tuple[list, dict]:
             a["editorial"]["priority"] = "media"
             meds.append(a)
 
-    # Si hay demasiadas medias -> bajar excedente a baja
     if len(meds) > MAX_MEDIUM:
         overflow = meds[MAX_MEDIUM:]
         meds = meds[:MAX_MEDIUM]
@@ -325,7 +307,6 @@ def enforce_limits(enriched: list) -> tuple[list, dict]:
             a["editorial"]["priority"] = "baja"
             lows.append(a)
 
-    # Si hay demasiadas bajas -> descartar excedente
     discarded = []
     if len(lows) > MAX_LOW:
         discarded = lows[MAX_LOW:]
@@ -364,9 +345,9 @@ def get_articles():
 
             try:
                 published_raw = getattr(entry, "published", "")
-                published_dt = dtparser.parse(published_raw) if published_raw else datetime.utcnow()
+                published_dt = dtparser.parse(published_raw) if published_raw else datetime.now(timezone.utc)
             except Exception:
-                published_dt = datetime.utcnow()
+                published_dt = datetime.now(timezone.utc)
 
             excerpt = try_get_excerpt(link) if link else ""
 
@@ -397,7 +378,7 @@ def save_to_r2(key: str, data) -> None:
 # MAIN
 # ==============================
 if __name__ == "__main__":
-    run_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
     print("Obteniendo artículos (RSS + filtros)...")
     articles = get_articles()
@@ -414,7 +395,7 @@ if __name__ == "__main__":
 
     payload = {
         "run_id": run_id,
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "counts": {
             "scraped_filtered": len(articles),
             "enriched": len(enriched),

@@ -17,8 +17,26 @@ AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
 AWS_DEFAULT_REGION = os.environ.get("AWS_DEFAULT_REGION", "auto")
 
 RSS_FEEDS = [
-    "https://www.espn.com/espn/rss/news",
-    "https://www.marca.com/rss/futbol/primera-division.xml"
+    "https://www.dexerto.com/feed/",
+    "https://esportsinsider.com/feed",
+    "https://www.esports.net/news/feed/",
+    "https://www.pcgamer.com/rss/"
+]
+
+KEYWORDS_INCLUDE = [
+    "esports", "e-sports", "competitive", "tournament",
+    "valorant", "league of legends", "lol", "cs2",
+    "rocket league", "fortnite", "call of duty",
+    "f1 esports", "sim racing", "simracing",
+    "gran turismo", "ea sports fc", "fc 25", "fifa",
+    "ddr", "dance dance revolution"
+]
+
+KEYWORDS_EXCLUDE = [
+    "nba", "nfl", "mlb", "nhl",
+    "olympic", "olympics",
+    "premier league", "la liga",
+    "champions league"
 ]
 
 # ==============================

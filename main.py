@@ -1,3 +1,4 @@
+print("RUNNING MULTIRED v1 (is_gaming + category)")
 import os
 import json
 import re

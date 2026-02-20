@@ -10,7 +10,7 @@ from dateutil import parser as dtparser
 from openai import OpenAI
 
 # ============================================================
-# LA ESTRATOSFÉRICA TV – ROBOT EDITORIAL (ECOSISTEMA GAMER AMPLIO + MULTIRED)
+# LA ESTRATOSFÉRICA TV – ROBOT EDITORIAL (MULTIRED + GAMING AMPLIO)
 # Archivo único: main.py (REEMPLAZAR TODO)
 # ============================================================
 
@@ -33,7 +33,7 @@ MAX_LOW = int(os.environ.get("MAX_LOW", "4"))
 # Para empezar barato:
 MAX_ARTICLES_PER_RUN = int(os.environ.get("MAX_ARTICLES_PER_RUN", "5"))
 
-# Si OpenAI falla, igual guardamos (fallback):
+# Si OpenAI falla, no se cae (usa fallback y guarda):
 ALLOW_FALLBACK_ON_OPENAI_ERROR = os.environ.get("ALLOW_FALLBACK_ON_OPENAI_ERROR", "true").lower() == "true"
 
 # ==============================
@@ -49,8 +49,6 @@ RSS_FEEDS = [
 # ==============================
 # FILTRO DE ENTRADA (AMPLIO)
 # ==============================
-# Este es un filtro inicial para evitar ruido.
-# La IA hace la decisión final con is_gaming + category.
 KEYWORDS_INCLUDE = [
     # general gaming
     "gaming", "video game", "videogame", "game", "gamer", "juego", "juegos",
@@ -89,7 +87,7 @@ KEYWORDS_EXCLUDE = [
     "olympic", "olympics",
 ]
 
-# filtro por URL para evitar secciones no gaming (muy efectivo)
+# Bloqueo fuerte por URL (Dexerto tiene secciones)
 URL_PATH_EXCLUDE = [
     "/tiktok/",
     "/tv-movies/",
@@ -124,24 +122,6 @@ def url_is_bad(url: str) -> bool:
     u = (url or "").lower()
     return any(p in u for p in URL_PATH_EXCLUDE)
 
-def passes_filters(title: str, link: str, excerpt: str) -> bool:
-    t = normalize_text(title)
-    e = normalize_text(excerpt)
-    u = (link or "").lower()
-
-    if url_is_bad(u):
-        return False
-
-    if any(bad in t for bad in KEYWORDS_EXCLUDE):
-        return False
-
-    # incluir si aparece keyword en title o excerpt o url
-    hay_keyword = any(ok in t for ok in KEYWORDS_INCLUDE) or any(ok in e for ok in KEYWORDS_INCLUDE) or any(ok in u for ok in KEYWORDS_INCLUDE)
-    if not hay_keyword:
-        return False
-
-    return True
-
 def try_get_excerpt(url: str, timeout: int = 8) -> str:
     try:
         r = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
@@ -156,6 +136,26 @@ def try_get_excerpt(url: str, timeout: int = 8) -> str:
         return m.group(1).strip() if m else ""
     except Exception:
         return ""
+
+def passes_filters(title: str, link: str, excerpt: str) -> bool:
+    t = normalize_text(title)
+    e = normalize_text(excerpt)
+    u = (link or "").lower()
+
+    # 1) Bloqueo por secciones no gaming
+    if url_is_bad(u):
+        return False
+
+    # 2) Excluir deportes tradicionales
+    if any(bad in t for bad in KEYWORDS_EXCLUDE):
+        return False
+
+    # 3) Incluir si aparece keyword en título o excerpt o url
+    hay_keyword = any(ok in t for ok in KEYWORDS_INCLUDE) or any(ok in e for ok in KEYWORDS_INCLUDE) or any(ok in u for ok in KEYWORDS_INCLUDE)
+    if not hay_keyword:
+        return False
+
+    return True
 
 def save_to_r2(key: str, data) -> None:
     body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -191,7 +191,7 @@ def fallback_editorial(article: dict, reason: str) -> dict:
     ig_slides = [
         f"Titular: {title}",
         f"Contexto: {(excerpt[:140] + '...') if len(excerpt) > 140 else excerpt}",
-        "Por qué importa: señal de mercado/comunidad.",
+        "Por qué importa: señal de comunidad/mercado.",
         "Lectura: producto + distribución + retención.",
         "Decisión: ¿qué priorizas hoy?",
         f"Fuente: {url}"
@@ -238,33 +238,33 @@ Identidad del medio:
 
 Tareas:
 1) Determina si pertenece al ecosistema GAMING (no solo esports).
-2) Clasifica categoría: "competitive" (competitivo/esports), "industry" (negocio/mercado), "culture" (cultura gamer), "other" (no gaming).
-3) Prioridad editorial: "alta", "media", "baja".
+2) Categoría: "competitive" (competitivo/esports), "industry" (negocio/mercado), "culture" (cultura gamer), "other" (no gaming).
+3) Prioridad: "alta", "media", "baja".
 4) Genera piezas MULTIPLATAFORMA:
 
 THREADS:
-- 6 posts, briefing ejecutivo
-- Cada post: por qué importa + lectura estratégica + pregunta final profesional
-- Evita repetir “¿qué opinas?” (usa decisión/riesgo/oportunidad/aprendizaje)
+- 6 posts estilo briefing ejecutivo.
+- Cada post: por qué importa + lectura estratégica + pregunta final profesional.
+- Evita repetir “¿qué opinas?” (usa decisión/riesgo/oportunidad/aprendizaje).
 
 INSTAGRAM:
-- Carrusel de 6 slides (texto corto por slide)
-- 1 caption (100–180 palabras, tono profesional)
+- Carrusel 6 slides (texto corto).
+- 1 caption (100–180 palabras).
 
 TIKTOK/SHORTS:
-- Guion 35–55 segundos (voz), gancho sobrio + contexto + lectura + pregunta final
+- Guion 35–55 segundos (voz): gancho sobrio + contexto + lectura + pregunta final.
 
 YOUTUBE:
-- Outline para análisis semanal (6–8 bullets), "cómo funciona el mundo profesional" del gaming/esports
+- Outline 6–8 bullets para análisis semanal (cómo funciona el mundo profesional).
 
 FACEBOOK:
-- 1 post 80–160 palabras, comunidad + pregunta final
+- 1 post 80–160 palabras con pregunta final.
 
 Reglas:
-- Si NO es gaming: is_gaming=false, category="other", priority="baja"
-- Aun si es "other", llena campos con texto mínimo (para logging), sin inventar hechos.
+- Si NO es gaming: is_gaming=false, category="other", priority="baja".
+- Si es "other", llena campos con texto mínimo (para logging), sin inventar hechos.
 
-Devuelve SOLO JSON válido EXACTO con esta forma:
+Devuelve SOLO JSON válido EXACTO:
 
 {{
   "is_gaming": true,
@@ -301,7 +301,7 @@ url: "{url}"
         text = resp.choices[0].message.content
         data = json.loads(text)
 
-        # asegurar 6 threads
+        # asegurar threads 6
         posts = data.get("threads_posts", [])
         if not isinstance(posts, list):
             posts = []
@@ -309,7 +309,7 @@ url: "{url}"
             posts.append("")
         data["threads_posts"] = posts[:6]
 
-        # asegurar 6 slides IG
+        # asegurar IG slides 6
         slides = data.get("instagram_carousel_slides", [])
         if not isinstance(slides, list):
             slides = []
@@ -317,7 +317,7 @@ url: "{url}"
             slides.append("")
         data["instagram_carousel_slides"] = slides[:6]
 
-        # asegurar outline youtube mínimo 6
+        # asegurar YouTube outline min 6
         outline = data.get("youtube_outline", [])
         if not isinstance(outline, list):
             outline = []
@@ -325,7 +325,7 @@ url: "{url}"
             outline.append("")
         data["youtube_outline"] = outline[:8]
 
-        # asegurar 3 tags
+        # tags 3
         tags = data.get("topic_tags", [])
         if not isinstance(tags, list):
             tags = ["gaming", "ecosistema", "LATAM"]
@@ -333,7 +333,7 @@ url: "{url}"
             tags.append("LATAM")
         data["topic_tags"] = tags[:3]
 
-        # asegurar strings
+        # strings seguros
         if not isinstance(data.get("instagram_caption", ""), str):
             data["instagram_caption"] = ""
         if not isinstance(data.get("tiktok_script", ""), str):
@@ -341,7 +341,17 @@ url: "{url}"
         if not isinstance(data.get("facebook_post", ""), str):
             data["facebook_post"] = ""
 
-        # si el modelo devuelve vacíos, rellenar suavemente (no publicable pero no rompe)
+        # asegurar keys principales
+        if "is_gaming" not in data:
+            data["is_gaming"] = True
+        if "category" not in data:
+            data["category"] = "culture"
+        if "priority" not in data:
+            data["priority"] = "baja"
+        if "reason" not in data:
+            data["reason"] = "Sin razón proporcionada por el modelo."
+
+        # si el modelo devuelve threads vacíos, fallback suave
         if all((p or "").strip() == "" for p in data["threads_posts"]):
             fb = fallback_editorial(article, reason="Relleno automático por posts vacíos del modelo.")
             data["threads_posts"] = fb["threads_posts"]
@@ -389,8 +399,8 @@ def enforce_limits(items: list) -> tuple[list, dict]:
 # ==============================
 def get_articles():
     articles = []
-    for url in RSS_FEEDS:
-        feed = feedparser.parse(url)
+    for feed_url in RSS_FEEDS:
+        feed = feedparser.parse(feed_url)
 
         for entry in feed.entries:
             title = getattr(entry, "title", "")
@@ -398,6 +408,9 @@ def get_articles():
                 continue
 
             link = getattr(entry, "link", "")
+            if link and url_is_bad(link):
+                continue
+
             excerpt = try_get_excerpt(link) if link else ""
 
             if not passes_filters(title, link, excerpt):
@@ -414,7 +427,7 @@ def get_articles():
                 "link": link,
                 "published": published_dt.isoformat(),
                 "excerpt": excerpt,
-                "source_feed": url
+                "source_feed": feed_url
             })
 
     return articles
@@ -448,7 +461,7 @@ if __name__ == "__main__":
         else:
             a["editorial"] = editorial
 
-        # DESCARTAR si NO es gaming (aquí se va TikTok/TV/fanfic)
+        # DESCARTAR si NO es gaming
         if not a["editorial"].get("is_gaming", True) or a["editorial"].get("category") == "other":
             discarded_non_gaming += 1
             continue
@@ -457,7 +470,6 @@ if __name__ == "__main__":
 
         time.sleep(0.25)
 
-        # si se quedó sin cuota, no seguir llamando
         if err == "insufficient_quota":
             break
 

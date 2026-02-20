@@ -10,10 +10,11 @@ from dateutil import parser
 # CONFIGURACIÓN
 # ==============================
 
-BUCKET_NAME = os.environ.get("R2_BUCKET")
-R2_ENDPOINT = os.environ.get("R2_ENDPOINT")
-R2_ACCESS_KEY = os.environ.get("R2_ACCESS_KEY")
-R2_SECRET_KEY = os.environ.get("R2_SECRET_KEY")
+BUCKET_NAME = os.environ["BUCKET_NAME"]
+R2_ENDPOINT = os.environ["R2_ENDPOINT_URL"]
+AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
+AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
+AWS_DEFAULT_REGION = os.environ.get("AWS_DEFAULT_REGION", "auto")
 
 RSS_FEEDS = [
     "https://www.espn.com/espn/rss/news",

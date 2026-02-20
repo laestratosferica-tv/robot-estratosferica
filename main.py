@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import time
 import requests
 import feedparser
 import boto3
@@ -16,21 +17,6 @@ from openai import OpenAI
 # ==============================
 # VARIABLES DE ENTORNO (Railway)
 # ==============================
-# Requeridas:
-# - BUCKET_NAME
-# - R2_ENDPOINT_URL
-# - AWS_ACCESS_KEY_ID
-# - AWS_SECRET_ACCESS_KEY
-# - AWS_DEFAULT_REGION (opcional; si no, usa "auto")
-# - OPENAI_API_KEY
-#
-# Recomendadas:
-# - OPENAI_MODEL = gpt-4o-mini
-# - OPENAI_TEMPERATURE = 0.4
-# - MAX_HIGH = 3
-# - MAX_MEDIUM = 5
-# - MAX_LOW = 4
-
 BUCKET_NAME = os.environ["BUCKET_NAME"]
 R2_ENDPOINT = os.environ["R2_ENDPOINT_URL"]
 AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
@@ -43,6 +29,12 @@ OPENAI_TEMPERATURE = float(os.environ.get("OPENAI_TEMPERATURE", "0.4"))
 MAX_HIGH = int(os.environ.get("MAX_HIGH", "3"))
 MAX_MEDIUM = int(os.environ.get("MAX_MEDIUM", "5"))
 MAX_LOW = int(os.environ.get("MAX_LOW", "4"))
+
+# Para evitar gastar mucho al inicio:
+MAX_ARTICLES_PER_RUN = int(os.environ.get("MAX_ARTICLES_PER_RUN", "8"))
+
+# Si OpenAI falla, ¿seguimos con fallback?
+ALLOW_FALLBACK_ON_OPENAI_ERROR = os.environ.get("ALLOW_FALLBACK_ON_OPENAI_ERROR", "true").lower() == "true"
 
 # ==============================
 # FUENTES RSS
@@ -58,11 +50,9 @@ RSS_FEEDS = [
 # FILTROS DE CONTENIDO
 # ==============================
 KEYWORDS_INCLUDE = [
-    # términos esports generales
     "esports", "e-sports", "competitive", "competition", "pro scene", "tournament",
     "major", "worlds", "lan", "playoffs", "qualifier", "open qualifier", "split",
 
-    # shooters / esports top
     "valorant", "vct",
     "cs2", "counter-strike", "cs:", "csgo",
     "call of duty", "cod", "warzone",
@@ -70,32 +60,24 @@ KEYWORDS_INCLUDE = [
     "apex", "apex legends",
     "rainbow six", "r6", "r6 siege",
 
-    # mobas
     "league of legends", "lol", "lcs", "lec", "lck", "lpl", "msi",
     "dota", "dota 2", "ti", "the international",
 
-    # fighting / sports
     "street fighter", "sf6", "tekken", "mk1", "mortal kombat", "evo",
     "ea sports fc", "fc 24", "fc 25", "fc 26", "fifa",
 
-    # organizers / ligas
     "esl", "blast", "pgl", "riot", "activision", "ubisoft",
 
-    # rosters / mercado
     "roster", "fichaje", "plantilla", "transfer", "traspaso", "trade", "rumor", "signing",
 
-    # simulación / carreras
     "f1 esports", "sim racing", "simracing", "gran turismo", "iracing",
 
-    # baile / ritmo
     "ddr", "dance dance revolution", "just dance",
 
-    # juegos de moda / comunidad
     "minecraft", "roblox", "roleplay", "rp",
     "gta", "gta v", "gta 6",
     "fortnite",
 
-    # otros populares
     "rocket league",
     "pubg",
     "mobile legends", "mlbb",
@@ -109,7 +91,6 @@ KEYWORDS_EXCLUDE = [
     "champions league",
 ]
 
-# Capa 2 – reglas duras (promoción automática a ALTA)
 HARD_PROMOTE_HIGH = [
     "récord", "record", "histórico", "historic",
     "sanción", "suspensión", "ban", "baneo",
@@ -122,7 +103,7 @@ HARD_PROMOTE_HIGH = [
 ]
 
 # ==============================
-# CONEXIÓN R2 (Cloudflare R2 via S3)
+# CONEXIÓN R2
 # ==============================
 s3 = boto3.client(
     "s3",
@@ -133,7 +114,7 @@ s3 = boto3.client(
 )
 
 # ==============================
-# OPENAI CLIENT (usa OPENAI_API_KEY)
+# OPENAI CLIENT
 # ==============================
 client = OpenAI()
 
@@ -145,44 +126,72 @@ def normalize_text(s: str) -> str:
 
 def passes_filters(title: str) -> bool:
     t = normalize_text(title)
-
-    # Excluir deportes tradicionales
     if any(bad in t for bad in KEYWORDS_EXCLUDE):
         return False
-
-    # Incluir solo esports / gaming (según tu lista)
     if not any(ok in t for ok in KEYWORDS_INCLUDE):
         return False
-
     return True
 
 def try_get_excerpt(url: str, timeout: int = 8) -> str:
-    """
-    Intenta obtener un excerpt simple (meta description).
-    Si el sitio bloquea bots o falla, devuelve "".
-    """
     try:
         r = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
         if r.status_code != 200:
             return ""
         html = r.text
-
         m = re.search(
             r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']',
             html,
             re.I
         )
-        if m:
-            return m.group(1).strip()
-
-        return ""
+        return m.group(1).strip() if m else ""
     except Exception:
         return ""
+
+def save_to_r2(key: str, data) -> None:
+    body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+    s3.put_object(
+        Bucket=BUCKET_NAME,
+        Key=key,
+        Body=body,
+        ContentType="application/json"
+    )
+    print("Archivo guardado en R2:", key)
 
 # ==============================
 # OPENAI: CLASIFICACIÓN + 6 POSTS THREADS
 # ==============================
-def openai_editorial(article: dict) -> dict:
+def fallback_editorial(article: dict, reason: str) -> dict:
+    title = article.get("title", "")
+    url = article.get("link", "")
+    excerpt = article.get("excerpt", "")
+
+    base = f"{title}. {excerpt}".strip()
+    if len(base) > 220:
+        base = base[:220].rstrip() + "..."
+
+    posts = [
+        f"{base} ¿Qué impacto crees que puede tener esto en la escena?",
+        f"Contexto rápido: {base} ¿Te parece una decisión acertada?",
+        f"Lectura editorial: {base} ¿Qué detalle te parece más importante?",
+        f"Si esto se confirma, podría cambiar prioridades competitivas. ¿Estás de acuerdo?",
+        f"Más allá del titular, el punto es el efecto en equipos/jugadores. ¿A quién afecta más?",
+        f"Fuente: {url} ¿Qué te gustaría que analicemos a fondo de esta noticia?"
+    ]
+
+    return {
+        "is_esports": True,
+        "priority": "baja",
+        "reason": reason,
+        "threads_posts": posts,
+        "topic_tags": ["gaming", "news", "LATAM"],
+        "source_quality": "media"
+    }
+
+def openai_editorial(article: dict) -> tuple[dict, str]:
+    """
+    Retorna (editorial_json, error_code_str)
+    error_code_str = "" si todo OK.
+    """
     title = article.get("title", "")
     url = article.get("link", "")
     excerpt = article.get("excerpt", "")
@@ -219,62 +228,58 @@ excerpt: "{excerpt}"
 url: "{url}"
 """.strip()
 
-    resp = client.chat.completions.create(
-        model=OPENAI_MODEL,
-        messages=[
-            {"role": "system", "content": "Devuelve SOLO JSON válido. No incluyas texto fuera del JSON."},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=OPENAI_TEMPERATURE,
-        response_format={"type": "json_object"},
-    )
-
-    text = resp.choices[0].message.content
-
     try:
+        resp = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "Devuelve SOLO JSON válido. No incluyas texto fuera del JSON."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=OPENAI_TEMPERATURE,
+            response_format={"type": "json_object"},
+        )
+
+        text = resp.choices[0].message.content
+
         data = json.loads(text)
-    except json.JSONDecodeError:
-        data = {
-            "is_esports": True,
-            "priority": "baja",
-            "reason": "Fallback por JSON inválido del modelo.",
-            "threads_posts": [text[:450], "", "", "", "", ""],
-            "topic_tags": ["gaming", "news", "LATAM"],
-            "source_quality": "media",
-            "_raw": text
-        }
 
-    # Asegura 6 posts siempre
-    posts = data.get("threads_posts", [])
-    if not isinstance(posts, list):
-        posts = []
-    while len(posts) < 6:
-        posts.append("")
-    data["threads_posts"] = posts[:6]
+        # asegurar 6 posts
+        posts = data.get("threads_posts", [])
+        if not isinstance(posts, list):
+            posts = []
+        while len(posts) < 6:
+            posts.append("")
+        data["threads_posts"] = posts[:6]
 
-    # Asegura 3 tags siempre
-    tags = data.get("topic_tags", [])
-    if not isinstance(tags, list):
-        tags = ["gaming", "news", "LATAM"]
-    while len(tags) < 3:
-        tags.append("LATAM")
-    data["topic_tags"] = tags[:3]
+        # asegurar 3 tags
+        tags = data.get("topic_tags", [])
+        if not isinstance(tags, list):
+            tags = ["gaming", "news", "LATAM"]
+        while len(tags) < 3:
+            tags.append("LATAM")
+        data["topic_tags"] = tags[:3]
 
-    return data
+        return data, ""
+
+    except Exception as e:
+        msg = str(e)
+        # detecta cuota/429
+        if "insufficient_quota" in msg or "Error code: 429" in msg:
+            return {}, "insufficient_quota"
+        # otros errores
+        return {}, "openai_error"
 
 # ==============================
 # REGLAS DURAS (PROMOVER A ALTA)
 # ==============================
 def apply_hard_rules(article: dict) -> dict:
     t = normalize_text(article.get("title", "")) + " " + normalize_text(article.get("excerpt", ""))
-
     if any(w in t for w in HARD_PROMOTE_HIGH):
         article["editorial"]["priority"] = "alta"
         article["editorial"]["reason"] = (article["editorial"].get("reason", "") + " (Promovida por regla dura)").strip()
         article["promoted_by_rule"] = True
     else:
         article["promoted_by_rule"] = False
-
     return article
 
 # ==============================
@@ -321,7 +326,6 @@ def enforce_limits(enriched: list) -> tuple[list, dict]:
         "discarded_low": len(discarded),
         "promoted_by_hard_rules": sum(1 for a in enriched_sorted if a.get("promoted_by_rule")),
     }
-
     return final, metrics
 
 # ==============================
@@ -329,15 +333,12 @@ def enforce_limits(enriched: list) -> tuple[list, dict]:
 # ==============================
 def get_articles():
     articles = []
-
     for url in RSS_FEEDS:
         feed = feedparser.parse(url)
-
         for entry in feed.entries:
             title = getattr(entry, "title", "")
             if not title:
                 continue
-
             if not passes_filters(title):
                 continue
 
@@ -362,19 +363,6 @@ def get_articles():
     return articles
 
 # ==============================
-# GUARDAR EN R2
-# ==============================
-def save_to_r2(key: str, data) -> None:
-    body = json.dumps(data, ensure_ascii=False).encode("utf-8")
-    s3.put_object(
-        Bucket=BUCKET_NAME,
-        Key=key,
-        Body=body,
-        ContentType="application/json"
-    )
-    print("Archivo guardado en R2:", key)
-
-# ==============================
 # MAIN
 # ==============================
 if __name__ == "__main__":
@@ -384,12 +372,35 @@ if __name__ == "__main__":
     articles = get_articles()
     print(f"{len(articles)} artículos encontrados (filtrados)")
 
+    # Limitar artículos por corrida para cuidar costo/cuota
+    articles = articles[:MAX_ARTICLES_PER_RUN]
+    print(f"Procesando con IA (máximo {MAX_ARTICLES_PER_RUN})...")
+
     enriched = []
+    openai_errors = {"insufficient_quota": 0, "openai_error": 0}
+
     for a in articles:
-        editorial = openai_editorial(a)
-        a["editorial"] = editorial
+        editorial, err = openai_editorial(a)
+
+        if err:
+            openai_errors[err] = openai_errors.get(err, 0) + 1
+            if ALLOW_FALLBACK_ON_OPENAI_ERROR:
+                a["editorial"] = fallback_editorial(a, reason=f"OpenAI error: {err}")
+            else:
+                # si no permites fallback, saltamos el item
+                continue
+        else:
+            a["editorial"] = editorial
+
         a = apply_hard_rules(a)
         enriched.append(a)
+
+        # pequeña pausa para no golpear rate limits
+        time.sleep(0.2)
+
+        # Si no hay cuota, no tiene sentido seguir llamando OpenAI
+        if err == "insufficient_quota":
+            break
 
     final, metrics = enforce_limits(enriched)
 
@@ -397,8 +408,10 @@ if __name__ == "__main__":
         "run_id": run_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "counts": {
-            "scraped_filtered": len(articles),
+            "scraped_filtered": len(get_articles()),
+            "processed_this_run": len(articles),
             "enriched": len(enriched),
+            "openai_errors": openai_errors,
             **metrics
         },
         "items": final

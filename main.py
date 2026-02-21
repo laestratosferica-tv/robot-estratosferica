@@ -1,4 +1,5 @@
 print("RUNNING MULTIRED v1 (is_gaming + category)")
+
 import os
 import json
 import re
@@ -10,9 +11,116 @@ from datetime import datetime, timezone
 from dateutil import parser as dtparser
 from openai import OpenAI
 
+# ==============================
+# FASTAPI (para OAuth Threads)
+# ==============================
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+app = FastAPI()
+
+
+@app.get("/health")
+def health():
+    return {"ok": True, "service": "robot-estratosferica"}
+
+
+@app.get("/callback/")
+def threads_callback(request: Request):
+    """
+    Threads redirige aquí con: /callback/?code=...
+    Este endpoint cambia code -> short-lived token -> long-lived token
+    """
+    code = request.query_params.get("code")
+    if not code:
+        return JSONResponse(
+            {"error": "No llegó 'code'. Debe ser /callback/?code=..."},
+            status_code=400,
+        )
+
+    THREADS_APP_ID = os.getenv("THREADS_APP_ID")
+    THREADS_APP_SECRET = os.getenv("THREADS_APP_SECRET")
+    THREADS_REDIRECT_URI = os.getenv("THREADS_REDIRECT_URI")
+
+    missing = []
+    if not THREADS_APP_ID:
+        missing.append("THREADS_APP_ID")
+    if not THREADS_APP_SECRET:
+        missing.append("THREADS_APP_SECRET")
+    if not THREADS_REDIRECT_URI:
+        missing.append("THREADS_REDIRECT_URI")
+
+    if missing:
+        return JSONResponse(
+            {"error": "Faltan variables en Railway", "missing": missing},
+            status_code=400,
+        )
+
+    # 1) code -> short-lived token
+    token_url = "https://graph.threads.net/oauth/access_token"
+    data = {
+        "client_id": THREADS_APP_ID,
+        "client_secret": THREADS_APP_SECRET,
+        "grant_type": "authorization_code",
+        "redirect_uri": THREADS_REDIRECT_URI,
+        "code": code,
+    }
+
+    r = requests.post(token_url, data=data, timeout=30)
+    try:
+        short_payload = r.json()
+    except Exception:
+        short_payload = {"raw": r.text}
+
+    if r.status_code != 200 or "access_token" not in short_payload:
+        return JSONResponse(
+            {
+                "step": "code_to_token_failed",
+                "status": r.status_code,
+                "response": short_payload,
+            },
+            status_code=400,
+        )
+
+    short_token = short_payload["access_token"]
+
+    # 2) short-lived -> long-lived (60 días)
+    ll_url = "https://graph.threads.net/access_token"
+    params = {
+        "grant_type": "th_exchange_token",
+        "client_secret": THREADS_APP_SECRET,
+        "access_token": short_token,
+    }
+
+    r2 = requests.get(ll_url, params=params, timeout=30)
+    try:
+        long_payload = r2.json()
+    except Exception:
+        long_payload = {"raw": r2.text}
+
+    if r2.status_code != 200 or "access_token" not in long_payload:
+        return JSONResponse(
+            {
+                "ok": True,
+                "short_lived": short_payload,
+                "long_lived_error": {"status": r2.status_code, "response": long_payload},
+                "next": "Copia short_lived.access_token (dura ~1h) o revisa permisos/config.",
+            }
+        )
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "long_lived": long_payload,
+            "short_lived": short_payload,
+            "next": "Copia long_lived.access_token y guárdalo en Railway como THREADS_USER_ACCESS_TOKEN.",
+        }
+    )
+
+
 # ============================================================
 # LA ESTRATOSFÉRICA TV – ROBOT EDITORIAL (MULTIRED + GAMING AMPLIO)
-# Archivo único: main.py (REEMPLAZAR TODO)
+# Archivo único: main.py
 # ============================================================
 
 # ==============================
@@ -31,11 +139,11 @@ MAX_HIGH = int(os.environ.get("MAX_HIGH", "3"))
 MAX_MEDIUM = int(os.environ.get("MAX_MEDIUM", "5"))
 MAX_LOW = int(os.environ.get("MAX_LOW", "4"))
 
-# Para empezar barato:
 MAX_ARTICLES_PER_RUN = int(os.environ.get("MAX_ARTICLES_PER_RUN", "5"))
 
-# Si OpenAI falla, no se cae (usa fallback y guarda):
-ALLOW_FALLBACK_ON_OPENAI_ERROR = os.environ.get("ALLOW_FALLBACK_ON_OPENAI_ERROR", "true").lower() == "true"
+ALLOW_FALLBACK_ON_OPENAI_ERROR = (
+    os.environ.get("ALLOW_FALLBACK_ON_OPENAI_ERROR", "true").lower() == "true"
+)
 
 # ==============================
 # FUENTES RSS
@@ -51,14 +159,9 @@ RSS_FEEDS = [
 # FILTRO DE ENTRADA (AMPLIO)
 # ==============================
 KEYWORDS_INCLUDE = [
-    # general gaming
     "gaming", "video game", "videogame", "game", "gamer", "juego", "juegos",
     "playstation", "ps5", "ps4", "xbox", "nintendo", "switch", "steam", "pc",
-
-    # publishers / estudios
     "ubisoft", "riot", "blizzard", "ea", "epic", "bandai", "capcom", "square enix", "take-two",
-
-    # esports / competitivo
     "esports", "e-sports", "competitive", "tournament", "major", "worlds", "lan",
     "valorant", "vct",
     "cs2", "counter-strike",
@@ -66,11 +169,7 @@ KEYWORDS_INCLUDE = [
     "dota", "dota 2", "the international",
     "fortnite", "call of duty", "cod", "warzone",
     "overwatch", "apex",
-
-    # mobile / latam
     "free fire", "mlbb", "mobile legends",
-
-    # cultura gamer (lo que pediste)
     "minecraft", "roblox",
     "just dance",
     "mario kart", "mariokart",
@@ -81,14 +180,12 @@ KEYWORDS_INCLUDE = [
     "street fighter", "tekken", "mortal kombat",
 ]
 
-# deportes tradicionales
 KEYWORDS_EXCLUDE = [
     "nba", "nfl", "mlb", "nhl",
     "premier league", "champions league", "la liga",
     "olympic", "olympics",
 ]
 
-# Bloqueo fuerte por URL (Dexerto tiene secciones)
 URL_PATH_EXCLUDE = [
     "/tiktok/",
     "/tv-movies/",
@@ -143,16 +240,17 @@ def passes_filters(title: str, link: str, excerpt: str) -> bool:
     e = normalize_text(excerpt)
     u = (link or "").lower()
 
-    # 1) Bloqueo por secciones no gaming
     if url_is_bad(u):
         return False
 
-    # 2) Excluir deportes tradicionales
     if any(bad in t for bad in KEYWORDS_EXCLUDE):
         return False
 
-    # 3) Incluir si aparece keyword en título o excerpt o url
-    hay_keyword = any(ok in t for ok in KEYWORDS_INCLUDE) or any(ok in e for ok in KEYWORDS_INCLUDE) or any(ok in u for ok in KEYWORDS_INCLUDE)
+    hay_keyword = (
+        any(ok in t for ok in KEYWORDS_INCLUDE)
+        or any(ok in e for ok in KEYWORDS_INCLUDE)
+        or any(ok in u for ok in KEYWORDS_INCLUDE)
+    )
     if not hay_keyword:
         return False
 
@@ -169,7 +267,7 @@ def save_to_r2(key: str, data) -> None:
     print("Archivo guardado en R2:", key)
 
 # ==============================
-# FALLBACK EDITORIAL (si OpenAI falla)
+# FALLBACK EDITORIAL
 # ==============================
 def fallback_editorial(article: dict, reason: str) -> dict:
     title = (article.get("title", "") or "").strip()
@@ -221,9 +319,9 @@ def fallback_editorial(article: dict, reason: str) -> dict:
     }
 
 # ==============================
-# OPENAI: MULTIPLATAFORMA EN 1 SOLA LLAMADA
+# OPENAI: MULTIPLATAFORMA
 # ==============================
-def openai_editorial(article: dict) -> tuple[dict, str]:
+def openai_editorial(article: dict):
     title = article.get("title", "")
     url = article.get("link", "")
     excerpt = article.get("excerpt", "")
@@ -245,42 +343,21 @@ Tareas:
 
 THREADS:
 - 6 posts estilo briefing ejecutivo.
-- Cada post: por qué importa + lectura estratégica + pregunta final profesional.
-- Evita repetir “¿qué opinas?” (usa decisión/riesgo/oportunidad/aprendizaje).
 
 INSTAGRAM:
-- Carrusel 6 slides (texto corto).
+- Carrusel 6 slides.
 - 1 caption (100–180 palabras).
 
 TIKTOK/SHORTS:
-- Guion 35–55 segundos (voz): gancho sobrio + contexto + lectura + pregunta final.
+- Guion 35–55 segundos.
 
 YOUTUBE:
-- Outline 6–8 bullets para análisis semanal (cómo funciona el mundo profesional).
+- Outline 6–8 bullets.
 
 FACEBOOK:
-- 1 post 80–160 palabras con pregunta final.
+- 1 post 80–160 palabras.
 
-Reglas:
-- Si NO es gaming: is_gaming=false, category="other", priority="baja".
-- Si es "other", llena campos con texto mínimo (para logging), sin inventar hechos.
-
-Devuelve SOLO JSON válido EXACTO:
-
-{{
-  "is_gaming": true,
-  "category": "competitive" | "industry" | "culture" | "other",
-  "priority": "alta" | "media" | "baja",
-  "reason": "explicación ejecutiva y breve",
-  "threads_posts": ["p1","p2","p3","p4","p5","p6"],
-  "instagram_carousel_slides": ["s1","s2","s3","s4","s5","s6"],
-  "instagram_caption": "string",
-  "tiktok_script": "string",
-  "youtube_outline": ["b1","b2","b3","b4","b5","b6"],
-  "facebook_post": "string",
-  "topic_tags": ["t1","t2","t3"],
-  "source_quality": "alta" | "media" | "baja"
-}}
+Devuelve SOLO JSON válido EXACTO con las llaves definidas.
 
 Noticia:
 title: "{title}"
@@ -302,7 +379,6 @@ url: "{url}"
         text = resp.choices[0].message.content
         data = json.loads(text)
 
-        # asegurar threads 6
         posts = data.get("threads_posts", [])
         if not isinstance(posts, list):
             posts = []
@@ -310,7 +386,6 @@ url: "{url}"
             posts.append("")
         data["threads_posts"] = posts[:6]
 
-        # asegurar IG slides 6
         slides = data.get("instagram_carousel_slides", [])
         if not isinstance(slides, list):
             slides = []
@@ -318,7 +393,6 @@ url: "{url}"
             slides.append("")
         data["instagram_carousel_slides"] = slides[:6]
 
-        # asegurar YouTube outline min 6
         outline = data.get("youtube_outline", [])
         if not isinstance(outline, list):
             outline = []
@@ -326,7 +400,6 @@ url: "{url}"
             outline.append("")
         data["youtube_outline"] = outline[:8]
 
-        # tags 3
         tags = data.get("topic_tags", [])
         if not isinstance(tags, list):
             tags = ["gaming", "ecosistema", "LATAM"]
@@ -334,7 +407,6 @@ url: "{url}"
             tags.append("LATAM")
         data["topic_tags"] = tags[:3]
 
-        # strings seguros
         if not isinstance(data.get("instagram_caption", ""), str):
             data["instagram_caption"] = ""
         if not isinstance(data.get("tiktok_script", ""), str):
@@ -342,7 +414,6 @@ url: "{url}"
         if not isinstance(data.get("facebook_post", ""), str):
             data["facebook_post"] = ""
 
-        # asegurar keys principales
         if "is_gaming" not in data:
             data["is_gaming"] = True
         if "category" not in data:
@@ -352,7 +423,6 @@ url: "{url}"
         if "reason" not in data:
             data["reason"] = "Sin razón proporcionada por el modelo."
 
-        # si el modelo devuelve threads vacíos, fallback suave
         if all((p or "").strip() == "" for p in data["threads_posts"]):
             fb = fallback_editorial(article, reason="Relleno automático por posts vacíos del modelo.")
             data["threads_posts"] = fb["threads_posts"]
@@ -368,8 +438,7 @@ url: "{url}"
 # ==============================
 # CONTROL EDITORIAL (LIMITES)
 # ==============================
-def enforce_limits(items: list) -> tuple[list, dict]:
-    # Orden por fecha (más reciente primero)
+def enforce_limits(items: list):
     items_sorted = sorted(items, key=lambda a: a.get("published", ""), reverse=True)
 
     highs, meds, lows = [], [], []
@@ -433,10 +502,11 @@ def get_articles():
 
     return articles
 
+
 # ==============================
-# MAIN
+# EJECUCIÓN DEL ROBOT (solo cuando lo corras como script)
 # ==============================
-if __name__ == "__main__":
+def run_robot_once():
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
     print("Obteniendo artículos (RSS + filtros)...")
@@ -462,13 +532,11 @@ if __name__ == "__main__":
         else:
             a["editorial"] = editorial
 
-        # DESCARTAR si NO es gaming
         if not a["editorial"].get("is_gaming", True) or a["editorial"].get("category") == "other":
             discarded_non_gaming += 1
             continue
 
         enriched.append(a)
-
         time.sleep(0.25)
 
         if err == "insufficient_quota":
@@ -492,3 +560,9 @@ if __name__ == "__main__":
 
     key = f"editorial_run_{run_id}.json"
     save_to_r2(key, payload)
+
+
+if __name__ == "__main__":
+    # Esto SOLO se ejecuta si corres: python main.py
+    # NO se ejecuta cuando Railway usa uvicorn.
+    run_robot_once()

@@ -781,7 +781,8 @@ def run_robot_once():
             break
 
     final, metrics = enforce_limits(enriched)
-
+    print("FINAL ITEMS:", len(final))
+    
     # ==============================
     # AUTO-POST (Threads): 1 post por corrida
     # ==============================

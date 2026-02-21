@@ -1,0 +1,41 @@
+name: Robot Editorial Scheduler
+
+on:
+  schedule:
+    # 9:00 AM UTC
+    - cron: "0 9 * * *"
+    # 3:00 PM UTC
+    - cron: "0 15 * * *"
+    # 9:00 PM UTC
+    - cron: "0 21 * * *"
+  workflow_dispatch:
+
+jobs:
+  run-robot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run robot
+        env:
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          THREADS_USER_ACCESS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+        run: |
+          python main.py

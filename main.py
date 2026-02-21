@@ -15,7 +15,7 @@ from openai import OpenAI
 # FASTAPI (para OAuth Threads)
 # ==============================
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 app = FastAPI()
 
@@ -23,6 +23,41 @@ app = FastAPI()
 @app.get("/health")
 def health():
     return {"ok": True, "service": "robot-estratosferica"}
+
+
+# ==============================
+# INICIO OAUTH (NUEVO)
+# ==============================
+@app.get("/login")
+def threads_login():
+    """
+    Inicia el OAuth de Threads. Abre:
+    /login  -> redirige a threads.net/oauth/authorize
+    """
+    THREADS_APP_ID = os.getenv("THREADS_APP_ID")
+    THREADS_REDIRECT_URI = os.getenv("THREADS_REDIRECT_URI")
+
+    missing = []
+    if not THREADS_APP_ID:
+        missing.append("THREADS_APP_ID")
+    if not THREADS_REDIRECT_URI:
+        missing.append("THREADS_REDIRECT_URI")
+
+    if missing:
+        return JSONResponse(
+            {"error": "Faltan variables en Railway", "missing": missing},
+            status_code=400,
+        )
+
+    # Importante: redirect_uri debe coincidir EXACTAMENTE con el configurado en Meta
+    auth_url = (
+        "https://www.threads.net/oauth/authorize"
+        f"?client_id={THREADS_APP_ID}"
+        f"&redirect_uri={THREADS_REDIRECT_URI}"
+        "&response_type=code"
+        "&scope=threads_basic"
+    )
+    return RedirectResponse(auth_url)
 
 
 @app.get("/callback/")

@@ -796,6 +796,7 @@ def run_robot_once():
             text = build_threads_text(item)
             print("Auto-post Threads: publicando 1 post...")
             res = threads_publish_text(text)
+            print("Threads publish raw response:", res)
             threads_publish_result = res
 
             # marca como publicado si salió ok (y tiene link)

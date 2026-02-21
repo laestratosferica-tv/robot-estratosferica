@@ -20,12 +20,17 @@ from fastapi.responses import JSONResponse, RedirectResponse
 app = FastAPI()
 
 # ==============================
-# THREADS: POST DE PRUEBA (NUEVO)
+# THREADS: CONFIG
 # ==============================
-# Si no defines THREADS_USER_ID en Railway, usa este por defecto:
 THREADS_USER_ID = os.getenv("THREADS_USER_ID", "25864040949913281")
+THREADS_STATE_KEY = os.getenv("THREADS_STATE_KEY", "threads_state.json")
+THREADS_AUTO_POST = os.getenv("THREADS_AUTO_POST", "true").lower() == "true"
+THREADS_AUTO_POST_LIMIT = int(os.getenv("THREADS_AUTO_POST_LIMIT", "1"))
+THREADS_DRY_RUN = os.getenv("THREADS_DRY_RUN", "false").lower() == "true"
 
-
+# ==============================
+# THREADS: POST DE PRUEBA
+# ==============================
 @app.get("/post_test")
 def post_test():
     """
@@ -88,7 +93,7 @@ def health():
 
 
 # ==============================
-# INICIO OAUTH (NUEVO)
+# INICIO OAUTH (Threads)
 # ==============================
 @app.get("/login")
 def threads_login():
@@ -111,7 +116,6 @@ def threads_login():
             status_code=400,
         )
 
-    # Importante: redirect_uri debe coincidir EXACTAMENTE con el configurado en Meta
     auth_url = (
         "https://www.threads.net/oauth/authorize"
         f"?client_id={THREADS_APP_ID}"
@@ -216,12 +220,11 @@ def threads_callback(request: Request):
 
 
 # ============================================================
-# LA ESTRATOSFÉRICA TV – ROBOT EDITORIAL (MULTIRED + GAMING AMPLIO)
-# Archivo único: main.py
+# ROBOT EDITORIAL
 # ============================================================
 
 # ==============================
-# VARIABLES DE ENTORNO (Railway)
+# VARIABLES DE ENTORNO (Railway/GitHub Actions)
 # ==============================
 BUCKET_NAME = os.environ["BUCKET_NAME"]
 R2_ENDPOINT = os.environ["R2_ENDPOINT_URL"]
@@ -362,6 +365,145 @@ def save_to_r2(key: str, data) -> None:
         ContentType="application/json"
     )
     print("Archivo guardado en R2:", key)
+
+def load_from_r2(key: str):
+    try:
+        obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+        raw = obj["Body"].read().decode("utf-8")
+        return json.loads(raw)
+    except Exception:
+        return None
+
+# ==============================
+# THREADS: STATE (para no repetir links)
+# ==============================
+def load_threads_state() -> dict:
+    state = load_from_r2(THREADS_STATE_KEY)
+    if not isinstance(state, dict):
+        state = {}
+    posted = state.get("posted_links", [])
+    if not isinstance(posted, list):
+        posted = []
+    # mantén máximo 200 para no crecer infinito
+    state["posted_links"] = posted[-200:]
+    return state
+
+def save_threads_state(state: dict) -> None:
+    save_to_r2(THREADS_STATE_KEY, state)
+
+# ==============================
+# THREADS: PUBLICAR
+# ==============================
+def threads_publish_text(text: str) -> dict:
+    token = os.getenv("THREADS_USER_ACCESS_TOKEN")
+    if not token:
+        return {"ok": False, "error": "missing_THREADS_USER_ACCESS_TOKEN"}
+
+    # Protección: Threads tiene límite de texto (varía), recortamos conservador
+    text = (text or "").strip()
+    if len(text) > 480:
+        text = text[:477].rstrip() + "..."
+
+    if THREADS_DRY_RUN:
+        return {"ok": True, "dry_run": True, "text": text}
+
+    # 1) Crear contenedor
+    create_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads"
+    create_res = requests.post(
+        create_url,
+        data={
+            "media_type": "TEXT",
+            "text": text,
+            "access_token": token,
+        },
+        timeout=30,
+    )
+    try:
+        create_data = create_res.json()
+    except Exception:
+        create_data = {"raw": create_res.text}
+
+    if create_res.status_code != 200 or "id" not in create_data:
+        return {
+            "ok": False,
+            "step": "create_container_failed",
+            "status": create_res.status_code,
+            "response": create_data,
+        }
+
+    creation_id = create_data["id"]
+
+    # 2) Publicar
+    publish_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads_publish"
+    publish_res = requests.post(
+        publish_url,
+        data={"creation_id": creation_id, "access_token": token},
+        timeout=30,
+    )
+    try:
+        publish_data = publish_res.json()
+    except Exception:
+        publish_data = {"raw": publish_res.text}
+
+    return {
+        "ok": True,
+        "container": create_data,
+        "publish": publish_data,
+        "text": text,
+    }
+
+def build_threads_text(item: dict) -> str:
+    """
+    Toma 1 item final y genera el texto a publicar:
+    - usa threads_posts[0] si existe
+    - agrega la fuente (link)
+    """
+    title = (item.get("title") or "").strip()
+    link = (item.get("link") or "").strip()
+    editorial = item.get("editorial") or {}
+    posts = editorial.get("threads_posts") or []
+    first = ""
+    if isinstance(posts, list) and len(posts) > 0:
+        first = (posts[0] or "").strip()
+
+    if not first:
+        first = title
+
+    if link:
+        # agrega fuente al final
+        text = f"{first}\n\nFuente: {link}".strip()
+    else:
+        text = first
+
+    return text
+
+def pick_best_item_to_post(final_items: list, posted_links: set):
+    """
+    Elige el mejor item:
+    - prioridad alta > media > baja
+    - más reciente
+    - que NO esté ya publicado
+    """
+    def priority_rank(p: str) -> int:
+        if p == "alta":
+            return 3
+        if p == "media":
+            return 2
+        return 1
+
+    candidates = []
+    for it in final_items:
+        link = (it.get("link") or "").strip()
+        if link and link in posted_links:
+            continue
+        editorial = it.get("editorial") or {}
+        p = editorial.get("priority", "baja")
+        pub = it.get("published", "")
+        candidates.append((priority_rank(p), pub, it))
+
+    # orden: rank desc, published desc
+    candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return candidates[0][2] if candidates else None
 
 # ==============================
 # FALLBACK EDITORIAL
@@ -599,9 +741,8 @@ def get_articles():
 
     return articles
 
-
 # ==============================
-# EJECUCIÓN DEL ROBOT (solo cuando lo corras como script)
+# EJECUCIÓN DEL ROBOT
 # ==============================
 def run_robot_once():
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -641,6 +782,34 @@ def run_robot_once():
 
     final, metrics = enforce_limits(enriched)
 
+    # ==============================
+    # AUTO-POST (Threads): 1 post por corrida
+    # ==============================
+    threads_publish_result = None
+    if THREADS_AUTO_POST and final and THREADS_AUTO_POST_LIMIT > 0:
+        state = load_threads_state()
+        posted_links = set(state.get("posted_links", []))
+
+        item = pick_best_item_to_post(final, posted_links)
+        if item:
+            text = build_threads_text(item)
+            print("Auto-post Threads: publicando 1 post...")
+            res = threads_publish_text(text)
+            threads_publish_result = res
+
+            # marca como publicado si salió ok (y tiene link)
+            if res.get("ok") and (item.get("link") or "").strip():
+                posted_links.add(item["link"].strip())
+                state["posted_links"] = list(posted_links)[-200:]
+                state["last_posted_at"] = datetime.now(timezone.utc).isoformat()
+                state["last_posted_link"] = item["link"].strip()
+                save_threads_state(state)
+                print("Auto-post Threads: OK ✅")
+            else:
+                print("Auto-post Threads: NO OK ⚠️", res)
+        else:
+            print("Auto-post Threads: no hay item nuevo (evitando repetidos).")
+
     payload = {
         "run_id": run_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -652,12 +821,17 @@ def run_robot_once():
             "openai_errors": openai_errors,
             **metrics
         },
+        "threads_auto_post": {
+            "enabled": THREADS_AUTO_POST,
+            "limit": THREADS_AUTO_POST_LIMIT,
+            "dry_run": THREADS_DRY_RUN,
+            "result": threads_publish_result,
+        },
         "items": final
     }
 
     key = f"editorial_run_{run_id}.json"
     save_to_r2(key, payload)
-
 
 if __name__ == "__main__":
     # Esto SOLO se ejecuta si corres: python main.py

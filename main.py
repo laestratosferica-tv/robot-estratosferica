@@ -22,11 +22,17 @@ app = FastAPI()
 # ==============================
 # THREADS: CONFIG
 # ==============================
+# Si no defines THREADS_USER_ID, usa default:
 THREADS_USER_ID = os.getenv("THREADS_USER_ID", "25864040949913281")
+
+# Estado para evitar repetidos (guardado en R2)
 THREADS_STATE_KEY = os.getenv("THREADS_STATE_KEY", "threads_state.json")
+
+# Auto post settings
 THREADS_AUTO_POST = os.getenv("THREADS_AUTO_POST", "true").lower() == "true"
 THREADS_AUTO_POST_LIMIT = int(os.getenv("THREADS_AUTO_POST_LIMIT", "1"))
 THREADS_DRY_RUN = os.getenv("THREADS_DRY_RUN", "false").lower() == "true"
+
 
 # ==============================
 # THREADS: POST DE PRUEBA
@@ -34,8 +40,8 @@ THREADS_DRY_RUN = os.getenv("THREADS_DRY_RUN", "false").lower() == "true"
 @app.get("/post_test")
 def post_test():
     """
-    Publica un post de prueba en Threads usando el long-lived token guardado en Railway.
-    Requiere variable:
+    Publica un post de prueba en Threads usando el long-lived token.
+    Requiere:
       - THREADS_USER_ACCESS_TOKEN
     Opcional:
       - THREADS_USER_ID (si no existe, usa el default)
@@ -44,7 +50,7 @@ def post_test():
     if not token:
         raise HTTPException(
             status_code=500,
-            detail="Falta THREADS_USER_ACCESS_TOKEN en Railway (Variables).",
+            detail="Falta THREADS_USER_ACCESS_TOKEN en Variables.",
         )
 
     # 1) Crear contenedor del post (TEXT)
@@ -93,7 +99,7 @@ def health():
 
 
 # ==============================
-# INICIO OAUTH (Threads)
+# INICIO OAUTH
 # ==============================
 @app.get("/login")
 def threads_login():
@@ -112,10 +118,11 @@ def threads_login():
 
     if missing:
         return JSONResponse(
-            {"error": "Faltan variables en Railway", "missing": missing},
+            {"error": "Faltan variables", "missing": missing},
             status_code=400,
         )
 
+    # redirect_uri debe coincidir EXACTAMENTE con el configurado en Meta
     auth_url = (
         "https://www.threads.net/oauth/authorize"
         f"?client_id={THREADS_APP_ID}"
@@ -153,7 +160,7 @@ def threads_callback(request: Request):
 
     if missing:
         return JSONResponse(
-            {"error": "Faltan variables en Railway", "missing": missing},
+            {"error": "Faltan variables", "missing": missing},
             status_code=400,
         )
 
@@ -214,17 +221,18 @@ def threads_callback(request: Request):
             "ok": True,
             "long_lived": long_payload,
             "short_lived": short_payload,
-            "next": "Copia long_lived.access_token y guárdalo en Railway como THREADS_USER_ACCESS_TOKEN.",
+            "next": "Copia long_lived.access_token y guárdalo como THREADS_USER_ACCESS_TOKEN.",
         }
     )
 
 
 # ============================================================
-# ROBOT EDITORIAL
+# LA ESTRATOSFÉRICA TV – ROBOT EDITORIAL (MULTIRED + GAMING AMPLIO)
+# Archivo único: main.py
 # ============================================================
 
 # ==============================
-# VARIABLES DE ENTORNO (Railway/GitHub Actions)
+# VARIABLES DE ENTORNO
 # ==============================
 BUCKET_NAME = os.environ["BUCKET_NAME"]
 R2_ENDPOINT = os.environ["R2_ENDPOINT_URL"]
@@ -256,7 +264,7 @@ RSS_FEEDS = [
 ]
 
 # ==============================
-# FILTRO DE ENTRADA (AMPLIO)
+# FILTRO DE ENTRADA (AMPLIO)  (NO TOCADO)
 # ==============================
 KEYWORDS_INCLUDE = [
     "gaming", "video game", "videogame", "game", "gamer", "juego", "juegos",
@@ -366,144 +374,6 @@ def save_to_r2(key: str, data) -> None:
     )
     print("Archivo guardado en R2:", key)
 
-def load_from_r2(key: str):
-    try:
-        obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
-        raw = obj["Body"].read().decode("utf-8")
-        return json.loads(raw)
-    except Exception:
-        return None
-
-# ==============================
-# THREADS: STATE (para no repetir links)
-# ==============================
-def load_threads_state() -> dict:
-    state = load_from_r2(THREADS_STATE_KEY)
-    if not isinstance(state, dict):
-        state = {}
-    posted = state.get("posted_links", [])
-    if not isinstance(posted, list):
-        posted = []
-    # mantén máximo 200 para no crecer infinito
-    state["posted_links"] = posted[-200:]
-    return state
-
-def save_threads_state(state: dict) -> None:
-    save_to_r2(THREADS_STATE_KEY, state)
-
-# ==============================
-# THREADS: PUBLICAR
-# ==============================
-def threads_publish_text(text: str) -> dict:
-    token = os.getenv("THREADS_USER_ACCESS_TOKEN")
-    if not token:
-        return {"ok": False, "error": "missing_THREADS_USER_ACCESS_TOKEN"}
-
-    # Protección: Threads tiene límite de texto (varía), recortamos conservador
-    text = (text or "").strip()
-    if len(text) > 480:
-        text = text[:477].rstrip() + "..."
-
-    if THREADS_DRY_RUN:
-        return {"ok": True, "dry_run": True, "text": text}
-
-    # 1) Crear contenedor
-    create_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads"
-    create_res = requests.post(
-        create_url,
-        data={
-            "media_type": "TEXT",
-            "text": text,
-            "access_token": token,
-        },
-        timeout=30,
-    )
-    try:
-        create_data = create_res.json()
-    except Exception:
-        create_data = {"raw": create_res.text}
-
-    if create_res.status_code != 200 or "id" not in create_data:
-        return {
-            "ok": False,
-            "step": "create_container_failed",
-            "status": create_res.status_code,
-            "response": create_data,
-        }
-
-    creation_id = create_data["id"]
-
-    # 2) Publicar
-    publish_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads_publish"
-    publish_res = requests.post(
-        publish_url,
-        data={"creation_id": creation_id, "access_token": token},
-        timeout=30,
-    )
-    try:
-        publish_data = publish_res.json()
-    except Exception:
-        publish_data = {"raw": publish_res.text}
-
-    return {
-        "ok": True,
-        "container": create_data,
-        "publish": publish_data,
-        "text": text,
-    }
-
-def build_threads_text(item: dict) -> str:
-    """
-    Toma 1 item final y genera el texto a publicar:
-    - usa threads_posts[0] si existe
-    - agrega la fuente (link)
-    """
-    title = (item.get("title") or "").strip()
-    link = (item.get("link") or "").strip()
-    editorial = item.get("editorial") or {}
-    posts = editorial.get("threads_posts") or []
-    first = ""
-    if isinstance(posts, list) and len(posts) > 0:
-        first = (posts[0] or "").strip()
-
-    if not first:
-        first = title
-
-    if link:
-        # agrega fuente al final
-        text = f"{first}\n\nFuente: {link}".strip()
-    else:
-        text = first
-
-    return text
-
-def pick_best_item_to_post(final_items: list, posted_links: set):
-    """
-    Elige el mejor item:
-    - prioridad alta > media > baja
-    - más reciente
-    - que NO esté ya publicado
-    """
-    def priority_rank(p: str) -> int:
-        if p == "alta":
-            return 3
-        if p == "media":
-            return 2
-        return 1
-
-    candidates = []
-    for it in final_items:
-        link = (it.get("link") or "").strip()
-        if link and link in posted_links:
-            continue
-        editorial = it.get("editorial") or {}
-        p = editorial.get("priority", "baja")
-        pub = it.get("published", "")
-        candidates.append((priority_rank(p), pub, it))
-
-    # orden: rank desc, published desc
-    candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
-    return candidates[0][2] if candidates else None
 
 # ==============================
 # FALLBACK EDITORIAL
@@ -556,6 +426,7 @@ def fallback_editorial(article: dict, reason: str) -> dict:
         "topic_tags": ["gaming", "ecosistema", "LATAM"],
         "source_quality": "media"
     }
+
 
 # ==============================
 # OPENAI: MULTIPLATAFORMA
@@ -674,6 +545,7 @@ url: "{url}"
             return {}, "insufficient_quota"
         return {}, "openai_error"
 
+
 # ==============================
 # CONTROL EDITORIAL (LIMITES)
 # ==============================
@@ -702,6 +574,7 @@ def enforce_limits(items: list):
         "final_low": len(lows),
     }
     return final, metrics
+
 
 # ==============================
 # SCRAPER
@@ -741,8 +614,168 @@ def get_articles():
 
     return articles
 
+
 # ==============================
-# EJECUCIÓN DEL ROBOT
+# THREADS: STATE (evitar repetidos)
+# ==============================
+def load_threads_state() -> dict:
+    """
+    Carga estado desde R2 (threads_state.json).
+    Si no existe, regresa estado vacío.
+    """
+    key = THREADS_STATE_KEY
+    try:
+        obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+        raw = obj["Body"].read().decode("utf-8")
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+def save_threads_state(state: dict) -> None:
+    """
+    Guarda estado en R2 (threads_state.json).
+    """
+    save_to_r2(THREADS_STATE_KEY, state)
+
+
+# ==============================
+# THREADS: elegir item a publicar (mejor esfuerzo)
+# ==============================
+def pick_best_item_to_post(final_items: list, posted_links: set):
+    """
+    Elige el mejor item que NO se haya publicado aún.
+    Prioridad: alta > media > baja, y dentro de eso el más reciente.
+    """
+    def prio_score(p):
+        if p == "alta":
+            return 3
+        if p == "media":
+            return 2
+        return 1
+
+    candidates = []
+    for it in final_items or []:
+        link = (it.get("link") or "").strip()
+        if link and link in posted_links:
+            continue
+        p = ((it.get("editorial") or {}).get("priority") or "baja")
+        candidates.append(it)
+
+    candidates.sort(
+        key=lambda x: (
+            -prio_score(((x.get("editorial") or {}).get("priority") or "baja")),
+            x.get("published", "")
+        ),
+        reverse=False
+    )
+    # Nota: sort anterior deja raro por reverse, mejor ordenar claro:
+    candidates = sorted(
+        candidates,
+        key=lambda x: (
+            prio_score(((x.get("editorial") or {}).get("priority") or "baja")),
+            x.get("published", "")
+        ),
+        reverse=True
+    )
+
+    return candidates[0] if candidates else None
+
+
+# ==============================
+# THREADS: construir texto (PUBLICA EN ESPAÑOL)
+# ==============================
+def build_threads_text(item: dict) -> str:
+    """
+    Publica el primer post editorial (threads_posts[0]) en español.
+    Si por alguna razón no existe, cae a fallback_editorial.
+    """
+    editorial = (item or {}).get("editorial") or {}
+    posts = editorial.get("threads_posts") or []
+
+    text = ""
+    if isinstance(posts, list) and len(posts) > 0 and isinstance(posts[0], str):
+        text = posts[0].strip()
+
+    if not text:
+        fb = fallback_editorial(item, reason="build_threads_text: threads_posts[0] vacío o inexistente")
+        text = (fb.get("threads_posts") or [""])[0].strip()
+
+    MAX_CHARS = 480
+    if len(text) > MAX_CHARS:
+        text = text[:MAX_CHARS].rstrip() + "…"
+
+    return text
+
+
+# ==============================
+# THREADS: publicar texto (SUCCESS REAL)
+# ==============================
+def threads_publish_text(text: str) -> dict:
+    """
+    Publica un post de texto en Threads y regresa resultado estructurado.
+    Marca ok=True SOLO si el publish devuelve un ID real.
+    """
+    token = os.getenv("THREADS_USER_ACCESS_TOKEN")
+    if not token:
+        return {"ok": False, "error": "missing_env", "message": "Falta THREADS_USER_ACCESS_TOKEN"}
+
+    # 1) Crear contenedor (TEXT)
+    create_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads"
+    create_res = requests.post(
+        create_url,
+        data={
+            "media_type": "TEXT",
+            "text": text,
+            "access_token": token,
+        },
+        timeout=30,
+    )
+
+    try:
+        create_data = create_res.json()
+    except Exception:
+        create_data = {"raw": create_res.text}
+
+    if create_res.status_code != 200 or "id" not in create_data:
+        return {
+            "ok": False,
+            "step": "create_container_failed",
+            "status": create_res.status_code,
+            "container": create_data,
+        }
+
+    creation_id = create_data["id"]
+
+    # 2) Publicar contenedor
+    publish_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads_publish"
+    publish_res = requests.post(
+        publish_url,
+        data={"creation_id": creation_id, "access_token": token},
+        timeout=30,
+    )
+
+    try:
+        publish_data = publish_res.json()
+    except Exception:
+        publish_data = {"raw": publish_res.text}
+
+    publish_ok = (
+        publish_res.status_code == 200
+        and isinstance(publish_data, dict)
+        and ("id" in publish_data)
+        and ("error" not in publish_data)
+    )
+
+    return {
+        "ok": publish_ok,
+        "container": create_data,
+        "publish": publish_data,
+        "status_publish": publish_res.status_code,
+    }
+
+
+# ==============================
+# EJECUCIÓN DEL ROBOT (solo cuando lo corras como script)
 # ==============================
 def run_robot_once():
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -782,33 +815,44 @@ def run_robot_once():
 
     final, metrics = enforce_limits(enriched)
     print("FINAL ITEMS:", len(final))
-    
+
     # ==============================
     # AUTO-POST (Threads): 1 post por corrida
     # ==============================
     threads_publish_result = None
+
     if THREADS_AUTO_POST and final and THREADS_AUTO_POST_LIMIT > 0:
         state = load_threads_state()
         posted_links = set(state.get("posted_links", []))
 
         item = pick_best_item_to_post(final, posted_links)
+
         if item:
             text = build_threads_text(item)
             print("Auto-post Threads: publicando 1 post...")
-            res = threads_publish_text(text)
-            print("Threads publish raw response:", res)
-            threads_publish_result = res
 
-            # marca como publicado si salió ok (y tiene link)
-            if res.get("ok") and (item.get("link") or "").strip():
-                posted_links.add(item["link"].strip())
-                state["posted_links"] = list(posted_links)[-200:]
-                state["last_posted_at"] = datetime.now(timezone.utc).isoformat()
-                state["last_posted_link"] = item["link"].strip()
-                save_threads_state(state)
-                print("Auto-post Threads: OK ✅")
+            if THREADS_DRY_RUN:
+                threads_publish_result = {"ok": True, "dry_run": True, "text": text}
+                print("Auto-post Threads: DRY_RUN ✅ (no publicó de verdad)")
             else:
-                print("Auto-post Threads: NO OK ⚠️", res)
+                res = threads_publish_text(text)
+                threads_publish_result = res
+
+                # ✅ SOLO guardar como publicado si el publish fue REALMENTE exitoso
+                if res.get("ok") is True:
+                    link = (item.get("link") or "").strip()
+                    if link:
+                        posted_links.add(link)
+                        state["posted_links"] = list(posted_links)[-200:]
+                        state["last_posted_at"] = datetime.now(timezone.utc).isoformat()
+                        state["last_posted_link"] = link
+
+                    save_threads_state(state)
+                    print("Auto-post Threads: OK ✅")
+                    print("Threads publish:", res.get("publish"))
+                else:
+                    print("Auto-post Threads: FALLÓ ❌")
+                    print("Threads response:", res)
         else:
             print("Auto-post Threads: no hay item nuevo (evitando repetidos).")
 
@@ -834,6 +878,7 @@ def run_robot_once():
 
     key = f"editorial_run_{run_id}.json"
     save_to_r2(key, payload)
+
 
 if __name__ == "__main__":
     # Esto SOLO se ejecuta si corres: python main.py

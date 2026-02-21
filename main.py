@@ -14,10 +14,72 @@ from openai import OpenAI
 # ==============================
 # FASTAPI (para OAuth Threads)
 # ==============================
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
 
 app = FastAPI()
+
+# ==============================
+# THREADS: POST DE PRUEBA (NUEVO)
+# ==============================
+# Si no defines THREADS_USER_ID en Railway, usa este por defecto:
+THREADS_USER_ID = os.getenv("THREADS_USER_ID", "25864040949913281")
+
+
+@app.get("/post_test")
+def post_test():
+    """
+    Publica un post de prueba en Threads usando el long-lived token guardado en Railway.
+    Requiere variable:
+      - THREADS_USER_ACCESS_TOKEN
+    Opcional:
+      - THREADS_USER_ID (si no existe, usa el default)
+    """
+    token = os.getenv("THREADS_USER_ACCESS_TOKEN")
+    if not token:
+        raise HTTPException(
+            status_code=500,
+            detail="Falta THREADS_USER_ACCESS_TOKEN en Railway (Variables).",
+        )
+
+    # 1) Crear contenedor del post (TEXT)
+    create_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads"
+    create_res = requests.post(
+        create_url,
+        data={
+            "media_type": "TEXT",
+            "text": "🚀 Prueba automática desde Robot Editorial La Estratosférica TV",
+            "access_token": token,
+        },
+        timeout=30,
+    )
+    try:
+        create_data = create_res.json()
+    except Exception:
+        create_data = {"raw": create_res.text}
+
+    if create_res.status_code != 200 or "id" not in create_data:
+        return {
+            "step": "create_container_failed",
+            "status": create_res.status_code,
+            "response": create_data,
+        }
+
+    creation_id = create_data["id"]
+
+    # 2) Publicar el contenedor
+    publish_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads_publish"
+    publish_res = requests.post(
+        publish_url,
+        data={"creation_id": creation_id, "access_token": token},
+        timeout=30,
+    )
+    try:
+        publish_data = publish_res.json()
+    except Exception:
+        publish_data = {"raw": publish_res.text}
+
+    return {"step": "ok", "container": create_data, "publish": publish_data}
 
 
 @app.get("/health")

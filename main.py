@@ -1,6 +1,6 @@
 # main.py
 # Robot Editorial + Auto-post Threads con re-host de imágenes en R2
-# PRODUCCIÓN v4: Threads OK + anti-duplicado + repost inteligente + debug JSON errores
+# PRODUCCIÓN v5: wait container FINISHED (fix "Media Not Found") + state + repost
 
 import os
 import re
@@ -26,7 +26,7 @@ except Exception:
     OpenAI = None
 
 
-print("RUNNING MULTIRED v4 (PROD: Threads + State + Repost)")
+print("RUNNING MULTIRED v5 (PROD: Threads WAIT + State + Repost)")
 
 # =========================
 # CONFIG
@@ -37,11 +37,13 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL")  # ej: https://xxxxx.r2.cloudflarestorage.com
+R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL")
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 
-# R2 public base (tu subdominio público)
-R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "https://pub-8937244ee725495691514507bb8f431e.r2.dev").rstrip("/")
+R2_PUBLIC_BASE_URL = os.getenv(
+    "R2_PUBLIC_BASE_URL",
+    "https://pub-8937244ee725495691514507bb8f431e.r2.dev"
+).rstrip("/")
 
 THREADS_USER_ID = os.getenv("THREADS_USER_ID", "me")  # recomendado: "me"
 THREADS_USER_ACCESS_TOKEN = os.getenv("THREADS_USER_ACCESS_TOKEN")
@@ -57,26 +59,27 @@ REPOST_MAX_TIMES = int(os.getenv("REPOST_MAX_TIMES", "3"))
 REPOST_WINDOW_DAYS = int(os.getenv("REPOST_WINDOW_DAYS", "7"))
 REPOST_ENABLE = os.getenv("REPOST_ENABLE", "true").lower() == "true"
 
-# RSS feeds (coma)
+# RSS feeds
 RSS_FEEDS = [x.strip() for x in (os.getenv("RSS_FEEDS") or "").split(",") if x.strip()]
 if not RSS_FEEDS:
-    RSS_FEEDS = [
-        "https://www.dexerto.com/feed/",
-    ]
+    RSS_FEEDS = ["https://www.dexerto.com/feed/"]
 
 MAX_AI_ITEMS = int(os.getenv("MAX_AI_ITEMS", "5"))
 SLEEP_BETWEEN_ITEMS_SEC = float(os.getenv("SLEEP_BETWEEN_ITEMS_SEC", "0.25"))
 
-# ✅ HOST CORRECTO Threads (SIN /v20.0)
+# ✅ Threads host correcto (SIN /v20.0)
 THREADS_GRAPH = os.getenv("THREADS_GRAPH", "https://graph.threads.net").rstrip("/")
 
-# Timeouts / retries básicos
+# HTTP tuning
 HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "30"))
-POST_RETRY_MAX = int(os.getenv("POST_RETRY_MAX", "2"))  # reintentos ligeros por si hay flakiness
+POST_RETRY_MAX = int(os.getenv("POST_RETRY_MAX", "2"))
 POST_RETRY_SLEEP = float(os.getenv("POST_RETRY_SLEEP", "2"))
 
+CONTAINER_WAIT_TIMEOUT = int(os.getenv("CONTAINER_WAIT_TIMEOUT", "120"))
+CONTAINER_POLL_INTERVAL = float(os.getenv("CONTAINER_POLL_INTERVAL", "2"))
+
 # =========================
-# HELPERS: TIME
+# TIME
 # =========================
 
 def now_utc() -> datetime:
@@ -96,16 +99,13 @@ def days_since(dt_iso: str) -> int:
         return 999999
 
 # =========================
-# DEBUG: META / HTTP
+# DEBUG / HTTP
 # =========================
 
 def _threads_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 def _raise_meta_error(r: requests.Response, label: str = "META"):
-    """
-    Si Meta responde 4xx/5xx, imprime el JSON completo para diagnóstico.
-    """
     if r.status_code < 400:
         return
 
@@ -118,7 +118,7 @@ def _raise_meta_error(r: requests.Response, label: str = "META"):
         if isinstance(body, bytes):
             body = body.decode("utf-8", errors="replace")
         print("REQUEST BODY:", body)
-    print("RESPONSE TEXT:", r.text)  # 👈 JSON completo
+    print("RESPONSE TEXT:", r.text)
     print("================================\n")
 
     r.raise_for_status()
@@ -136,11 +136,10 @@ def _post_with_retries(url, *, headers=None, data=None, params=None, label="HTTP
                 time.sleep(POST_RETRY_SLEEP)
             else:
                 raise
-
-    raise last_err  # por seguridad
+    raise last_err
 
 # =========================
-# HELPERS: R2 (S3)
+# R2 (S3)
 # =========================
 
 def r2_client():
@@ -291,7 +290,7 @@ def openai_client():
 def openai_text(prompt: str) -> str:
     client = openai_client()
 
-    # Intento 1: Responses API
+    # Responses API
     try:
         resp = client.responses.create(
             model=OPENAI_MODEL,
@@ -303,7 +302,7 @@ def openai_text(prompt: str) -> str:
     except Exception:
         pass
 
-    # Intento 2: chat.completions fallback
+    # Fallback chat.completions
     resp = client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=[{"role": "user", "content": prompt}],
@@ -342,7 +341,7 @@ Link: {link}
     return text.strip()
 
 # =========================
-# THREADS API (CORRECTO)
+# THREADS API (CORRECTO) + WAIT
 # =========================
 
 def threads_create_container_image(user_id: str, access_token: str, text: str, image_url: str) -> str:
@@ -354,6 +353,41 @@ def threads_create_container_image(user_id: str, access_token: str, text: str, i
     }
     r = _post_with_retries(url, headers=_threads_headers(access_token), data=data, label="THREADS CREATE_CONTAINER")
     return r.json()["id"]
+
+def threads_wait_container(container_id: str, access_token: str, timeout_sec: int = None):
+    """
+    Espera a que el container esté FINISHED antes de publicar.
+    Evita el 400: Media Not Found.
+    """
+    if timeout_sec is None:
+        timeout_sec = CONTAINER_WAIT_TIMEOUT
+
+    url = f"{THREADS_GRAPH}/{container_id}"
+    start = time.time()
+    last = None
+
+    while time.time() - start < timeout_sec:
+        r = requests.get(
+            url,
+            headers=_threads_headers(access_token),
+            params={"fields": "status,error_message"},
+            timeout=HTTP_TIMEOUT
+        )
+        _raise_meta_error(r, "THREADS CONTAINER STATUS")
+
+        j = r.json()
+        last = j
+        status = j.get("status")
+
+        if status == "FINISHED":
+            return j
+
+        if status in ("ERROR", "FAILED"):
+            raise RuntimeError(f"Container failed: {j}")
+
+        time.sleep(CONTAINER_POLL_INTERVAL)
+
+    raise TimeoutError(f"Container not ready after {timeout_sec}s: {last}")
 
 def threads_publish(user_id: str, access_token: str, container_id: str) -> dict:
     url = f"{THREADS_GRAPH}/{user_id}/threads_publish"
@@ -385,8 +419,13 @@ def threads_publish_text_image(text: str, image_url_from_news: str) -> dict:
     container_id = threads_create_container_image(THREADS_USER_ID, THREADS_USER_ACCESS_TOKEN, text, r2_url)
     print("Container created:", container_id)
 
+    # ✅ 3.5) esperar FINISHED
+    threads_wait_container(container_id, THREADS_USER_ACCESS_TOKEN)
+
     # 4) publish
     res = threads_publish(THREADS_USER_ID, THREADS_USER_ACCESS_TOKEN, container_id)
+    print("Threads publish response:", res)
+
     return {"ok": True, "container": {"id": container_id}, "publish": res, "image_url": r2_url}
 
 # =========================
@@ -461,7 +500,6 @@ def run_robot_once():
     articles = fetch_rss_articles()
     print(f"{len(articles)} artículos encontrados")
 
-    # limit para no reventar recursos
     processed = []
     for a in articles[:MAX_AI_ITEMS]:
         processed.append(a)
@@ -472,7 +510,6 @@ def run_robot_once():
     posted_count = 0
     results = []
 
-    # Publica hasta THREADS_AUTO_POST_LIMIT en esta corrida
     while posted_count < THREADS_AUTO_POST_LIMIT:
         item, mode = pick_item(processed, state)
         if not item:
@@ -483,14 +520,11 @@ def run_robot_once():
         label = "NUEVO" if mode == "new" else "REPOST"
         print(f"Seleccionado ({label}): {link}")
 
-        # Texto IA
         text = build_threads_text(item, mode=mode)
 
-        # Imagen
         og_image = extract_og_image(link)
         if not og_image:
             print("No se encontró og:image. Se omite para evitar post sin imagen.")
-            # Marca como "no-post" para evitar bucle infinito: lo sacamos de processed
             processed = [x for x in processed if x.get("link") != link]
             continue
 
@@ -502,23 +536,21 @@ def run_robot_once():
         print(f"Publicando en Threads ({label})...")
         try:
             res = threads_publish_text_image(text, og_image)
-            print("Threads publish response:", res)
             mark_posted(state, link)
             save_threads_state(state)
+
             posted_count += 1
             results.append({"link": link, "mode": mode, "posted": True, "threads": res})
+            print("Auto-post Threads: OK ✅")
         except Exception as e:
             print("Auto-post Threads: FALLÓ ❌")
             print("ERROR:", str(e))
             results.append({"link": link, "mode": mode, "posted": False, "error": str(e)})
-            # en fallo, no seguimos spameando
             break
 
-        # saca el item ya consumido para evitar repost inmediato en la misma corrida
         processed = [x for x in processed if x.get("link") != link]
 
     return {
-        "final_items": len(processed),
         "posted_count": posted_count,
         "results": results,
     }
@@ -543,5 +575,4 @@ if __name__ == "__main__":
             "result": result,
         },
     }
-    # guarda reporte siempre
     save_run_payload(payload)

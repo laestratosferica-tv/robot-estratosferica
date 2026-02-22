@@ -1,6 +1,6 @@
 # main.py
 # Robot Editorial + Auto-post Threads con re-host de imágenes en R2
-# FIX v3: Threads endpoints SIN /v20.0 + Debug 400 completo
+# PRODUCCIÓN v4: Threads OK + anti-duplicado + repost inteligente + debug JSON errores
 
 import os
 import re
@@ -13,56 +13,105 @@ from urllib.parse import urljoin
 import requests
 import boto3
 
+# RSS
 try:
     import feedparser
 except Exception:
     feedparser = None
 
+# OpenAI
 try:
     from openai import OpenAI
 except Exception:
     OpenAI = None
 
 
-print("RUNNING MULTIRED v3 (THREADS FIX v20.0 REMOVED)")
+print("RUNNING MULTIRED v4 (PROD: Threads + State + Repost)")
 
 # =========================
 # CONFIG
 # =========================
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL")
+R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL")  # ej: https://xxxxx.r2.cloudflarestorage.com
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 
-# ✅ RECOMENDADO: usar "me"
-THREADS_USER_ID = os.getenv("THREADS_USER_ID", "me")
+# R2 public base (tu subdominio público)
+R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "https://pub-8937244ee725495691514507bb8f431e.r2.dev").rstrip("/")
+
+THREADS_USER_ID = os.getenv("THREADS_USER_ID", "me")  # recomendado: "me"
 THREADS_USER_ACCESS_TOKEN = os.getenv("THREADS_USER_ACCESS_TOKEN")
 
+THREADS_STATE_KEY = os.getenv("THREADS_STATE_KEY", "threads_state.json")
+
+THREADS_AUTO_POST = os.getenv("THREADS_AUTO_POST", "true").lower() == "true"
+THREADS_AUTO_POST_LIMIT = int(os.getenv("THREADS_AUTO_POST_LIMIT", "1"))
 THREADS_DRY_RUN = os.getenv("THREADS_DRY_RUN", "false").lower() == "true"
 
+# Repost logic
+REPOST_MAX_TIMES = int(os.getenv("REPOST_MAX_TIMES", "3"))
+REPOST_WINDOW_DAYS = int(os.getenv("REPOST_WINDOW_DAYS", "7"))
+REPOST_ENABLE = os.getenv("REPOST_ENABLE", "true").lower() == "true"
+
+# RSS feeds (coma)
 RSS_FEEDS = [x.strip() for x in (os.getenv("RSS_FEEDS") or "").split(",") if x.strip()]
 if not RSS_FEEDS:
-    RSS_FEEDS = ["https://www.dexerto.com/feed/"]
+    RSS_FEEDS = [
+        "https://www.dexerto.com/feed/",
+    ]
 
-# 🔥 HOST CORRECTO (SIN /v20.0)
-THREADS_GRAPH = os.getenv("THREADS_GRAPH", "https://graph.threads.net")
+MAX_AI_ITEMS = int(os.getenv("MAX_AI_ITEMS", "5"))
+SLEEP_BETWEEN_ITEMS_SEC = float(os.getenv("SLEEP_BETWEEN_ITEMS_SEC", "0.25"))
+
+# ✅ HOST CORRECTO Threads (SIN /v20.0)
+THREADS_GRAPH = os.getenv("THREADS_GRAPH", "https://graph.threads.net").rstrip("/")
+
+# Timeouts / retries básicos
+HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "30"))
+POST_RETRY_MAX = int(os.getenv("POST_RETRY_MAX", "2"))  # reintentos ligeros por si hay flakiness
+POST_RETRY_SLEEP = float(os.getenv("POST_RETRY_SLEEP", "2"))
 
 # =========================
-# DEBUG META
+# HELPERS: TIME
 # =========================
 
-def _threads_headers(token: str):
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+def iso_now() -> str:
+    return now_utc().isoformat()
+
+def parse_iso(dt: str) -> datetime:
+    return datetime.fromisoformat(dt.replace("Z", "+00:00"))
+
+def days_since(dt_iso: str) -> int:
+    try:
+        dt = parse_iso(dt_iso)
+        return int((now_utc() - dt).total_seconds() // 86400)
+    except Exception:
+        return 999999
+
+# =========================
+# DEBUG: META / HTTP
+# =========================
+
+def _threads_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
-def _raise_meta_error(r: requests.Response, label="META"):
+def _raise_meta_error(r: requests.Response, label: str = "META"):
+    """
+    Si Meta responde 4xx/5xx, imprime el JSON completo para diagnóstico.
+    """
     if r.status_code < 400:
         return
 
     print(f"\n====== {label} ERROR DEBUG ======")
     print("URL:", r.request.url)
+    print("METHOD:", r.request.method)
     print("STATUS:", r.status_code)
     if r.request.body:
         body = r.request.body
@@ -74,18 +123,29 @@ def _raise_meta_error(r: requests.Response, label="META"):
 
     r.raise_for_status()
 
-# =========================
-# TIME
-# =========================
+def _post_with_retries(url, *, headers=None, data=None, params=None, label="HTTP POST"):
+    last_err = None
+    for attempt in range(POST_RETRY_MAX + 1):
+        try:
+            r = requests.post(url, headers=headers, data=data, params=params, timeout=HTTP_TIMEOUT)
+            _raise_meta_error(r, label)
+            return r
+        except Exception as e:
+            last_err = e
+            if attempt < POST_RETRY_MAX:
+                time.sleep(POST_RETRY_SLEEP)
+            else:
+                raise
 
-def now_utc():
-    return datetime.now(timezone.utc)
+    raise last_err  # por seguridad
 
 # =========================
-# R2
+# HELPERS: R2 (S3)
 # =========================
 
 def r2_client():
+    if not (R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and BUCKET_NAME):
+        raise RuntimeError("Faltan credenciales R2/S3 (R2_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME)")
     return boto3.client(
         "s3",
         endpoint_url=R2_ENDPOINT_URL,
@@ -94,18 +154,39 @@ def r2_client():
         region_name="auto",
     )
 
-R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "https://pub-8937244ee725495691514507bb8f431e.r2.dev")
+def save_to_r2_json(key: str, payload: dict):
+    s3 = r2_client()
+    body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=body, ContentType="application/json")
 
-def upload_bytes_to_r2_public(image_bytes: bytes, ext: str):
+def load_from_r2_json(key: str):
+    s3 = r2_client()
+    try:
+        obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+        data = obj["Body"].read().decode("utf-8")
+        return json.loads(data)
+    except s3.exceptions.NoSuchKey:
+        return None
+    except Exception:
+        return None
+
+def _guess_ext_from_content_type(ct: str) -> str:
+    ct = (ct or "").lower()
+    if "png" in ct: return ".png"
+    if "webp" in ct: return ".webp"
+    if "jpeg" in ct or "jpg" in ct: return ".jpg"
+    return ".jpg"
+
+def upload_bytes_to_r2_public(image_bytes: bytes, ext: str, prefix="threads_media") -> str:
     s3 = r2_client()
     h = hashlib.sha1(image_bytes).hexdigest()[:16]
-    key = f"threads_media/{h}{ext}"
+    key = f"{prefix}/{h}{ext}"
 
     content_type = {
-        ".png": "image/png",
-        ".webp": "image/webp",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
+        ".png":"image/png",
+        ".webp":"image/webp",
+        ".jpg":"image/jpeg",
+        ".jpeg":"image/jpeg",
     }.get(ext, "image/jpeg")
 
     s3.put_object(
@@ -115,9 +196,9 @@ def upload_bytes_to_r2_public(image_bytes: bytes, ext: str):
         ContentType=content_type,
     )
 
-    url = f"{R2_PUBLIC_BASE_URL.rstrip('/')}/{key}"
+    url = f"{R2_PUBLIC_BASE_URL}/{key}"
 
-    # Validar que sea accesible públicamente
+    # Verifica que sea pública y con content-type de imagen
     head = requests.head(url, timeout=10, allow_redirects=True)
     if head.status_code != 200:
         raise RuntimeError(f"R2 public URL no accesible (status {head.status_code}): {url}")
@@ -129,154 +210,338 @@ def upload_bytes_to_r2_public(image_bytes: bytes, ext: str):
     return url
 
 # =========================
-# RSS
+# RSS / ARTÍCULOS
 # =========================
 
 def fetch_rss_articles():
     if not feedparser:
-        raise RuntimeError("Falta feedparser en requirements.txt")
+        raise RuntimeError("Falta feedparser. Agrégalo a requirements.txt: feedparser")
 
     articles = []
     for feed in RSS_FEEDS:
-        d = feedparser.parse(feed)
-        for e in d.entries[:20]:
-            articles.append({
-                "title": getattr(e, "title", "") or "",
-                "link": getattr(e, "link", "") or "",
-            })
-    return [a for a in articles if a["link"]]
+        try:
+            d = feedparser.parse(feed)
+            for e in d.entries[:50]:
+                link = getattr(e, "link", None) or ""
+                title = getattr(e, "title", "") or ""
+                published = getattr(e, "published", "") or getattr(e, "updated", "") or ""
+                articles.append({
+                    "title": title.strip(),
+                    "link": link.strip(),
+                    "published": published,
+                    "feed": feed,
+                })
+        except Exception:
+            continue
+
+    # dedupe por link
+    seen = set()
+    out = []
+    for a in articles:
+        if a["link"] and a["link"] not in seen:
+            seen.add(a["link"])
+            out.append(a)
+    return out
 
 # =========================
-# IMAGEN OG
+# EXTRAER IMAGEN OG
 # =========================
 
-OG_IMAGE_RE = re.compile(r'property=["\']og:image["\']\s+content=["\']([^"\']+)["\']', re.I)
-OG_IMAGE_RE2 = re.compile(r'content=["\']([^"\']+)["\']\s+property=["\']og:image["\']', re.I)
+OG_IMAGE_RE = re.compile(r'property=["\']og:image["\']\s+content=["\']([^"\']+)["\']', re.IGNORECASE)
+OG_IMAGE_RE2 = re.compile(r'content=["\']([^"\']+)["\']\s+property=["\']og:image["\']', re.IGNORECASE)
 
-def extract_og_image(url):
-    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20, allow_redirects=True)
-    r.raise_for_status()
-    m = OG_IMAGE_RE.search(r.text) or OG_IMAGE_RE2.search(r.text)
-    if not m:
+def extract_og_image(url: str) -> str | None:
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
+        r.raise_for_status()
+        html = r.text
+        m = OG_IMAGE_RE.search(html) or OG_IMAGE_RE2.search(html)
+        if not m:
+            return None
+        img = m.group(1).strip()
+        if img.startswith("/"):
+            img = urljoin(url, img)
+        return img
+    except Exception:
         return None
-    img = m.group(1).strip()
-    if img.startswith("/"):
-        img = urljoin(url, img)
-    return img
 
-def download_image_bytes(image_url):
-    r = requests.get(image_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, allow_redirects=True)
+def download_image_bytes(image_url: str) -> tuple[bytes, str]:
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "Referer": image_url,
+    }
+    r = requests.get(image_url, headers=headers, timeout=30, allow_redirects=True)
     r.raise_for_status()
-    ct = (r.headers.get("Content-Type") or "").lower()
-    if "png" in ct:
-        ext = ".png"
-    elif "webp" in ct:
-        ext = ".webp"
-    elif "jpeg" in ct or "jpg" in ct:
-        ext = ".jpg"
-    else:
-        ext = ".jpg"
+    ext = _guess_ext_from_content_type(r.headers.get("Content-Type", ""))
     return r.content, ext
 
 # =========================
-# OPENAI
+# OPENAI: GENERAR TEXTO
 # =========================
 
-def openai_text(prompt):
+def openai_client():
     if not OpenAI:
         raise RuntimeError("No se pudo importar OpenAI. Revisa requirements.txt (openai).")
     if not OPENAI_API_KEY:
         raise RuntimeError("Falta OPENAI_API_KEY en secrets.")
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    return OpenAI(api_key=OPENAI_API_KEY)
 
-    resp = client.responses.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
-        input=prompt
+def openai_text(prompt: str) -> str:
+    client = openai_client()
+
+    # Intento 1: Responses API
+    try:
+        resp = client.responses.create(
+            model=OPENAI_MODEL,
+            input=prompt,
+        )
+        out = getattr(resp, "output_text", None)
+        if out:
+            return out.strip()
+    except Exception:
+        pass
+
+    # Intento 2: chat.completions fallback
+    resp = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[{"role": "user", "content": prompt}],
     )
-    out = getattr(resp, "output_text", None)
-    if not out:
-        raise RuntimeError("OpenAI: no output_text en respuesta.")
-    return out.strip()
+    return resp.choices[0].message.content.strip()
 
-def build_threads_text(item):
-    prompt = f"""
+def build_threads_text(item: dict, mode: str = "new") -> str:
+    title = item.get("title", "")
+    link = item.get("link", "")
+
+    if mode == "repost":
+        prompt = f"""
+Eres editor para una cuenta de Threads sobre esports/gaming.
+Reescribe este post como un REPOST con otra mirada/opinión, sin sonar repetido.
+- 1 párrafo corto, máximo 260 caracteres si es posible.
+- Termina con una pregunta para la comunidad.
+- Incluye "Fuente:" + link.
+Datos:
+Título: {title}
+Link: {link}
+"""
+    else:
+        prompt = f"""
 Eres editor para una cuenta de Threads sobre esports/gaming.
 Crea un post:
-- 1 párrafo corto (máx 260-320 caracteres).
+- 1 párrafo corto (máximo 260-320 caracteres).
 - Termina con una pregunta a la comunidad.
 - Incluye "Fuente:" + link.
-Título: {item['title']}
-Link: {item['link']}
+Datos:
+Título: {title}
+Link: {link}
 """
     text = openai_text(prompt)
     if "Fuente:" not in text:
-        text = f"{text}\n\nFuente: {item['link']}"
+        text = f"{text}\n\nFuente: {link}"
     return text.strip()
 
 # =========================
-# THREADS API (SIN VERSION EN URL)
+# THREADS API (CORRECTO)
 # =========================
 
-def threads_create_container(text, image_url):
-    # ✅ Ejemplo oficial: https://graph.threads.net/me/threads?media_type=IMAGE&image_url=...
-    url = f"{THREADS_GRAPH.rstrip('/')}/{THREADS_USER_ID}/threads"
+def threads_create_container_image(user_id: str, access_token: str, text: str, image_url: str) -> str:
+    url = f"{THREADS_GRAPH}/{user_id}/threads"
     data = {
         "media_type": "IMAGE",
         "image_url": image_url,
         "text": text,
     }
-    r = requests.post(url, headers=_threads_headers(THREADS_USER_ACCESS_TOKEN), data=data, timeout=30)
-    _raise_meta_error(r, "THREADS CREATE_CONTAINER")
+    r = _post_with_retries(url, headers=_threads_headers(access_token), data=data, label="THREADS CREATE_CONTAINER")
     return r.json()["id"]
 
-def threads_publish(container_id):
-    # ✅ Ejemplo oficial: https://graph.threads.net/me/threads_publish?creation_id=...
-    url = f"{THREADS_GRAPH.rstrip('/')}/{THREADS_USER_ID}/threads_publish"
-    r = requests.post(
+def threads_publish(user_id: str, access_token: str, container_id: str) -> dict:
+    url = f"{THREADS_GRAPH}/{user_id}/threads_publish"
+    r = _post_with_retries(
         url,
-        headers=_threads_headers(THREADS_USER_ACCESS_TOKEN),
+        headers=_threads_headers(access_token),
         data={"creation_id": container_id},
-        timeout=30
+        label="THREADS PUBLISH"
     )
-    _raise_meta_error(r, "THREADS PUBLISH")
     return r.json()
 
-# =========================
-# MAIN
-# =========================
-
-def run():
-    articles = fetch_rss_articles()
-    if not articles:
-        print("No articles found.")
-        return
-
-    item = articles[0]
-
-    text = build_threads_text(item)
-
-    og = extract_og_image(item["link"])
-    if not og:
-        print("No OG image found.")
-        return
-
-    img_bytes, ext = download_image_bytes(og)
-    r2_url = upload_bytes_to_r2_public(img_bytes, ext)
-    print("IMAGE re-hosted:", r2_url)
-
+def threads_publish_text_image(text: str, image_url_from_news: str) -> dict:
     if THREADS_DRY_RUN:
-        print("[DRY_RUN] Would post text:", text)
-        print("[DRY_RUN] Would post image:", r2_url)
-        return
+        print("[DRY_RUN] Threads post:", text)
+        print("[DRY_RUN] Image source:", image_url_from_news)
+        return {"ok": True, "dry_run": True}
 
-    container_id = threads_create_container(text, r2_url)
+    if not THREADS_USER_ACCESS_TOKEN:
+        raise RuntimeError("Falta THREADS_USER_ACCESS_TOKEN")
+
+    # 1) descargar imagen
+    img_bytes, ext = download_image_bytes(image_url_from_news)
+
+    # 2) subir a R2 público
+    r2_url = upload_bytes_to_r2_public(img_bytes, ext)
+    print("IMAGE re-hosted on R2:", r2_url)
+
+    # 3) container
+    container_id = threads_create_container_image(THREADS_USER_ID, THREADS_USER_ACCESS_TOKEN, text, r2_url)
     print("Container created:", container_id)
 
-    time.sleep(3)
+    # 4) publish
+    res = threads_publish(THREADS_USER_ID, THREADS_USER_ACCESS_TOKEN, container_id)
+    return {"ok": True, "container": {"id": container_id}, "publish": res, "image_url": r2_url}
 
-    res = threads_publish(container_id)
-    print("THREADS SUCCESS:", res)
+# =========================
+# STATE (anti-duplicado + repost)
+# =========================
 
+def load_threads_state() -> dict:
+    state = load_from_r2_json(THREADS_STATE_KEY)
+    if not state:
+        state = {
+            "posted_items": {},  # link -> {last_posted_at, times}
+            "posted_links": [],  # legacy
+            "last_posted_at": None,
+        }
+    state.setdefault("posted_items", {})
+    state.setdefault("posted_links", [])
+    state.setdefault("last_posted_at", None)
+    return state
+
+def save_threads_state(state: dict):
+    save_to_r2_json(THREADS_STATE_KEY, state)
+
+def mark_posted(state: dict, link: str):
+    pi = state["posted_items"].get(link, {"times": 0, "last_posted_at": None})
+    pi["times"] = int(pi.get("times", 0)) + 1
+    pi["last_posted_at"] = iso_now()
+    state["posted_items"][link] = pi
+
+    if link not in state["posted_links"]:
+        state["posted_links"].append(link)
+    state["posted_links"] = state["posted_links"][-200:]
+    state["last_posted_at"] = iso_now()
+
+def is_new_allowed(state: dict, link: str) -> bool:
+    return link not in state["posted_items"]
+
+def repost_eligible(state: dict, link: str) -> bool:
+    pi = state["posted_items"].get(link)
+    if not pi:
+        return False
+
+    times = int(pi.get("times", 0))
+    if times >= REPOST_MAX_TIMES:
+        return False
+
+    last = pi.get("last_posted_at")
+    if not last:
+        return True
+
+    return days_since(last) >= REPOST_WINDOW_DAYS
+
+def pick_item(articles: list[dict], state: dict) -> tuple[dict | None, str]:
+    # 1) nuevo
+    for a in articles:
+        if a.get("link") and is_new_allowed(state, a["link"]):
+            return a, "new"
+
+    # 2) repost
+    if REPOST_ENABLE:
+        for a in articles:
+            if a.get("link") and a["link"] in state["posted_items"] and repost_eligible(state, a["link"]):
+                return a, "repost"
+
+    return None, "none"
+
+# =========================
+# MAIN RUN
+# =========================
+
+def run_robot_once():
+    print("Obteniendo artículos (RSS)...")
+    articles = fetch_rss_articles()
+    print(f"{len(articles)} artículos encontrados")
+
+    # limit para no reventar recursos
+    processed = []
+    for a in articles[:MAX_AI_ITEMS]:
+        processed.append(a)
+        time.sleep(SLEEP_BETWEEN_ITEMS_SEC)
+
+    state = load_threads_state()
+
+    posted_count = 0
+    results = []
+
+    # Publica hasta THREADS_AUTO_POST_LIMIT en esta corrida
+    while posted_count < THREADS_AUTO_POST_LIMIT:
+        item, mode = pick_item(processed, state)
+        if not item:
+            print("No hay item nuevo ni repost elegible.")
+            break
+
+        link = item["link"]
+        label = "NUEVO" if mode == "new" else "REPOST"
+        print(f"Seleccionado ({label}): {link}")
+
+        # Texto IA
+        text = build_threads_text(item, mode=mode)
+
+        # Imagen
+        og_image = extract_og_image(link)
+        if not og_image:
+            print("No se encontró og:image. Se omite para evitar post sin imagen.")
+            # Marca como "no-post" para evitar bucle infinito: lo sacamos de processed
+            processed = [x for x in processed if x.get("link") != link]
+            continue
+
+        if not THREADS_AUTO_POST:
+            print("THREADS_AUTO_POST desactivado. (No se publica)")
+            results.append({"link": link, "mode": mode, "posted": False, "reason": "auto_post_off"})
+            break
+
+        print(f"Publicando en Threads ({label})...")
+        try:
+            res = threads_publish_text_image(text, og_image)
+            print("Threads publish response:", res)
+            mark_posted(state, link)
+            save_threads_state(state)
+            posted_count += 1
+            results.append({"link": link, "mode": mode, "posted": True, "threads": res})
+        except Exception as e:
+            print("Auto-post Threads: FALLÓ ❌")
+            print("ERROR:", str(e))
+            results.append({"link": link, "mode": mode, "posted": False, "error": str(e)})
+            # en fallo, no seguimos spameando
+            break
+
+        # saca el item ya consumido para evitar repost inmediato en la misma corrida
+        processed = [x for x in processed if x.get("link") != link]
+
+    return {
+        "final_items": len(processed),
+        "posted_count": posted_count,
+        "results": results,
+    }
+
+def save_run_payload(payload: dict):
+    run_id = now_utc().strftime("%Y%m%d_%H%M%S")
+    key = f"editorial_run_{run_id}.json"
+    save_to_r2_json(key, payload)
+    print("Archivo guardado en R2:", key)
 
 if __name__ == "__main__":
-    run()
+    result = run_robot_once()
+    payload = {
+        "generated_at": iso_now(),
+        "threads_auto_post": {
+            "enabled": THREADS_AUTO_POST,
+            "limit": THREADS_AUTO_POST_LIMIT,
+            "dry_run": THREADS_DRY_RUN,
+            "repost_enable": REPOST_ENABLE,
+            "repost_max_times": REPOST_MAX_TIMES,
+            "repost_window_days": REPOST_WINDOW_DAYS,
+            "result": result,
+        },
+    }
+    # guarda reporte siempre
+    save_run_payload(payload)

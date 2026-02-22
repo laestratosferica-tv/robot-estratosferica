@@ -1,992 +1,522 @@
-print("RUNNING MULTIRED v1 (is_gaming + category)")
+# main.py
+# Robot Editorial + Auto-post Threads con re-host de imágenes en R2
+# Ajustes: n=3 reposts, ventana=7 días
 
 import os
-import json
 import re
+import json
 import time
-import random
-import requests
-import feedparser
-import boto3
+import hashlib
 from datetime import datetime, timezone, timedelta
-from dateutil import parser as dtparser
-from openai import OpenAI
+from urllib.parse import urljoin
 
-# ==============================
-# FASTAPI (para OAuth Threads)
-# ==============================
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse, RedirectResponse
+import requests
+import boto3
 
-app = FastAPI()
+# Opcional pero recomendado para RSS
+try:
+    import feedparser
+except Exception:
+    feedparser = None
 
-# ==============================
-# THREADS: CONFIG
-# ==============================
-# Si no defines THREADS_USER_ID, usa default:
+# OpenAI (según tu repo ya lo estás usando)
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
+
+print("RUNNING MULTIRED v1 (is_gaming + category)")
+
+# =========================
+# CONFIG
+# =========================
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL")  # ej: https://xxxxx.r2.cloudflarestorage.com
+BUCKET_NAME = os.getenv("BUCKET_NAME")
+
 THREADS_USER_ID = os.getenv("THREADS_USER_ID", "25864040949913281")
+THREADS_USER_ACCESS_TOKEN = os.getenv("THREADS_USER_ACCESS_TOKEN")
 
-# Estado para evitar repetidos (guardado en R2)
 THREADS_STATE_KEY = os.getenv("THREADS_STATE_KEY", "threads_state.json")
 
-# Auto post settings
 THREADS_AUTO_POST = os.getenv("THREADS_AUTO_POST", "true").lower() == "true"
 THREADS_AUTO_POST_LIMIT = int(os.getenv("THREADS_AUTO_POST_LIMIT", "1"))
 THREADS_DRY_RUN = os.getenv("THREADS_DRY_RUN", "false").lower() == "true"
 
-# Repost inteligente: N=3 corridas sin nuevo, ventana=7 días
-REPOST_AFTER_NO_NEW_RUNS = int(os.getenv("THREADS_REPOST_AFTER_NO_NEW_RUNS", "3"))
-REPOST_WINDOW_DAYS = int(os.getenv("THREADS_REPOST_WINDOW_DAYS", "7"))
+# Repost logic
+REPOST_MAX_TIMES = int(os.getenv("REPOST_MAX_TIMES", "3"))  # n=3
+REPOST_WINDOW_DAYS = int(os.getenv("REPOST_WINDOW_DAYS", "7"))  # ventana=7
+REPOST_ENABLE = os.getenv("REPOST_ENABLE", "true").lower() == "true"
 
-ANGLES = ["producto", "comunidad", "negocio", "leccion", "debate"]
+# RSS feeds (separados por coma). Si no pones nada, usa un ejemplo.
+RSS_FEEDS = [x.strip() for x in (os.getenv("RSS_FEEDS") or "").split(",") if x.strip()]
+if not RSS_FEEDS:
+    RSS_FEEDS = [
+        # Pon aquí tus feeds reales (o en variable RSS_FEEDS)
+        "https://www.dexerto.com/feed/",
+    ]
+
+# Para no reventar rate limits
+MAX_AI_ITEMS = int(os.getenv("MAX_AI_ITEMS", "5"))
+SLEEP_BETWEEN_ITEMS_SEC = float(os.getenv("SLEEP_BETWEEN_ITEMS_SEC", "0.25"))
+
+THREADS_GRAPH = os.getenv("THREADS_GRAPH", "https://graph.facebook.com/v20.0")
 
 
-# ==============================
-# THREADS: POST DE PRUEBA
-# ==============================
-@app.get("/post_test")
-def post_test():
-    """
-    Publica un post de prueba en Threads usando el long-lived token.
-    Requiere:
-      - THREADS_USER_ACCESS_TOKEN
-    Opcional:
-      - THREADS_USER_ID (si no existe, usa el default)
-    """
-    token = os.getenv("THREADS_USER_ACCESS_TOKEN")
-    if not token:
-        raise HTTPException(
-            status_code=500,
-            detail="Falta THREADS_USER_ACCESS_TOKEN en Variables.",
-        )
+# =========================
+# HELPERS: TIME
+# =========================
 
-    # 1) Crear contenedor del post (TEXT)
-    create_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads"
-    create_res = requests.post(
-        create_url,
-        data={
-            "media_type": "TEXT",
-            "text": "🚀 Prueba automática desde Robot Editorial La Estratosférica TV",
-            "access_token": token,
-        },
-        timeout=30,
-    )
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+def iso_now() -> str:
+    return now_utc().isoformat()
+
+def parse_iso(dt: str) -> datetime:
+    return datetime.fromisoformat(dt.replace("Z", "+00:00"))
+
+def days_since(dt_iso: str) -> int:
     try:
-        create_data = create_res.json()
+        dt = parse_iso(dt_iso)
+        return int((now_utc() - dt).total_seconds() // 86400)
     except Exception:
-        create_data = {"raw": create_res.text}
-
-    if create_res.status_code != 200 or "id" not in create_data:
-        return {
-            "step": "create_container_failed",
-            "status": create_res.status_code,
-            "response": create_data,
-        }
-
-    creation_id = create_data["id"]
-
-    # 2) Publicar el contenedor
-    publish_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads_publish"
-    publish_res = requests.post(
-        publish_url,
-        data={"creation_id": creation_id, "access_token": token},
-        timeout=30,
-    )
-    try:
-        publish_data = publish_res.json()
-    except Exception:
-        publish_data = {"raw": publish_res.text}
-
-    return {"step": "ok", "container": create_data, "publish": publish_data}
+        return 999999
 
 
-@app.get("/health")
-def health():
-    return {"ok": True, "service": "robot-estratosferica"}
+# =========================
+# HELPERS: R2 (S3)
+# =========================
 
-
-# ==============================
-# INICIO OAUTH
-# ==============================
-@app.get("/login")
-def threads_login():
-    """
-    Inicia el OAuth de Threads. Abre:
-    /login  -> redirige a threads.net/oauth/authorize
-    """
-    THREADS_APP_ID = os.getenv("THREADS_APP_ID")
-    THREADS_REDIRECT_URI = os.getenv("THREADS_REDIRECT_URI")
-
-    missing = []
-    if not THREADS_APP_ID:
-        missing.append("THREADS_APP_ID")
-    if not THREADS_REDIRECT_URI:
-        missing.append("THREADS_REDIRECT_URI")
-
-    if missing:
-        return JSONResponse(
-            {"error": "Faltan variables", "missing": missing},
-            status_code=400,
-        )
-
-    # redirect_uri debe coincidir EXACTAMENTE con el configurado en Meta
-    auth_url = (
-        "https://www.threads.net/oauth/authorize"
-        f"?client_id={THREADS_APP_ID}"
-        f"&redirect_uri={THREADS_REDIRECT_URI}"
-        "&response_type=code"
-        "&scope=threads_basic"
-    )
-    return RedirectResponse(auth_url)
-
-
-@app.get("/callback/")
-def threads_callback(request: Request):
-    """
-    Threads redirige aquí con: /callback/?code=...
-    Este endpoint cambia code -> short-lived token -> long-lived token
-    """
-    code = request.query_params.get("code")
-    if not code:
-        return JSONResponse(
-            {"error": "No llegó 'code'. Debe ser /callback/?code=..."},
-            status_code=400,
-        )
-
-    THREADS_APP_ID = os.getenv("THREADS_APP_ID")
-    THREADS_APP_SECRET = os.getenv("THREADS_APP_SECRET")
-    THREADS_REDIRECT_URI = os.getenv("THREADS_REDIRECT_URI")
-
-    missing = []
-    if not THREADS_APP_ID:
-        missing.append("THREADS_APP_ID")
-    if not THREADS_APP_SECRET:
-        missing.append("THREADS_APP_SECRET")
-    if not THREADS_REDIRECT_URI:
-        missing.append("THREADS_REDIRECT_URI")
-
-    if missing:
-        return JSONResponse(
-            {"error": "Faltan variables", "missing": missing},
-            status_code=400,
-        )
-
-    # 1) code -> short-lived token
-    token_url = "https://graph.threads.net/oauth/access_token"
-    data = {
-        "client_id": THREADS_APP_ID,
-        "client_secret": THREADS_APP_SECRET,
-        "grant_type": "authorization_code",
-        "redirect_uri": THREADS_REDIRECT_URI,
-        "code": code,
-    }
-
-    r = requests.post(token_url, data=data, timeout=30)
-    try:
-        short_payload = r.json()
-    except Exception:
-        short_payload = {"raw": r.text}
-
-    if r.status_code != 200 or "access_token" not in short_payload:
-        return JSONResponse(
-            {
-                "step": "code_to_token_failed",
-                "status": r.status_code,
-                "response": short_payload,
-            },
-            status_code=400,
-        )
-
-    short_token = short_payload["access_token"]
-
-    # 2) short-lived -> long-lived (60 días)
-    ll_url = "https://graph.threads.net/access_token"
-    params = {
-        "grant_type": "th_exchange_token",
-        "client_secret": THREADS_APP_SECRET,
-        "access_token": short_token,
-    }
-
-    r2 = requests.get(ll_url, params=params, timeout=30)
-    try:
-        long_payload = r2.json()
-    except Exception:
-        long_payload = {"raw": r2.text}
-
-    if r2.status_code != 200 or "access_token" not in long_payload:
-        return JSONResponse(
-            {
-                "ok": True,
-                "short_lived": short_payload,
-                "long_lived_error": {"status": r2.status_code, "response": long_payload},
-                "next": "Copia short_lived.access_token (dura ~1h) o revisa permisos/config.",
-            }
-        )
-
-    return JSONResponse(
-        {
-            "ok": True,
-            "long_lived": long_payload,
-            "short_lived": short_payload,
-            "next": "Copia long_lived.access_token y guárdalo como THREADS_USER_ACCESS_TOKEN.",
-        }
+def r2_client():
+    if not (R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY):
+        raise RuntimeError("Faltan credenciales R2/S3 (R2_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)")
+    return boto3.client(
+        "s3",
+        endpoint_url=R2_ENDPOINT_URL,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name="auto",
     )
 
+def save_to_r2(key: str, payload: dict):
+    s3 = r2_client()
+    body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=body, ContentType="application/json")
 
-# ============================================================
-# LA ESTRATOSFÉRICA TV – ROBOT EDITORIAL (MULTIRED + GAMING AMPLIO)
-# Archivo único: main.py
-# ============================================================
-
-# ==============================
-# VARIABLES DE ENTORNO
-# ==============================
-BUCKET_NAME = os.environ["BUCKET_NAME"]
-R2_ENDPOINT = os.environ["R2_ENDPOINT_URL"]
-AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
-AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
-AWS_DEFAULT_REGION = os.environ.get("AWS_DEFAULT_REGION", "auto")
-
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-OPENAI_TEMPERATURE = float(os.environ.get("OPENAI_TEMPERATURE", "0.4"))
-
-MAX_HIGH = int(os.environ.get("MAX_HIGH", "3"))
-MAX_MEDIUM = int(os.environ.get("MAX_MEDIUM", "5"))
-MAX_LOW = int(os.environ.get("MAX_LOW", "4"))
-
-MAX_ARTICLES_PER_RUN = int(os.environ.get("MAX_ARTICLES_PER_RUN", "5"))
-
-ALLOW_FALLBACK_ON_OPENAI_ERROR = (
-    os.environ.get("ALLOW_FALLBACK_ON_OPENAI_ERROR", "true").lower() == "true"
-)
-
-# ==============================
-# FUENTES RSS
-# ==============================
-RSS_FEEDS = [
-    "https://www.dexerto.com/feed/",
-    "https://esportsinsider.com/feed",
-    "https://www.esports.net/news/feed/",
-    "https://www.pcgamer.com/rss/",
-]
-
-# ==============================
-# FILTRO DE ENTRADA (AMPLIO)  (NO TOCADO)
-# ==============================
-KEYWORDS_INCLUDE = [
-    "gaming", "video game", "videogame", "game", "gamer", "juego", "juegos",
-    "playstation", "ps5", "ps4", "xbox", "nintendo", "switch", "steam", "pc",
-    "ubisoft", "riot", "blizzard", "ea", "epic", "bandai", "capcom", "square enix", "take-two",
-    "esports", "e-sports", "competitive", "tournament", "major", "worlds", "lan",
-    "valorant", "vct",
-    "cs2", "counter-strike",
-    "league of legends", "lol", "lck", "lec", "lcs", "lpl", "msi",
-    "dota", "dota 2", "the international",
-    "fortnite", "call of duty", "cod", "warzone",
-    "overwatch", "apex",
-    "free fire", "mlbb", "mobile legends",
-    "minecraft", "roblox",
-    "just dance",
-    "mario kart", "mariokart",
-    "ea sports fc", "fc 24", "fc 25", "fc 26", "fifa",
-    "rocket league", "pubg",
-    "gta", "gta v", "gta 6",
-    "pokemon", "zelda", "mario", "smash", "smash bros",
-    "street fighter", "tekken", "mortal kombat",
-]
-
-KEYWORDS_EXCLUDE = [
-    "nba", "nfl", "mlb", "nhl",
-    "premier league", "champions league", "la liga",
-    "olympic", "olympics",
-]
-
-URL_PATH_EXCLUDE = [
-    "/tiktok/",
-    "/tv-movies/",
-    "/movies/",
-    "/celebrity/",
-    "/dating/",
-]
-
-# ==============================
-# CONEXIÓN R2 (Cloudflare R2 via S3)
-# ==============================
-s3 = boto3.client(
-    "s3",
-    endpoint_url=R2_ENDPOINT,
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-    region_name=AWS_DEFAULT_REGION,
-)
-
-# ==============================
-# OPENAI CLIENT
-# ==============================
-client = OpenAI()
-
-# ==============================
-# HELPERS
-# ==============================
-def normalize_text(s: str) -> str:
-    return re.sub(r"\s+", " ", (s or "").strip().lower())
-
-def url_is_bad(url: str) -> bool:
-    u = (url or "").lower()
-    return any(p in u for p in URL_PATH_EXCLUDE)
-
-def try_get_excerpt(url: str, timeout: int = 8) -> str:
+def load_from_r2(key: str):
+    s3 = r2_client()
     try:
-        r = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
-        if r.status_code != 200:
-            return ""
-        html = r.text
-        m = re.search(
-            r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']',
-            html,
-            re.I
-        )
-        return m.group(1).strip() if m else ""
+        obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+        data = obj["Body"].read().decode("utf-8")
+        return json.loads(data)
+    except s3.exceptions.NoSuchKey:
+        return None
     except Exception:
-        return ""
+        return None
 
-def passes_filters(title: str, link: str, excerpt: str) -> bool:
-    t = normalize_text(title)
-    e = normalize_text(excerpt)
-    u = (link or "").lower()
+def r2_public_base_url_from_endpoint(endpoint_url: str) -> str:
+    # Convierte: https://xxxxx.r2.cloudflarestorage.com -> https://xxxxx.r2.dev
+    # Si usas dominio propio público, reemplaza esta lógica por tu dominio.
+    return endpoint_url.replace(".r2.cloudflarestorage.com", ".r2.dev").rstrip("/")
 
-    if url_is_bad(u):
-        return False
+def upload_bytes_to_r2_public(image_bytes: bytes, ext: str, prefix="threads_media") -> str:
+    s3 = r2_client()
+    h = hashlib.sha1(image_bytes).hexdigest()[:16]
+    key = f"{prefix}/{h}{ext}"
 
-    if any(bad in t for bad in KEYWORDS_EXCLUDE):
-        return False
+    content_type = {
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+    }.get(ext.lower(), "image/jpeg")
 
-    hay_keyword = (
-        any(ok in t for ok in KEYWORDS_INCLUDE)
-        or any(ok in e for ok in KEYWORDS_INCLUDE)
-        or any(ok in u for ok in KEYWORDS_INCLUDE)
-    )
-    if not hay_keyword:
-        return False
-
-    return True
-
-def save_to_r2(key: str, data) -> None:
-    body = json.dumps(data, ensure_ascii=False).encode("utf-8")
     s3.put_object(
         Bucket=BUCKET_NAME,
         Key=key,
-        Body=body,
-        ContentType="application/json"
+        Body=image_bytes,
+        ContentType=content_type,
     )
-    print("Archivo guardado en R2:", key)
 
-# ==============================
-# FALLBACK EDITORIAL
-# ==============================
-def fallback_editorial(article: dict, reason: str) -> dict:
-    title = (article.get("title", "") or "").strip()
-    url = (article.get("link", "") or "").strip()
-    excerpt = (article.get("excerpt", "") or "").strip()
+    base = r2_public_base_url_from_endpoint(R2_ENDPOINT_URL)
+    # forma común de r2.dev: /<bucket>/<key>
+    return f"{base}/{BUCKET_NAME}/{key}"
 
-    base = f"{title}. {excerpt}".strip()
-    if len(base) > 220:
-        base = base[:220].rstrip() + "..."
 
-    threads = [
-        f"{base} ¿Qué lectura harías si esto fuera tu producto o comunidad?",
-        "Señal clave: atención vs. retención. ¿Qué variable crees que manda aquí?",
-        "Si eres jugador/creador: ¿cómo te afecta? Si eres marca: ¿qué oportunidad ves?",
-        "En el ecosistema gamer, lo sostenible es ejecución. ¿Qué harías esta semana para sostenerlo?",
-        "Pregunta de negocio: ¿esto construye valor a largo plazo o solo un pico de conversación?",
-        f"Fuente: {url} ¿Qué ángulo quieres que profundicemos con datos?"
-    ]
+# =========================
+# RSS / ARTÍCULOS
+# =========================
 
-    ig_slides = [
-        f"Titular: {title}",
-        f"Contexto: {(excerpt[:140] + '...') if len(excerpt) > 140 else excerpt}",
-        "Por qué importa: señal de comunidad/mercado.",
-        "Lectura: producto + distribución + retención.",
-        "Decisión: ¿qué priorizas hoy?",
-        f"Fuente: {url}"
-    ]
+def fetch_rss_articles():
+    if not feedparser:
+        raise RuntimeError("Falta feedparser. Agrégalo a requirements.txt: feedparser")
 
-    return {
-        "is_gaming": True,
-        "category": "culture",
-        "priority": "baja",
-        "reason": reason,
-        "threads_posts": threads,
-        "instagram_carousel_slides": ig_slides,
-        "instagram_caption": f"{title}\n\nLectura: esto es más señal de mercado/comunidad que un titular competitivo.\n\nSi tú lideraras el proyecto, ¿qué priorizarías esta semana?\n\nFuente: {url}",
-        "tiktok_script": f"Brief gamer: {title}. Contexto: {excerpt}. Lectura: aquí manda la retención y el valor de comunidad. Pregunta: si fueras responsable, ¿qué decisión tomarías hoy?",
-        "youtube_outline": [
-            "Resumen en 30 segundos",
-            "Contexto: por qué esto aparece ahora",
-            "Qué significa para jugadores/creadores/marcas",
-            "Riesgos y oportunidades",
-            "Qué métricas observar",
-            "Cierre: decisión de la semana"
-        ],
-        "facebook_post": f"{title}\n\nContexto: {excerpt}\n\nLectura: ¿qué pesa más aquí: producto, contenido o comunidad?\n\nFuente: {url}",
-        "topic_tags": ["gaming", "ecosistema", "LATAM"],
-        "source_quality": "media"
+    articles = []
+    for feed in RSS_FEEDS:
+        try:
+            d = feedparser.parse(feed)
+            for e in d.entries[:50]:
+                link = getattr(e, "link", None) or ""
+                title = getattr(e, "title", "") or ""
+                published = getattr(e, "published", "") or getattr(e, "updated", "") or ""
+                articles.append({
+                    "title": title.strip(),
+                    "link": link.strip(),
+                    "published": published,
+                    "feed": feed,
+                })
+        except Exception:
+            continue
+
+    # dedupe por link
+    seen = set()
+    out = []
+    for a in articles:
+        if a["link"] and a["link"] not in seen:
+            seen.add(a["link"])
+            out.append(a)
+    return out
+
+
+# =========================
+# EXTRAER IMAGEN OG
+# =========================
+
+OG_IMAGE_RE = re.compile(r'property=["\']og:image["\']\s+content=["\']([^"\']+)["\']', re.IGNORECASE)
+OG_IMAGE_RE2 = re.compile(r'content=["\']([^"\']+)["\']\s+property=["\']og:image["\']', re.IGNORECASE)
+
+def extract_og_image(url: str) -> str | None:
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
+        r.raise_for_status()
+        html = r.text
+        m = OG_IMAGE_RE.search(html) or OG_IMAGE_RE2.search(html)
+        if not m:
+            return None
+        img = m.group(1).strip()
+        # normaliza relativas
+        if img.startswith("/"):
+            img = urljoin(url, img)
+        return img
+    except Exception:
+        return None
+
+def guess_ext_from_content_type(ct: str):
+    ct = (ct or "").lower()
+    if "png" in ct: return ".png"
+    if "webp" in ct: return ".webp"
+    if "jpeg" in ct or "jpg" in ct: return ".jpg"
+    return ".jpg"
+
+def download_image_bytes(image_url: str) -> tuple[bytes, str]:
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "Referer": image_url,
     }
+    r = requests.get(image_url, headers=headers, timeout=30, allow_redirects=True)
+    r.raise_for_status()
+    ext = guess_ext_from_content_type(r.headers.get("Content-Type", ""))
+    return r.content, ext
 
-# ==============================
-# OPENAI: MULTIPLATAFORMA
-# ==============================
-def openai_editorial(article: dict):
-    title = article.get("title", "")
-    url = article.get("link", "")
-    excerpt = article.get("excerpt", "")
 
-    prompt = f"""
-Eres el editor ejecutivo de LA ESTRATOSFÉRICA TV.
+# =========================
+# OPENAI: GENERAR TEXTO
+# =========================
 
-Identidad del medio:
-- Aspiracional: eleva al lector (jugador, creador, empresario, sponsor)
-- Profesional, directo, claro
-- Inclusivo: explica sin descalificar
-- Sin clickbait, sin exageraciones, sin tono infantil
+def openai_client():
+    if not OpenAI:
+        raise RuntimeError("No se pudo importar OpenAI. Revisa requirements.txt (openai).")
+    if not OPENAI_API_KEY:
+        raise RuntimeError("Falta OPENAI_API_KEY en secrets.")
+    return OpenAI(api_key=OPENAI_API_KEY)
 
-Tareas:
-1) Determina si pertenece al ecosistema GAMING (no solo esports).
-2) Categoría: "competitive" (competitivo/esports), "industry" (negocio/mercado), "culture" (cultura gamer), "other" (no gaming).
-3) Prioridad: "alta", "media", "baja".
-4) Genera piezas MULTIPLATAFORMA:
+def openai_text(prompt: str) -> str:
+    client = openai_client()
 
-THREADS:
-- 6 posts estilo briefing ejecutivo.
+    # Intento 1: responses API (más nueva)
+    try:
+        resp = client.responses.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+            input=prompt,
+        )
+        # resp.output_text existe en SDKs nuevos
+        out = getattr(resp, "output_text", None)
+        if out:
+            return out.strip()
+    except Exception:
+        pass
 
-INSTAGRAM:
-- Carrusel 6 slides.
-- 1 caption (100–180 palabras).
-
-TIKTOK/SHORTS:
-- Guion 35–55 segundos.
-
-YOUTUBE:
-- Outline 6–8 bullets.
-
-FACEBOOK:
-- 1 post 80–160 palabras.
-
-Devuelve SOLO JSON válido EXACTO con las llaves definidas.
-
-Noticia:
-title: "{title}"
-excerpt: "{excerpt}"
-url: "{url}"
-""".strip()
-
+    # Intento 2: chat.completions (fallback)
     try:
         resp = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": "Responde SOLO JSON válido."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=OPENAI_TEMPERATURE,
-            response_format={"type": "json_object"},
+            model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+            messages=[{"role": "user", "content": prompt}],
         )
-
-        text = resp.choices[0].message.content
-        data = json.loads(text)
-
-        posts = data.get("threads_posts", [])
-        if not isinstance(posts, list):
-            posts = []
-        while len(posts) < 6:
-            posts.append("")
-        data["threads_posts"] = posts[:6]
-
-        slides = data.get("instagram_carousel_slides", [])
-        if not isinstance(slides, list):
-            slides = []
-        while len(slides) < 6:
-            slides.append("")
-        data["instagram_carousel_slides"] = slides[:6]
-
-        outline = data.get("youtube_outline", [])
-        if not isinstance(outline, list):
-            outline = []
-        while len(outline) < 6:
-            outline.append("")
-        data["youtube_outline"] = outline[:8]
-
-        tags = data.get("topic_tags", [])
-        if not isinstance(tags, list):
-            tags = ["gaming", "ecosistema", "LATAM"]
-        while len(tags) < 3:
-            tags.append("LATAM")
-        data["topic_tags"] = tags[:3]
-
-        if not isinstance(data.get("instagram_caption", ""), str):
-            data["instagram_caption"] = ""
-        if not isinstance(data.get("tiktok_script", ""), str):
-            data["tiktok_script"] = ""
-        if not isinstance(data.get("facebook_post", ""), str):
-            data["facebook_post"] = ""
-
-        if "is_gaming" not in data:
-            data["is_gaming"] = True
-        if "category" not in data:
-            data["category"] = "culture"
-        if "priority" not in data:
-            data["priority"] = "baja"
-        if "reason" not in data:
-            data["reason"] = "Sin razón proporcionada por el modelo."
-
-        if all((p or "").strip() == "" for p in data["threads_posts"]):
-            fb = fallback_editorial(article, reason="Relleno automático por posts vacíos del modelo.")
-            data["threads_posts"] = fb["threads_posts"]
-
-        return data, ""
-
+        return resp.choices[0].message.content.strip()
     except Exception as e:
-        msg = str(e)
-        if "insufficient_quota" in msg or "Error code: 429" in msg:
-            return {}, "insufficient_quota"
-        return {}, "openai_error"
+        raise RuntimeError(f"OpenAI error: {e}")
 
-# ==============================
-# CONTROL EDITORIAL (LIMITES)
-# ==============================
-def enforce_limits(items: list):
-    items_sorted = sorted(items, key=lambda a: a.get("published", ""), reverse=True)
+def build_threads_text(item: dict, mode: str = "new") -> str:
+    # mode: "new" o "repost"
+    title = item.get("title", "")
+    link = item.get("link", "")
 
-    highs, meds, lows = [], [], []
-    for a in items_sorted:
-        p = a["editorial"].get("priority", "baja")
-        if p == "alta":
-            highs.append(a)
-        elif p == "media":
-            meds.append(a)
-        else:
-            lows.append(a)
+    if mode == "repost":
+        prompt = f"""
+Eres editor para una cuenta de Threads sobre esports/gaming.
+Reescribe este post como un REPOST con otra mirada/opinión, sin sonar repetido.
+- 1 párrafo corto, máximo 260 caracteres si es posible.
+- Termina con una pregunta para la comunidad.
+- Incluye "Fuente:" + link.
+Datos:
+Título: {title}
+Link: {link}
+"""
+    else:
+        prompt = f"""
+Eres editor para una cuenta de Threads sobre esports/gaming.
+Crea un post:
+- 1 párrafo corto (máximo 260-320 caracteres).
+- Termina con una pregunta a la comunidad.
+- Incluye "Fuente:" + link.
+Datos:
+Título: {title}
+Link: {link}
+"""
+    text = openai_text(prompt)
 
-    highs = highs[:MAX_HIGH]
-    meds = meds[:MAX_MEDIUM]
-    lows = lows[:MAX_LOW]
+    # Seguridad: asegura que el link aparezca
+    if "Fuente:" not in text:
+        text = f"{text}\n\nFuente: {link}"
+    return text.strip()
 
-    final = highs + meds + lows
 
-    metrics = {
-        "final_high": len(highs),
-        "final_medium": len(meds),
-        "final_low": len(lows),
+# =========================
+# THREADS API
+# =========================
+
+def threads_create_container_image(user_id, access_token, text, image_url):
+    url = f"{THREADS_GRAPH}/{user_id}/threads"
+    data = {
+        "media_type": "IMAGE",
+        "image_url": image_url,
+        "text": text,
+        "access_token": access_token,
     }
-    return final, metrics
+    r = requests.post(url, data=data, timeout=30)
+    r.raise_for_status()
+    return r.json()["id"]
 
-# ==============================
-# SCRAPER
-# ==============================
-def get_articles():
-    articles = []
-    for feed_url in RSS_FEEDS:
-        feed = feedparser.parse(feed_url)
+def threads_wait_container(container_id, access_token, timeout_sec=90):
+    url = f"{THREADS_GRAPH}/{container_id}"
+    start = time.time()
+    last = None
+    while time.time() - start < timeout_sec:
+        r = requests.get(
+            url,
+            params={"fields": "status,error_message", "access_token": access_token},
+            timeout=30
+        )
+        r.raise_for_status()
+        j = r.json()
+        last = j
+        status = j.get("status")
+        if status == "FINISHED":
+            return j
+        if status in ("ERROR", "FAILED"):
+            raise RuntimeError(f"Container failed: {j}")
+        time.sleep(2)
+    raise TimeoutError(f"Container not ready after {timeout_sec}s: {last}")
 
-        for entry in feed.entries:
-            title = getattr(entry, "title", "")
-            if not title:
-                continue
-
-            link = getattr(entry, "link", "")
-            if link and url_is_bad(link):
-                continue
-
-            excerpt = try_get_excerpt(link) if link else ""
-
-            if not passes_filters(title, link, excerpt):
-                continue
-
-            try:
-                published_raw = getattr(entry, "published", "")
-                published_dt = dtparser.parse(published_raw) if published_raw else datetime.now(timezone.utc)
-            except Exception:
-                published_dt = datetime.now(timezone.utc)
-
-            articles.append({
-                "title": title,
-                "link": link,
-                "published": published_dt.isoformat(),
-                "excerpt": excerpt,
-                "source_feed": feed_url
-            })
-
-    return articles
+def threads_publish(user_id, access_token, container_id):
+    url = f"{THREADS_GRAPH}/{user_id}/threads_publish"
+    r = requests.post(url, data={"creation_id": container_id, "access_token": access_token}, timeout=30)
+    r.raise_for_status()
+    return r.json()
 
 
-# ==============================
-# THREADS: STATE + REPOST
-# ==============================
-def _utcnow():
-    return datetime.now(timezone.utc)
+def threads_publish_text_image(text: str, image_url_from_news: str):
+    if THREADS_DRY_RUN:
+        print("[DRY_RUN] Threads post:", text)
+        print("[DRY_RUN] Image:", image_url_from_news)
+        return {"ok": True, "dry_run": True}
 
-def _parse_dt(s: str):
-    if not s:
-        return None
-    try:
-        return datetime.fromisoformat(s.replace("Z", "+00:00"))
-    except Exception:
-        return None
+    # 1) descargar imagen
+    img_bytes, ext = download_image_bytes(image_url_from_news)
+
+    # 2) subir a R2 público
+    r2_url = upload_bytes_to_r2_public(img_bytes, ext)
+    print("IMAGE re-hosted on R2:", r2_url)
+
+    # 3) container
+    container_id = threads_create_container_image(THREADS_USER_ID, THREADS_USER_ACCESS_TOKEN, text, r2_url)
+    threads_wait_container(container_id, THREADS_USER_ACCESS_TOKEN, timeout_sec=90)
+
+    # 4) publish
+    res = threads_publish(THREADS_USER_ID, THREADS_USER_ACCESS_TOKEN, container_id)
+    return {"ok": True, "container": {"id": container_id}, "publish": res, "image_url": r2_url}
+
+
+# =========================
+# STATE
+# =========================
 
 def load_threads_state() -> dict:
-    """
-    Carga estado desde R2 (threads_state.json).
-    Si no existe, regresa estado vacío.
-    """
-    try:
-        obj = s3.get_object(Bucket=BUCKET_NAME, Key=THREADS_STATE_KEY)
-        raw = obj["Body"].read().decode("utf-8")
-        return json.loads(raw)
-    except Exception:
-        return {}
+    state = load_from_r2(THREADS_STATE_KEY)
+    if not state:
+        state = {
+            "posted_items": {},  # link -> {last_posted_at, times}
+            "posted_links": [],  # lista (solo para lectura humana / legacy)
+            "last_posted_at": None,
+        }
+    # normaliza
+    state.setdefault("posted_items", {})
+    state.setdefault("posted_links", [])
+    state.setdefault("last_posted_at", None)
+    return state
 
-def save_threads_state(state: dict) -> None:
+def save_threads_state(state: dict):
     save_to_r2(THREADS_STATE_KEY, state)
 
-def state_get_runs_without_new(state: dict) -> int:
-    return int(state.get("runs_without_new", 0))
+def mark_posted(state: dict, link: str):
+    pi = state["posted_items"].get(link, {"times": 0, "last_posted_at": None})
+    pi["times"] = int(pi.get("times", 0)) + 1
+    pi["last_posted_at"] = iso_now()
+    state["posted_items"][link] = pi
 
-def state_inc_runs_without_new(state: dict) -> None:
-    state["runs_without_new"] = state_get_runs_without_new(state) + 1
+    # legacy list
+    if link not in state["posted_links"]:
+        state["posted_links"].append(link)
+    state["posted_links"] = state["posted_links"][-200:]
+    state["last_posted_at"] = iso_now()
 
-def state_reset_runs_without_new(state: dict) -> None:
-    state["runs_without_new"] = 0
 
-def state_mark_posted(state: dict, link: str) -> None:
-    posted = state.get("posted_links_meta", {})
-    posted[link] = {"last_posted_at": _utcnow().isoformat()}
-    state["posted_links_meta"] = posted
+# =========================
+# SELECCIÓN: NUEVO vs REPOST
+# =========================
 
-def state_can_repost(state: dict, link: str) -> bool:
-    posted = state.get("posted_links_meta", {}).get(link, {})
-    last = _parse_dt(posted.get("last_posted_at"))
+def is_new_allowed(state: dict, link: str) -> bool:
+    # Si nunca se ha posteado, permitido
+    if link not in state["posted_items"]:
+        return True
+    # si ya se posteó, NO es nuevo
+    return False
+
+def repost_eligible(state: dict, link: str) -> bool:
+    pi = state["posted_items"].get(link)
+    if not pi:
+        return False
+    times = int(pi.get("times", 0))
+    if times >= REPOST_MAX_TIMES:
+        return False
+    last = pi.get("last_posted_at")
     if not last:
         return True
-    return (_utcnow() - last) >= timedelta(days=REPOST_WINDOW_DAYS)
+    # Solo repost si pasaron >= ventana
+    return days_since(last) >= REPOST_WINDOW_DAYS
 
-def prio_score(p: str) -> int:
-    if p == "alta":
-        return 3
-    if p == "media":
-        return 2
-    return 1
-
-def pick_best_item_to_post(final_items: list, posted_links: set):
-    """
-    Elige el mejor item NUEVO (link no publicado aún).
-    Prioridad: alta > media > baja, y dentro de eso el más reciente.
-    """
-    candidates = []
-    for it in final_items or []:
-        link = (it.get("link") or "").strip()
-        if link and link in posted_links:
-            continue
-        candidates.append(it)
-
-    if not candidates:
-        return None
-
-    candidates = sorted(
-        candidates,
-        key=lambda x: (
-            prio_score(((x.get("editorial") or {}).get("priority") or "baja")),
-            x.get("published", "")
-        ),
-        reverse=True
-    )
-    return candidates[0]
-
-def pick_repost_candidate(final_items: list, state: dict):
-    """
-    Elige 1 item para repostear si cumple ventana (7 días).
-    Prioriza por: prioridad + recencia.
-    """
-    candidates = []
-    for it in final_items or []:
-        link = (it.get("link") or "").strip()
-        if not link:
-            continue
-        if state_can_repost(state, link):
-            candidates.append(it)
-
-    if not candidates:
-        return None
-
-    candidates = sorted(
-        candidates,
-        key=lambda x: (
-            prio_score(((x.get("editorial") or {}).get("priority") or "baja")),
-            x.get("published", "")
-        ),
-        reverse=True
-    )
-
-    top = candidates[:3] if len(candidates) >= 3 else candidates
-    return random.choice(top)
-
-def rewrite_with_angle(item: dict) -> str:
-    """
-    Crea un texto distinto para REPOST (otra mirada).
-    """
-    angle = random.choice(ANGLES)
-    title = (item.get("title") or "").strip()
-    link = (item.get("link") or "").strip()
-
-    if angle == "producto":
-        return f"{title}\n\nLectura de producto: ¿qué decisión tomarías aquí y por qué?\n\nFuente: {link}"
-    if angle == "comunidad":
-        return f"{title}\n\nLectura de comunidad: si esto pasa en tu comunidad, ¿cómo lo manejarías?\n\nFuente: {link}"
-    if angle == "negocio":
-        return f"{title}\n\nLectura de negocio: ¿dónde está la oportunidad sin matar el engagement?\n\nFuente: {link}"
-    if angle == "leccion":
-        return f"{title}\n\n3 aprendizajes rápidos para creadores/marcas:\n1) \n2) \n3) \n\nFuente: {link}"
-    return f"{title}\n\nDebate: ¿estás a favor o en contra? ¿por qué?\n\nFuente: {link}"
-
-def build_threads_text(item: dict) -> str:
-    """
-    Publica el primer post editorial (threads_posts[0]) en español.
-    Si por alguna razón no existe, cae a fallback_editorial.
-    """
-    editorial = (item or {}).get("editorial") or {}
-    posts = editorial.get("threads_posts") or []
-
-    text = ""
-    if isinstance(posts, list) and len(posts) > 0 and isinstance(posts[0], str):
-        text = posts[0].strip()
-
-    if not text:
-        fb = fallback_editorial(item, reason="build_threads_text: threads_posts[0] vacío o inexistente")
-        text = (fb.get("threads_posts") or [""])[0].strip()
-
-    MAX_CHARS = 480
-    if len(text) > MAX_CHARS:
-        text = text[:MAX_CHARS].rstrip() + "…"
-
-    return text
-
-def threads_publish_text(text: str) -> dict:
-    """
-    Publica un post de texto en Threads y regresa resultado estructurado.
-    Marca ok=True SOLO si el publish devuelve un ID real.
-    """
-    token = os.getenv("THREADS_USER_ACCESS_TOKEN")
-    if not token:
-        return {"ok": False, "error": "missing_env", "message": "Falta THREADS_USER_ACCESS_TOKEN"}
-
-    # 1) Crear contenedor (TEXT)
-    create_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads"
-    create_res = requests.post(
-        create_url,
-        data={
-            "media_type": "TEXT",
-            "text": text,
-            "access_token": token,
-        },
-        timeout=30,
-    )
-
-    try:
-        create_data = create_res.json()
-    except Exception:
-        create_data = {"raw": create_res.text}
-
-    if create_res.status_code != 200 or "id" not in create_data:
-        return {
-            "ok": False,
-            "step": "create_container_failed",
-            "status": create_res.status_code,
-            "container": create_data,
-        }
-
-    creation_id = create_data["id"]
-
-    # 2) Publicar contenedor
-    publish_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads_publish"
-    publish_res = requests.post(
-        publish_url,
-        data={"creation_id": creation_id, "access_token": token},
-        timeout=30,
-    )
-
-    try:
-        publish_data = publish_res.json()
-    except Exception:
-        publish_data = {"raw": publish_res.text}
-
-    publish_ok = (
-        publish_res.status_code == 200
-        and isinstance(publish_data, dict)
-        and ("id" in publish_data)
-        and ("error" not in publish_data)
-    )
-
-    return {
-        "ok": publish_ok,
-        "container": create_data,
-        "publish": publish_data,
-        "status_publish": publish_res.status_code,
-    }
-
-
-# ==============================
-# EJECUCIÓN DEL ROBOT
-# ==============================
-def run_robot_once():
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-
-    print("Obteniendo artículos (RSS + filtros)...")
-    scraped = get_articles()
-    print(f"{len(scraped)} artículos encontrados (filtrados)")
-
-    articles = scraped[:MAX_ARTICLES_PER_RUN]
-    print(f"Procesando con IA (máximo {MAX_ARTICLES_PER_RUN})...")
-
-    enriched = []
-    openai_errors = {"insufficient_quota": 0, "openai_error": 0}
-    discarded_non_gaming = 0
-
+def pick_item(articles: list[dict], state: dict) -> tuple[dict | None, str]:
+    # 1) busca un item NUEVO
     for a in articles:
-        editorial, err = openai_editorial(a)
+        if a.get("link") and is_new_allowed(state, a["link"]):
+            return a, "new"
 
-        if err:
-            openai_errors[err] = openai_errors.get(err, 0) + 1
-            if ALLOW_FALLBACK_ON_OPENAI_ERROR:
-                a["editorial"] = fallback_editorial(a, reason=f"OpenAI error: {err}")
-            else:
-                continue
-        else:
-            a["editorial"] = editorial
+    # 2) si no hay nuevos, intenta REPOST
+    if REPOST_ENABLE:
+        for a in articles:
+            if a.get("link") and a["link"] in state["posted_items"] and repost_eligible(state, a["link"]):
+                return a, "repost"
 
-        if not a["editorial"].get("is_gaming", True) or a["editorial"].get("category") == "other":
-            discarded_non_gaming += 1
-            continue
+    return None, "none"
 
-        enriched.append(a)
-        time.sleep(0.25)
 
-        if err == "insufficient_quota":
-            break
+# =========================
+# MAIN RUN
+# =========================
 
-    final, metrics = enforce_limits(enriched)
-    print("FINAL ITEMS:", len(final))
+def run_robot_once():
+    # 1) RSS
+    print(f"Obteniendo artículos (RSS + filtros)...")
+    articles = fetch_rss_articles()
+    print(f"{len(articles)} artículos encontrados (filtrados)")
 
-    # ==========================
-    # AUTO-POST (Threads): 1 post por corrida
-    # - Primero intenta NUEVO
-    # - Si no hay nuevo N=3 corridas seguidas -> REPOST (ventana 7 días) con otro texto
-    # ==========================
-    threads_publish_result = None
+    # 2) IA (limit)
+    print(f"Procesando con IA (máximo {MAX_AI_ITEMS})...")
+    processed = []
+    for a in articles[:MAX_AI_ITEMS]:
+        processed.append(a)
+        time.sleep(SLEEP_BETWEEN_ITEMS_SEC)
 
-    if THREADS_AUTO_POST and final and THREADS_AUTO_POST_LIMIT > 0:
-        state = load_threads_state()
+    # 3) Selección final simple
+    state = load_threads_state()
 
-        posted_links = set(state.get("posted_links", []))
-        item = pick_best_item_to_post(final, posted_links)
+    item, mode = pick_item(processed, state)
+    if not item:
+        print("FINAL ITEMS: 0")
+        print("Auto-post Threads: no hay item nuevo (evitando repetidos).")
+        # guarda corrida
+        return {"final_items": 0, "mode": "none", "posted": False}
 
-        if item:
-            text = build_threads_text(item)
-            print("Auto-post Threads: publicando 1 post (NUEVO)...")
+    print("FINAL ITEMS: 1")
+    link = item["link"]
 
-            if THREADS_DRY_RUN:
-                threads_publish_result = {"ok": True, "dry_run": True, "text": text}
-                print("Auto-post Threads: DRY_RUN ✅ (no publicó de verdad)")
-            else:
-                res = threads_publish_text(text)
-                threads_publish_result = res
+    # 4) construir texto
+    text = build_threads_text(item, mode=mode)
 
-                if res.get("ok") is True:
-                    link = (item.get("link") or "").strip()
-                    if link:
-                        posted_links.add(link)
-                        state["posted_links"] = list(posted_links)[-200:]
-                        state_mark_posted(state, link)
+    # 5) conseguir imagen
+    og_image = extract_og_image(link)
+    if not og_image:
+        # si no hay imagen, fallback: post sin imagen NO (para tu caso pediste texto+imagen)
+        print("No se encontró og:image. Se omite publicación para evitar post sin imagen.")
+        return {"final_items": 1, "mode": mode, "posted": False, "reason": "no_og_image"}
 
-                    state_reset_runs_without_new(state)
-                    state["last_posted_at"] = datetime.now(timezone.utc).isoformat()
-                    state["last_posted_link"] = (item.get("link") or "").strip()
-
-                    save_threads_state(state)
-                    print("Auto-post Threads: OK ✅")
-                    print("Threads publish:", res.get("publish"))
-                else:
-                    state_inc_runs_without_new(state)
-                    save_threads_state(state)
-                    print("Auto-post Threads: FALLÓ ❌")
-                    print("Threads response:", res)
-
-        else:
-            # No hubo NUEVO
-            state_inc_runs_without_new(state)
-            runs_wo_new = state_get_runs_without_new(state)
+    # 6) autopost
+    if THREADS_AUTO_POST and THREADS_AUTO_POST_LIMIT > 0:
+        label = "NUEVO" if mode == "new" else "REPOST"
+        print(f"Auto-post Threads: publicando 1 post ({label})...")
+        try:
+            res = threads_publish_text_image(text, og_image)
+            print("Threads publish response:", res)
+            mark_posted(state, link)
             save_threads_state(state)
+            print("Auto-post Threads: OK ✅")
+            return {"final_items": 1, "mode": mode, "posted": True, "link": link, "threads": res}
+        except Exception as e:
+            print("Auto-post Threads: FALLÓ ❌")
+            print("ERROR:", str(e))
+            return {"final_items": 1, "mode": mode, "posted": False, "error": str(e)}
+    else:
+        print("Auto-post Threads desactivado.")
+        return {"final_items": 1, "mode": mode, "posted": False, "reason": "auto_post_off"}
 
-            print(f"Auto-post Threads: no hay item nuevo (corridas sin nuevo={runs_wo_new}).")
 
-            # Intentar REPOST si ya se llegó a N
-            if runs_wo_new >= REPOST_AFTER_NO_NEW_RUNS:
-                repost_item = pick_repost_candidate(final, state)
-                if repost_item:
-                    repost_text = rewrite_with_angle(repost_item)
-                    print("Auto-post Threads: intentando REPOST con otra mirada...")
+def save_run_payload(payload: dict):
+    run_id = now_utc().strftime("%Y%m%d_%H%M%S")
+    key = f"editorial_run_{run_id}.json"
+    save_to_r2(key, payload)
+    print("Archivo guardado en R2:", key)
 
-                    if THREADS_DRY_RUN:
-                        threads_publish_result = {"ok": True, "dry_run": True, "text": repost_text, "repost": True}
-                        print("Auto-post Threads (REPOST): DRY_RUN ✅ (no publicó de verdad)")
-                    else:
-                        res = threads_publish_text(repost_text)
-                        threads_publish_result = res
 
-                        if res.get("ok") is True:
-                            link = (repost_item.get("link") or "").strip()
-                            if link:
-                                posted_links.add(link)
-                                state["posted_links"] = list(posted_links)[-200:]
-                                state_mark_posted(state, link)
-
-                            state_reset_runs_without_new(state)
-                            state["last_posted_at"] = datetime.now(timezone.utc).isoformat()
-                            state["last_posted_link"] = link
-
-                            save_threads_state(state)
-                            print("Auto-post Threads (REPOST): OK ✅")
-                            print("Threads publish:", res.get("publish"))
-                        else:
-                            print("Auto-post Threads (REPOST): FALLÓ ❌")
-                            print("Threads response:", res)
-                else:
-                    print("Auto-post Threads: REPOST no permitido aún (ventana 7 días) o sin candidatos.")
-
+if __name__ == "__main__":
+    result = run_robot_once()
+    # guarda reporte siempre
     payload = {
-        "run_id": run_id,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "counts": {
-            "scraped_filtered": len(scraped),
-            "processed_this_run": len(articles),
-            "enriched_after_ai": len(enriched),
-            "discarded_non_gaming": discarded_non_gaming,
-            "openai_errors": openai_errors,
-            **metrics
-        },
+        "generated_at": iso_now(),
         "threads_auto_post": {
             "enabled": THREADS_AUTO_POST,
             "limit": THREADS_AUTO_POST_LIMIT,
             "dry_run": THREADS_DRY_RUN,
-            "repost_after_no_new_runs": REPOST_AFTER_NO_NEW_RUNS,
+            "repost_enable": REPOST_ENABLE,
+            "repost_max_times": REPOST_MAX_TIMES,
             "repost_window_days": REPOST_WINDOW_DAYS,
-            "result": threads_publish_result,
+            "result": result,
         },
-        "items": final
     }
-
-    key = f"editorial_run_{run_id}.json"
-    save_to_r2(key, payload)
-
-
-if __name__ == "__main__":
-    # Esto SOLO se ejecuta si corres: python main.py
-    # NO se ejecuta cuando Railway usa uvicorn.
-    run_robot_once()
+    save_run_payload(payload)

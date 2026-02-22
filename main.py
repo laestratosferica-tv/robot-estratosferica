@@ -1,6 +1,6 @@
 # main.py
 # Robot Editorial + Auto-post Threads con re-host de imágenes en R2
-# FIX DEFINITIVO: Threads API correcta + Debug 400 completo
+# FIX v3: Threads endpoints SIN /v20.0 + Debug 400 completo
 
 import os
 import re
@@ -24,7 +24,7 @@ except Exception:
     OpenAI = None
 
 
-print("RUNNING MULTIRED v2 (THREADS FIXED)")
+print("RUNNING MULTIRED v3 (THREADS FIX v20.0 REMOVED)")
 
 # =========================
 # CONFIG
@@ -37,29 +37,18 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL")
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 
-# ⚠️ RECOMENDADO: usar "me"
+# ✅ RECOMENDADO: usar "me"
 THREADS_USER_ID = os.getenv("THREADS_USER_ID", "me")
 THREADS_USER_ACCESS_TOKEN = os.getenv("THREADS_USER_ACCESS_TOKEN")
 
-THREADS_STATE_KEY = os.getenv("THREADS_STATE_KEY", "threads_state.json")
-
-THREADS_AUTO_POST = os.getenv("THREADS_AUTO_POST", "true").lower() == "true"
-THREADS_AUTO_POST_LIMIT = int(os.getenv("THREADS_AUTO_POST_LIMIT", "1"))
 THREADS_DRY_RUN = os.getenv("THREADS_DRY_RUN", "false").lower() == "true"
-
-REPOST_MAX_TIMES = int(os.getenv("REPOST_MAX_TIMES", "3"))
-REPOST_WINDOW_DAYS = int(os.getenv("REPOST_WINDOW_DAYS", "7"))
-REPOST_ENABLE = os.getenv("REPOST_ENABLE", "true").lower() == "true"
 
 RSS_FEEDS = [x.strip() for x in (os.getenv("RSS_FEEDS") or "").split(",") if x.strip()]
 if not RSS_FEEDS:
     RSS_FEEDS = ["https://www.dexerto.com/feed/"]
 
-MAX_AI_ITEMS = int(os.getenv("MAX_AI_ITEMS", "5"))
-SLEEP_BETWEEN_ITEMS_SEC = float(os.getenv("SLEEP_BETWEEN_ITEMS_SEC", "0.25"))
-
-# 🔥 HOST CORRECTO
-THREADS_GRAPH = os.getenv("THREADS_GRAPH", "https://graph.threads.net/v20.0")
+# 🔥 HOST CORRECTO (SIN /v20.0)
+THREADS_GRAPH = os.getenv("THREADS_GRAPH", "https://graph.threads.net")
 
 # =========================
 # DEBUG META
@@ -80,7 +69,7 @@ def _raise_meta_error(r: requests.Response, label="META"):
         if isinstance(body, bytes):
             body = body.decode("utf-8", errors="replace")
         print("REQUEST BODY:", body)
-    print("RESPONSE TEXT:", r.text)  # 👈 AQUÍ ESTÁ EL JSON COMPLETO
+    print("RESPONSE TEXT:", r.text)  # 👈 JSON completo
     print("================================\n")
 
     r.raise_for_status()
@@ -91,9 +80,6 @@ def _raise_meta_error(r: requests.Response, label="META"):
 
 def now_utc():
     return datetime.now(timezone.utc)
-
-def iso_now():
-    return now_utc().isoformat()
 
 # =========================
 # R2
@@ -108,7 +94,7 @@ def r2_client():
         region_name="auto",
     )
 
-R2_PUBLIC_BASE_URL = "https://pub-8937244ee725495691514507bb8f431e.r2.dev"
+R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "https://pub-8937244ee725495691514507bb8f431e.r2.dev")
 
 def upload_bytes_to_r2_public(image_bytes: bytes, ext: str):
     s3 = r2_client()
@@ -116,10 +102,10 @@ def upload_bytes_to_r2_public(image_bytes: bytes, ext: str):
     key = f"threads_media/{h}{ext}"
 
     content_type = {
-        ".png":"image/png",
-        ".webp":"image/webp",
-        ".jpg":"image/jpeg",
-        ".jpeg":"image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
     }.get(ext, "image/jpeg")
 
     s3.put_object(
@@ -129,12 +115,16 @@ def upload_bytes_to_r2_public(image_bytes: bytes, ext: str):
         ContentType=content_type,
     )
 
-    url = f"{R2_PUBLIC_BASE_URL}/{key}"
+    url = f"{R2_PUBLIC_BASE_URL.rstrip('/')}/{key}"
 
-    # 🔎 Validar que sea accesible públicamente
-    head = requests.head(url, timeout=10)
+    # Validar que sea accesible públicamente
+    head = requests.head(url, timeout=10, allow_redirects=True)
     if head.status_code != 200:
-        raise RuntimeError(f"R2 public URL no accesible: {url}")
+        raise RuntimeError(f"R2 public URL no accesible (status {head.status_code}): {url}")
+
+    ct = (head.headers.get("Content-Type") or "").lower()
+    if "image" not in ct:
+        raise RuntimeError(f"R2 URL no parece imagen (Content-Type={ct}): {url}")
 
     return url
 
@@ -143,34 +133,49 @@ def upload_bytes_to_r2_public(image_bytes: bytes, ext: str):
 # =========================
 
 def fetch_rss_articles():
+    if not feedparser:
+        raise RuntimeError("Falta feedparser en requirements.txt")
+
     articles = []
     for feed in RSS_FEEDS:
         d = feedparser.parse(feed)
         for e in d.entries[:20]:
             articles.append({
-                "title": getattr(e, "title", ""),
-                "link": getattr(e, "link", ""),
+                "title": getattr(e, "title", "") or "",
+                "link": getattr(e, "link", "") or "",
             })
-    return articles
+    return [a for a in articles if a["link"]]
 
 # =========================
 # IMAGEN OG
 # =========================
 
 OG_IMAGE_RE = re.compile(r'property=["\']og:image["\']\s+content=["\']([^"\']+)["\']', re.I)
+OG_IMAGE_RE2 = re.compile(r'content=["\']([^"\']+)["\']\s+property=["\']og:image["\']', re.I)
 
 def extract_og_image(url):
-    r = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=20)
-    m = OG_IMAGE_RE.search(r.text)
-    return m.group(1) if m else None
+    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20, allow_redirects=True)
+    r.raise_for_status()
+    m = OG_IMAGE_RE.search(r.text) or OG_IMAGE_RE2.search(r.text)
+    if not m:
+        return None
+    img = m.group(1).strip()
+    if img.startswith("/"):
+        img = urljoin(url, img)
+    return img
 
 def download_image_bytes(image_url):
-    r = requests.get(image_url, timeout=30)
+    r = requests.get(image_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, allow_redirects=True)
     r.raise_for_status()
-    ct = r.headers.get("Content-Type","").lower()
-    if "png" in ct: ext = ".png"
-    elif "webp" in ct: ext = ".webp"
-    else: ext = ".jpg"
+    ct = (r.headers.get("Content-Type") or "").lower()
+    if "png" in ct:
+        ext = ".png"
+    elif "webp" in ct:
+        ext = ".webp"
+    elif "jpeg" in ct or "jpg" in ct:
+        ext = ".jpg"
+    else:
+        ext = ".jpg"
     return r.content, ext
 
 # =========================
@@ -178,41 +183,55 @@ def download_image_bytes(image_url):
 # =========================
 
 def openai_text(prompt):
+    if not OpenAI:
+        raise RuntimeError("No se pudo importar OpenAI. Revisa requirements.txt (openai).")
+    if not OPENAI_API_KEY:
+        raise RuntimeError("Falta OPENAI_API_KEY en secrets.")
     client = OpenAI(api_key=OPENAI_API_KEY)
+
     resp = client.responses.create(
-        model="gpt-4.1-mini",
+        model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
         input=prompt
     )
-    return resp.output_text.strip()
+    out = getattr(resp, "output_text", None)
+    if not out:
+        raise RuntimeError("OpenAI: no output_text en respuesta.")
+    return out.strip()
 
 def build_threads_text(item):
     prompt = f"""
-Crea un post para Threads sobre gaming.
-Máx 280 caracteres.
-Termina con pregunta.
-Incluye Fuente: {item['link']}
+Eres editor para una cuenta de Threads sobre esports/gaming.
+Crea un post:
+- 1 párrafo corto (máx 260-320 caracteres).
+- Termina con una pregunta a la comunidad.
+- Incluye "Fuente:" + link.
 Título: {item['title']}
+Link: {item['link']}
 """
-    return openai_text(prompt)
+    text = openai_text(prompt)
+    if "Fuente:" not in text:
+        text = f"{text}\n\nFuente: {item['link']}"
+    return text.strip()
 
 # =========================
-# THREADS API
+# THREADS API (SIN VERSION EN URL)
 # =========================
 
 def threads_create_container(text, image_url):
-    url = f"{THREADS_GRAPH}/{THREADS_USER_ID}/threads"
+    # ✅ Ejemplo oficial: https://graph.threads.net/me/threads?media_type=IMAGE&image_url=...
+    url = f"{THREADS_GRAPH.rstrip('/')}/{THREADS_USER_ID}/threads"
     data = {
         "media_type": "IMAGE",
         "image_url": image_url,
         "text": text,
     }
-
     r = requests.post(url, headers=_threads_headers(THREADS_USER_ACCESS_TOKEN), data=data, timeout=30)
     _raise_meta_error(r, "THREADS CREATE_CONTAINER")
     return r.json()["id"]
 
 def threads_publish(container_id):
-    url = f"{THREADS_GRAPH}/{THREADS_USER_ID}/threads_publish"
+    # ✅ Ejemplo oficial: https://graph.threads.net/me/threads_publish?creation_id=...
+    url = f"{THREADS_GRAPH.rstrip('/')}/{THREADS_USER_ID}/threads_publish"
     r = requests.post(
         url,
         headers=_threads_headers(THREADS_USER_ACCESS_TOKEN),
@@ -245,10 +264,15 @@ def run():
     r2_url = upload_bytes_to_r2_public(img_bytes, ext)
     print("IMAGE re-hosted:", r2_url)
 
+    if THREADS_DRY_RUN:
+        print("[DRY_RUN] Would post text:", text)
+        print("[DRY_RUN] Would post image:", r2_url)
+        return
+
     container_id = threads_create_container(text, r2_url)
     print("Container created:", container_id)
 
-    time.sleep(5)
+    time.sleep(3)
 
     res = threads_publish(container_id)
     print("THREADS SUCCESS:", res)

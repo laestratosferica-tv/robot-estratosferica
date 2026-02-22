@@ -119,34 +119,30 @@ def load_from_r2(key: str):
     except Exception:
         return None
 
+R2_PUBLIC_BASE_URL = "https://pub-8937244ee725495691514507bb8f431e.r2.dev"
+
 def r2_public_base_url_from_endpoint(endpoint_url: str) -> str:
-    # Convierte: https://xxxxx.r2.cloudflarestorage.com -> https://xxxxx.r2.dev
-    # Si usas dominio propio público, reemplaza esta lógica por tu dominio.
-    return endpoint_url.replace(".r2.cloudflarestorage.com", ".r2.dev").rstrip("/")
+    return R2_PUBLIC_BASE_URL.rstrip("/")
 
 def upload_bytes_to_r2_public(image_bytes: bytes, ext: str, prefix="threads_media") -> str:
     s3 = r2_client()
     h = hashlib.sha1(image_bytes).hexdigest()[:16]
     key = f"{prefix}/{h}{ext}"
 
-    content_type = {
-        ".png": "image/png",
-        ".webp": "image/webp",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-    }.get(ext.lower(), "image/jpeg")
-
     s3.put_object(
         Bucket=BUCKET_NAME,
         Key=key,
         Body=image_bytes,
-        ContentType=content_type,
+        ContentType={
+            ".png":"image/png",
+            ".webp":"image/webp",
+            ".jpg":"image/jpeg",
+            ".jpeg":"image/jpeg",
+        }.get(ext, "image/jpeg"),
     )
 
     base = r2_public_base_url_from_endpoint(R2_ENDPOINT_URL)
-    # forma común de r2.dev: /<bucket>/<key>
-    return f"{base}/{BUCKET_NAME}/{key}"
-
+    return f"{base}/{key}"
 
 # =========================
 # RSS / ARTÍCULOS

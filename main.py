@@ -4,10 +4,11 @@ import os
 import json
 import re
 import time
+import random
 import requests
 import feedparser
 import boto3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from dateutil import parser as dtparser
 from openai import OpenAI
 
@@ -32,6 +33,12 @@ THREADS_STATE_KEY = os.getenv("THREADS_STATE_KEY", "threads_state.json")
 THREADS_AUTO_POST = os.getenv("THREADS_AUTO_POST", "true").lower() == "true"
 THREADS_AUTO_POST_LIMIT = int(os.getenv("THREADS_AUTO_POST_LIMIT", "1"))
 THREADS_DRY_RUN = os.getenv("THREADS_DRY_RUN", "false").lower() == "true"
+
+# Repost inteligente: N=3 corridas sin nuevo, ventana=7 días
+REPOST_AFTER_NO_NEW_RUNS = int(os.getenv("THREADS_REPOST_AFTER_NO_NEW_RUNS", "3"))
+REPOST_WINDOW_DAYS = int(os.getenv("THREADS_REPOST_WINDOW_DAYS", "7"))
+
+ANGLES = ["producto", "comunidad", "negocio", "leccion", "debate"]
 
 
 # ==============================
@@ -374,7 +381,6 @@ def save_to_r2(key: str, data) -> None:
     )
     print("Archivo guardado en R2:", key)
 
-
 # ==============================
 # FALLBACK EDITORIAL
 # ==============================
@@ -426,7 +432,6 @@ def fallback_editorial(article: dict, reason: str) -> dict:
         "topic_tags": ["gaming", "ecosistema", "LATAM"],
         "source_quality": "media"
     }
-
 
 # ==============================
 # OPENAI: MULTIPLATAFORMA
@@ -545,7 +550,6 @@ url: "{url}"
             return {}, "insufficient_quota"
         return {}, "openai_error"
 
-
 # ==============================
 # CONTROL EDITORIAL (LIMITES)
 # ==============================
@@ -574,7 +578,6 @@ def enforce_limits(items: list):
         "final_low": len(lows),
     }
     return final, metrics
-
 
 # ==============================
 # SCRAPER
@@ -616,59 +619,103 @@ def get_articles():
 
 
 # ==============================
-# THREADS: STATE (evitar repetidos)
+# THREADS: STATE + REPOST
 # ==============================
+def _utcnow():
+    return datetime.now(timezone.utc)
+
+def _parse_dt(s: str):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
 def load_threads_state() -> dict:
     """
     Carga estado desde R2 (threads_state.json).
     Si no existe, regresa estado vacío.
     """
-    key = THREADS_STATE_KEY
     try:
-        obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+        obj = s3.get_object(Bucket=BUCKET_NAME, Key=THREADS_STATE_KEY)
         raw = obj["Body"].read().decode("utf-8")
         return json.loads(raw)
     except Exception:
         return {}
 
 def save_threads_state(state: dict) -> None:
-    """
-    Guarda estado en R2 (threads_state.json).
-    """
     save_to_r2(THREADS_STATE_KEY, state)
 
+def state_get_runs_without_new(state: dict) -> int:
+    return int(state.get("runs_without_new", 0))
 
-# ==============================
-# THREADS: elegir item a publicar (mejor esfuerzo)
-# ==============================
+def state_inc_runs_without_new(state: dict) -> None:
+    state["runs_without_new"] = state_get_runs_without_new(state) + 1
+
+def state_reset_runs_without_new(state: dict) -> None:
+    state["runs_without_new"] = 0
+
+def state_mark_posted(state: dict, link: str) -> None:
+    posted = state.get("posted_links_meta", {})
+    posted[link] = {"last_posted_at": _utcnow().isoformat()}
+    state["posted_links_meta"] = posted
+
+def state_can_repost(state: dict, link: str) -> bool:
+    posted = state.get("posted_links_meta", {}).get(link, {})
+    last = _parse_dt(posted.get("last_posted_at"))
+    if not last:
+        return True
+    return (_utcnow() - last) >= timedelta(days=REPOST_WINDOW_DAYS)
+
+def prio_score(p: str) -> int:
+    if p == "alta":
+        return 3
+    if p == "media":
+        return 2
+    return 1
+
 def pick_best_item_to_post(final_items: list, posted_links: set):
     """
-    Elige el mejor item que NO se haya publicado aún.
+    Elige el mejor item NUEVO (link no publicado aún).
     Prioridad: alta > media > baja, y dentro de eso el más reciente.
     """
-    def prio_score(p):
-        if p == "alta":
-            return 3
-        if p == "media":
-            return 2
-        return 1
-
     candidates = []
     for it in final_items or []:
         link = (it.get("link") or "").strip()
         if link and link in posted_links:
             continue
-        p = ((it.get("editorial") or {}).get("priority") or "baja")
         candidates.append(it)
 
-    candidates.sort(
+    if not candidates:
+        return None
+
+    candidates = sorted(
+        candidates,
         key=lambda x: (
-            -prio_score(((x.get("editorial") or {}).get("priority") or "baja")),
+            prio_score(((x.get("editorial") or {}).get("priority") or "baja")),
             x.get("published", "")
         ),
-        reverse=False
+        reverse=True
     )
-    # Nota: sort anterior deja raro por reverse, mejor ordenar claro:
+    return candidates[0]
+
+def pick_repost_candidate(final_items: list, state: dict):
+    """
+    Elige 1 item para repostear si cumple ventana (7 días).
+    Prioriza por: prioridad + recencia.
+    """
+    candidates = []
+    for it in final_items or []:
+        link = (it.get("link") or "").strip()
+        if not link:
+            continue
+        if state_can_repost(state, link):
+            candidates.append(it)
+
+    if not candidates:
+        return None
+
     candidates = sorted(
         candidates,
         key=lambda x: (
@@ -678,12 +725,27 @@ def pick_best_item_to_post(final_items: list, posted_links: set):
         reverse=True
     )
 
-    return candidates[0] if candidates else None
+    top = candidates[:3] if len(candidates) >= 3 else candidates
+    return random.choice(top)
 
+def rewrite_with_angle(item: dict) -> str:
+    """
+    Crea un texto distinto para REPOST (otra mirada).
+    """
+    angle = random.choice(ANGLES)
+    title = (item.get("title") or "").strip()
+    link = (item.get("link") or "").strip()
 
-# ==============================
-# THREADS: construir texto (PUBLICA EN ESPAÑOL)
-# ==============================
+    if angle == "producto":
+        return f"{title}\n\nLectura de producto: ¿qué decisión tomarías aquí y por qué?\n\nFuente: {link}"
+    if angle == "comunidad":
+        return f"{title}\n\nLectura de comunidad: si esto pasa en tu comunidad, ¿cómo lo manejarías?\n\nFuente: {link}"
+    if angle == "negocio":
+        return f"{title}\n\nLectura de negocio: ¿dónde está la oportunidad sin matar el engagement?\n\nFuente: {link}"
+    if angle == "leccion":
+        return f"{title}\n\n3 aprendizajes rápidos para creadores/marcas:\n1) \n2) \n3) \n\nFuente: {link}"
+    return f"{title}\n\nDebate: ¿estás a favor o en contra? ¿por qué?\n\nFuente: {link}"
+
 def build_threads_text(item: dict) -> str:
     """
     Publica el primer post editorial (threads_posts[0]) en español.
@@ -706,10 +768,6 @@ def build_threads_text(item: dict) -> str:
 
     return text
 
-
-# ==============================
-# THREADS: publicar texto (SUCCESS REAL)
-# ==============================
 def threads_publish_text(text: str) -> dict:
     """
     Publica un post de texto en Threads y regresa resultado estructurado.
@@ -775,7 +833,7 @@ def threads_publish_text(text: str) -> dict:
 
 
 # ==============================
-# EJECUCIÓN DEL ROBOT (solo cuando lo corras como script)
+# EJECUCIÓN DEL ROBOT
 # ==============================
 def run_robot_once():
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -816,20 +874,22 @@ def run_robot_once():
     final, metrics = enforce_limits(enriched)
     print("FINAL ITEMS:", len(final))
 
-    # ==============================
+    # ==========================
     # AUTO-POST (Threads): 1 post por corrida
-    # ==============================
+    # - Primero intenta NUEVO
+    # - Si no hay nuevo N=3 corridas seguidas -> REPOST (ventana 7 días) con otro texto
+    # ==========================
     threads_publish_result = None
 
     if THREADS_AUTO_POST and final and THREADS_AUTO_POST_LIMIT > 0:
         state = load_threads_state()
-        posted_links = set(state.get("posted_links", []))
 
+        posted_links = set(state.get("posted_links", []))
         item = pick_best_item_to_post(final, posted_links)
 
         if item:
             text = build_threads_text(item)
-            print("Auto-post Threads: publicando 1 post...")
+            print("Auto-post Threads: publicando 1 post (NUEVO)...")
 
             if THREADS_DRY_RUN:
                 threads_publish_result = {"ok": True, "dry_run": True, "text": text}
@@ -838,23 +898,67 @@ def run_robot_once():
                 res = threads_publish_text(text)
                 threads_publish_result = res
 
-                # ✅ SOLO guardar como publicado si el publish fue REALMENTE exitoso
                 if res.get("ok") is True:
                     link = (item.get("link") or "").strip()
                     if link:
                         posted_links.add(link)
                         state["posted_links"] = list(posted_links)[-200:]
-                        state["last_posted_at"] = datetime.now(timezone.utc).isoformat()
-                        state["last_posted_link"] = link
+                        state_mark_posted(state, link)
+
+                    state_reset_runs_without_new(state)
+                    state["last_posted_at"] = datetime.now(timezone.utc).isoformat()
+                    state["last_posted_link"] = (item.get("link") or "").strip()
 
                     save_threads_state(state)
                     print("Auto-post Threads: OK ✅")
                     print("Threads publish:", res.get("publish"))
                 else:
+                    state_inc_runs_without_new(state)
+                    save_threads_state(state)
                     print("Auto-post Threads: FALLÓ ❌")
                     print("Threads response:", res)
+
         else:
-            print("Auto-post Threads: no hay item nuevo (evitando repetidos).")
+            # No hubo NUEVO
+            state_inc_runs_without_new(state)
+            runs_wo_new = state_get_runs_without_new(state)
+            save_threads_state(state)
+
+            print(f"Auto-post Threads: no hay item nuevo (corridas sin nuevo={runs_wo_new}).")
+
+            # Intentar REPOST si ya se llegó a N
+            if runs_wo_new >= REPOST_AFTER_NO_NEW_RUNS:
+                repost_item = pick_repost_candidate(final, state)
+                if repost_item:
+                    repost_text = rewrite_with_angle(repost_item)
+                    print("Auto-post Threads: intentando REPOST con otra mirada...")
+
+                    if THREADS_DRY_RUN:
+                        threads_publish_result = {"ok": True, "dry_run": True, "text": repost_text, "repost": True}
+                        print("Auto-post Threads (REPOST): DRY_RUN ✅ (no publicó de verdad)")
+                    else:
+                        res = threads_publish_text(repost_text)
+                        threads_publish_result = res
+
+                        if res.get("ok") is True:
+                            link = (repost_item.get("link") or "").strip()
+                            if link:
+                                posted_links.add(link)
+                                state["posted_links"] = list(posted_links)[-200:]
+                                state_mark_posted(state, link)
+
+                            state_reset_runs_without_new(state)
+                            state["last_posted_at"] = datetime.now(timezone.utc).isoformat()
+                            state["last_posted_link"] = link
+
+                            save_threads_state(state)
+                            print("Auto-post Threads (REPOST): OK ✅")
+                            print("Threads publish:", res.get("publish"))
+                        else:
+                            print("Auto-post Threads (REPOST): FALLÓ ❌")
+                            print("Threads response:", res)
+                else:
+                    print("Auto-post Threads: REPOST no permitido aún (ventana 7 días) o sin candidatos.")
 
     payload = {
         "run_id": run_id,
@@ -871,6 +975,8 @@ def run_robot_once():
             "enabled": THREADS_AUTO_POST,
             "limit": THREADS_AUTO_POST_LIMIT,
             "dry_run": THREADS_DRY_RUN,
+            "repost_after_no_new_runs": REPOST_AFTER_NO_NEW_RUNS,
+            "repost_window_days": REPOST_WINDOW_DAYS,
             "result": threads_publish_result,
         },
         "items": final

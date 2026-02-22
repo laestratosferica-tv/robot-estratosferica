@@ -1,12 +1,13 @@
 # main.py
 # Robot Editorial + Auto-post Threads con re-host de imágenes en R2
-# PRODUCCIÓN v5: wait container FINISHED (fix "Media Not Found") + state + repost
+# PROD v6: auto-mix feeds (shuffle + max per feed) + Threads WAIT + state + repost
 
 import os
 import re
 import json
 import time
 import hashlib
+import random
 from datetime import datetime, timezone
 from urllib.parse import urljoin
 
@@ -26,7 +27,7 @@ except Exception:
     OpenAI = None
 
 
-print("RUNNING MULTIRED v5 (PROD: Threads WAIT + State + Repost)")
+print("RUNNING MULTIRED v6 (PROD: AUTO-MIX FEEDS)")
 
 # =========================
 # CONFIG
@@ -45,7 +46,7 @@ R2_PUBLIC_BASE_URL = os.getenv(
     "https://pub-8937244ee725495691514507bb8f431e.r2.dev"
 ).rstrip("/")
 
-THREADS_USER_ID = os.getenv("THREADS_USER_ID", "me")  # recomendado: "me"
+THREADS_USER_ID = os.getenv("THREADS_USER_ID", "me")
 THREADS_USER_ACCESS_TOKEN = os.getenv("THREADS_USER_ACCESS_TOKEN")
 
 THREADS_STATE_KEY = os.getenv("THREADS_STATE_KEY", "threads_state.json")
@@ -54,12 +55,10 @@ THREADS_AUTO_POST = os.getenv("THREADS_AUTO_POST", "true").lower() == "true"
 THREADS_AUTO_POST_LIMIT = int(os.getenv("THREADS_AUTO_POST_LIMIT", "1"))
 THREADS_DRY_RUN = os.getenv("THREADS_DRY_RUN", "false").lower() == "true"
 
-# Repost logic
 REPOST_MAX_TIMES = int(os.getenv("REPOST_MAX_TIMES", "3"))
 REPOST_WINDOW_DAYS = int(os.getenv("REPOST_WINDOW_DAYS", "7"))
 REPOST_ENABLE = os.getenv("REPOST_ENABLE", "true").lower() == "true"
 
-# RSS feeds
 RSS_FEEDS = [x.strip() for x in (os.getenv("RSS_FEEDS") or "").split(",") if x.strip()]
 if not RSS_FEEDS:
     RSS_FEEDS = ["https://www.dexerto.com/feed/"]
@@ -77,6 +76,11 @@ POST_RETRY_SLEEP = float(os.getenv("POST_RETRY_SLEEP", "2"))
 
 CONTAINER_WAIT_TIMEOUT = int(os.getenv("CONTAINER_WAIT_TIMEOUT", "120"))
 CONTAINER_POLL_INTERVAL = float(os.getenv("CONTAINER_POLL_INTERVAL", "2"))
+
+# ✅ Auto-mix feeds
+# Max artículos por feed para evitar que uno domine (dexerto suele publicar muchísimo)
+MAX_PER_FEED = int(os.getenv("MAX_PER_FEED", "10"))
+SHUFFLE_ARTICLES = os.getenv("SHUFFLE_ARTICLES", "true").lower() == "true"
 
 # =========================
 # TIME
@@ -197,7 +201,6 @@ def upload_bytes_to_r2_public(image_bytes: bytes, ext: str, prefix="threads_medi
 
     url = f"{R2_PUBLIC_BASE_URL}/{key}"
 
-    # Verifica que sea pública y con content-type de imagen
     head = requests.head(url, timeout=10, allow_redirects=True)
     if head.status_code != 200:
         raise RuntimeError(f"R2 public URL no accesible (status {head.status_code}): {url}")
@@ -209,14 +212,14 @@ def upload_bytes_to_r2_public(image_bytes: bytes, ext: str, prefix="threads_medi
     return url
 
 # =========================
-# RSS / ARTÍCULOS
+# RSS / ARTÍCULOS (AUTO-MIX)
 # =========================
 
 def fetch_rss_articles():
     if not feedparser:
         raise RuntimeError("Falta feedparser. Agrégalo a requirements.txt: feedparser")
 
-    articles = []
+    raw = []
     for feed in RSS_FEEDS:
         try:
             d = feedparser.parse(feed)
@@ -224,23 +227,41 @@ def fetch_rss_articles():
                 link = getattr(e, "link", None) or ""
                 title = getattr(e, "title", "") or ""
                 published = getattr(e, "published", "") or getattr(e, "updated", "") or ""
-                articles.append({
-                    "title": title.strip(),
-                    "link": link.strip(),
-                    "published": published,
-                    "feed": feed,
-                })
+                if link:
+                    raw.append({
+                        "title": title.strip(),
+                        "link": link.strip(),
+                        "published": published,
+                        "feed": feed,
+                    })
         except Exception:
             continue
 
-    # dedupe por link
+    # 1) dedupe por link (preserva orden inicial)
     seen = set()
-    out = []
-    for a in articles:
-        if a["link"] and a["link"] not in seen:
+    deduped = []
+    for a in raw:
+        if a["link"] not in seen:
             seen.add(a["link"])
-            out.append(a)
-    return out
+            deduped.append(a)
+
+    # 2) balance: máximo N por feed
+    if MAX_PER_FEED > 0:
+        counts = {}
+        balanced = []
+        for a in deduped:
+            f = a.get("feed") or "unknown"
+            counts.setdefault(f, 0)
+            if counts[f] < MAX_PER_FEED:
+                balanced.append(a)
+                counts[f] += 1
+        deduped = balanced
+
+    # 3) mezclar para evitar sesgo por orden de feed
+    if SHUFFLE_ARTICLES:
+        random.shuffle(deduped)
+
+    return deduped
 
 # =========================
 # EXTRAER IMAGEN OG
@@ -290,19 +311,14 @@ def openai_client():
 def openai_text(prompt: str) -> str:
     client = openai_client()
 
-    # Responses API
     try:
-        resp = client.responses.create(
-            model=OPENAI_MODEL,
-            input=prompt,
-        )
+        resp = client.responses.create(model=OPENAI_MODEL, input=prompt)
         out = getattr(resp, "output_text", None)
         if out:
             return out.strip()
     except Exception:
         pass
 
-    # Fallback chat.completions
     resp = client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=[{"role": "user", "content": prompt}],
@@ -341,24 +357,16 @@ Link: {link}
     return text.strip()
 
 # =========================
-# THREADS API (CORRECTO) + WAIT
+# THREADS API + WAIT
 # =========================
 
 def threads_create_container_image(user_id: str, access_token: str, text: str, image_url: str) -> str:
     url = f"{THREADS_GRAPH}/{user_id}/threads"
-    data = {
-        "media_type": "IMAGE",
-        "image_url": image_url,
-        "text": text,
-    }
+    data = {"media_type": "IMAGE", "image_url": image_url, "text": text}
     r = _post_with_retries(url, headers=_threads_headers(access_token), data=data, label="THREADS CREATE_CONTAINER")
     return r.json()["id"]
 
 def threads_wait_container(container_id: str, access_token: str, timeout_sec: int = None):
-    """
-    Espera a que el container esté FINISHED antes de publicar.
-    Evita el 400: Media Not Found.
-    """
     if timeout_sec is None:
         timeout_sec = CONTAINER_WAIT_TIMEOUT
 
@@ -381,7 +389,6 @@ def threads_wait_container(container_id: str, access_token: str, timeout_sec: in
 
         if status == "FINISHED":
             return j
-
         if status in ("ERROR", "FAILED"):
             raise RuntimeError(f"Container failed: {j}")
 
@@ -405,41 +412,28 @@ def threads_publish_text_image(text: str, image_url_from_news: str) -> dict:
         print("[DRY_RUN] Image source:", image_url_from_news)
         return {"ok": True, "dry_run": True}
 
-    if not THREADS_USER_ACCESS_TOKEN:
-        raise RuntimeError("Falta THREADS_USER_ACCESS_TOKEN")
-
-    # 1) descargar imagen
     img_bytes, ext = download_image_bytes(image_url_from_news)
-
-    # 2) subir a R2 público
     r2_url = upload_bytes_to_r2_public(img_bytes, ext)
     print("IMAGE re-hosted on R2:", r2_url)
 
-    # 3) container
     container_id = threads_create_container_image(THREADS_USER_ID, THREADS_USER_ACCESS_TOKEN, text, r2_url)
     print("Container created:", container_id)
 
-    # ✅ 3.5) esperar FINISHED
     threads_wait_container(container_id, THREADS_USER_ACCESS_TOKEN)
 
-    # 4) publish
     res = threads_publish(THREADS_USER_ID, THREADS_USER_ACCESS_TOKEN, container_id)
     print("Threads publish response:", res)
 
     return {"ok": True, "container": {"id": container_id}, "publish": res, "image_url": r2_url}
 
 # =========================
-# STATE (anti-duplicado + repost)
+# STATE + SELECCIÓN
 # =========================
 
 def load_threads_state() -> dict:
     state = load_from_r2_json(THREADS_STATE_KEY)
     if not state:
-        state = {
-            "posted_items": {},  # link -> {last_posted_at, times}
-            "posted_links": [],  # legacy
-            "last_posted_at": None,
-        }
+        state = {"posted_items": {}, "posted_links": [], "last_posted_at": None}
     state.setdefault("posted_items", {})
     state.setdefault("posted_links", [])
     state.setdefault("last_posted_at", None)
@@ -466,39 +460,31 @@ def repost_eligible(state: dict, link: str) -> bool:
     pi = state["posted_items"].get(link)
     if not pi:
         return False
-
-    times = int(pi.get("times", 0))
-    if times >= REPOST_MAX_TIMES:
+    if int(pi.get("times", 0)) >= REPOST_MAX_TIMES:
         return False
-
     last = pi.get("last_posted_at")
     if not last:
         return True
-
     return days_since(last) >= REPOST_WINDOW_DAYS
 
 def pick_item(articles: list[dict], state: dict) -> tuple[dict | None, str]:
-    # 1) nuevo
     for a in articles:
         if a.get("link") and is_new_allowed(state, a["link"]):
             return a, "new"
-
-    # 2) repost
     if REPOST_ENABLE:
         for a in articles:
             if a.get("link") and a["link"] in state["posted_items"] and repost_eligible(state, a["link"]):
                 return a, "repost"
-
     return None, "none"
 
 # =========================
-# MAIN RUN
+# MAIN
 # =========================
 
 def run_robot_once():
     print("Obteniendo artículos (RSS)...")
     articles = fetch_rss_articles()
-    print(f"{len(articles)} artículos encontrados")
+    print(f"{len(articles)} artículos candidatos tras mix/balance (MAX_PER_FEED={MAX_PER_FEED}, SHUFFLE={SHUFFLE_ARTICLES})")
 
     processed = []
     for a in articles[:MAX_AI_ITEMS]:
@@ -538,7 +524,6 @@ def run_robot_once():
             res = threads_publish_text_image(text, og_image)
             mark_posted(state, link)
             save_threads_state(state)
-
             posted_count += 1
             results.append({"link": link, "mode": mode, "posted": True, "threads": res})
             print("Auto-post Threads: OK ✅")
@@ -550,10 +535,7 @@ def run_robot_once():
 
         processed = [x for x in processed if x.get("link") != link]
 
-    return {
-        "posted_count": posted_count,
-        "results": results,
-    }
+    return {"posted_count": posted_count, "results": results}
 
 def save_run_payload(payload: dict):
     run_id = now_utc().strftime("%Y%m%d_%H%M%S")
@@ -565,6 +547,7 @@ if __name__ == "__main__":
     result = run_robot_once()
     payload = {
         "generated_at": iso_now(),
+        "auto_mix": {"shuffle": SHUFFLE_ARTICLES, "max_per_feed": MAX_PER_FEED},
         "threads_auto_post": {
             "enabled": THREADS_AUTO_POST,
             "limit": THREADS_AUTO_POST_LIMIT,

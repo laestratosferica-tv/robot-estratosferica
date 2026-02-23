@@ -1,6 +1,7 @@
 # main.py
 # Robot Editorial + Auto-post Threads con re-host de imágenes en R2
 # PROD v7: auto-mix feeds + balance por feed + Threads WAIT + anti-duplicado + repost
+# + IG Queue (reels>carousel>image) guardado en R2: ugc/ig_queue/
 
 import os
 import re
@@ -28,7 +29,7 @@ except Exception:
     OpenAI = None
 
 
-print("RUNNING MULTIRED v7 (PROD: MIX+BALANCE+STATE+THREADS WAIT)")
+print("RUNNING MULTIRED v7 (PROD: MIX+BALANCE+STATE+THREADS WAIT + IG QUEUE)")
 
 # =========================
 # CONFIG
@@ -85,6 +86,10 @@ POST_RETRY_SLEEP = float(os.getenv("POST_RETRY_SLEEP", "2"))
 
 CONTAINER_WAIT_TIMEOUT = int(os.getenv("CONTAINER_WAIT_TIMEOUT", "120"))
 CONTAINER_POLL_INTERVAL = float(os.getenv("CONTAINER_POLL_INTERVAL", "2"))
+
+# IG Queue
+IG_QUEUE_PREFIX = os.getenv("IG_QUEUE_PREFIX", "ugc/ig_queue").strip().strip("/")
+IG_CAROUSEL_MAX_IMAGES = int(os.getenv("IG_CAROUSEL_MAX_IMAGES", "5"))
 
 # =========================
 # TIME
@@ -269,27 +274,71 @@ def fetch_rss_articles() -> List[Dict[str, Any]]:
     return deduped
 
 # =========================
-# EXTRAER IMAGEN OG
+# EXTRAER IMÁGENES (og/twitter + fallback <img>)
 # =========================
 
-OG_IMAGE_RE = re.compile(r'property=["\']og:image["\']\s+content=["\']([^"\']+)["\']', re.IGNORECASE)
-OG_IMAGE_RE2 = re.compile(r'content=["\']([^"\']+)["\']\s+property=["\']og:image["\']', re.IGNORECASE)
+META_IMAGE_RE = re.compile(
+    r'<meta\s+(?:property|name)=["\'](og:image|twitter:image)["\']\s+content=["\']([^"\']+)["\']',
+    re.IGNORECASE
+)
+META_IMAGE_RE2 = re.compile(
+    r'<meta\s+content=["\']([^"\']+)["\']\s+(?:property|name)=["\'](og:image|twitter:image)["\']',
+    re.IGNORECASE
+)
+IMG_SRC_RE = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
 
-def extract_og_image(url: str) -> Optional[str]:
+def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
+    """
+    Devuelve lista de URLs de imagen (1..N) con prioridad:
+    1) og:image
+    2) twitter:image
+    3) <img src> del artículo (limitado)
+    """
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
+        r = requests.get(page_url, headers=headers, timeout=20, allow_redirects=True)
         r.raise_for_status()
         html = r.text
-        m = OG_IMAGE_RE.search(html) or OG_IMAGE_RE2.search(html)
-        if not m:
-            return None
-        img = m.group(1).strip()
-        if img.startswith("/"):
-            img = urljoin(url, img)
-        return img
+
+        found: List[str] = []
+
+        # meta og/twitter
+        metas: List[Tuple[str, str]] = []
+        for m in META_IMAGE_RE.finditer(html):
+            metas.append((m.group(1).lower(), m.group(2).strip()))
+        for m in META_IMAGE_RE2.finditer(html):
+            metas.append((m.group(2).lower(), m.group(1).strip()))
+
+        for k in ["og:image", "twitter:image"]:
+            for (name, img) in metas:
+                if name == k and img:
+                    if img.startswith("/"):
+                        img = urljoin(page_url, img)
+                    if img not in found:
+                        found.append(img)
+
+        # fallback: imgs del HTML
+        if len(found) < max_images:
+            for m in IMG_SRC_RE.finditer(html):
+                img = m.group(1).strip()
+                if not img:
+                    continue
+                if img.startswith("/"):
+                    img = urljoin(page_url, img)
+                if img.lower().startswith("data:"):
+                    continue
+                if img not in found:
+                    found.append(img)
+                if len(found) >= max_images:
+                    break
+
+        return found[:max_images]
     except Exception:
-        return None
+        return []
+
+def extract_og_image(url: str) -> Optional[str]:
+    imgs = extract_best_images(url, max_images=1)
+    return imgs[0] if imgs else None
 
 def download_image_bytes(image_url: str) -> Tuple[bytes, str]:
     headers = {
@@ -316,7 +365,7 @@ def openai_client():
 def openai_text(prompt: str) -> str:
     client = openai_client()
 
-    # Responses API
+    # Responses API (si está disponible)
     try:
         resp = client.responses.create(
             model=OPENAI_MODEL,
@@ -328,7 +377,7 @@ def openai_text(prompt: str) -> str:
     except Exception:
         pass
 
-    # Fallback
+    # Fallback chat.completions
     resp = client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=[{"role": "user", "content": prompt}],
@@ -365,6 +414,35 @@ Link: {link}
     if "Fuente:" not in text:
         text = f"{text}\n\nFuente: {link}"
     return text.strip()
+
+def build_instagram_caption(item: Dict[str, Any], mode: str, link: str) -> str:
+    title = item.get("title", "")
+    if mode == "repost":
+        prompt = f"""
+Eres editor de Instagram (esports/gaming).
+Escribe un caption natural y humano:
+- 1-2 párrafos cortos
+- 5-10 hashtags relevantes al final
+- Cierra con una pregunta
+- Incluye "Fuente:" + link al final
+Título: {title}
+Link: {link}
+"""
+    else:
+        prompt = f"""
+Eres editor de Instagram (esports/gaming).
+Escribe un caption natural y humano:
+- 1-2 párrafos cortos
+- 5-10 hashtags relevantes al final
+- Cierra con una pregunta
+- Incluye "Fuente:" + link al final
+Título: {title}
+Link: {link}
+"""
+    text = openai_text(prompt).strip()
+    if "Fuente:" not in text:
+        text = f"{text}\n\nFuente: {link}"
+    return text
 
 # =========================
 # THREADS API + WAIT (evita Media Not Found)
@@ -490,18 +568,38 @@ def repost_eligible(state: Dict[str, Any], link: str) -> bool:
     return days_since(last) >= REPOST_WINDOW_DAYS
 
 def pick_item(articles: List[Dict[str, Any]], state: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
-    # Nuevo primero
     for a in articles:
         if a.get("link") and is_new_allowed(state, a["link"]):
             return a, "new"
 
-    # Repost si no hay nuevos
     if REPOST_ENABLE:
         for a in articles:
             if a.get("link") and a["link"] in state["posted_items"] and repost_eligible(state, a["link"]):
                 return a, "repost"
 
     return None, "none"
+
+# =========================
+# IG QUEUE HELPERS
+# =========================
+
+def _short_hash(s: str) -> str:
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()[:12]
+
+def choose_ig_format(has_video: bool, image_count: int) -> str:
+    # prioridad reels (solo si hay video), luego carrusel, luego imagen
+    if has_video:
+        return "reel"
+    if image_count >= 2:
+        return "carousel"
+    return "image"
+
+def save_ig_queue_item(payload: Dict[str, Any]) -> str:
+    s = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    h = _short_hash(s + iso_now())
+    key = f"{IG_QUEUE_PREFIX}/{now_utc().strftime('%Y%m%d_%H%M%S')}_{h}.json"
+    save_to_r2_json(key, payload)
+    return key
 
 # =========================
 # MAIN RUN
@@ -541,7 +639,7 @@ def run_robot_once() -> Dict[str, Any]:
 
         og_image = extract_og_image(link)
         if not og_image:
-            print("No se encontró og:image. Se omite para evitar post sin imagen.")
+            print("No se encontró imagen (og/twitter/img). Se omite para evitar post sin imagen.")
             processed = [x for x in processed if x.get("link") != link]
             continue
 
@@ -559,6 +657,62 @@ def run_robot_once() -> Dict[str, Any]:
             posted_count += 1
             results.append({"link": link, "mode": mode, "posted": True, "threads": res})
             print("Auto-post Threads: OK ✅")
+
+            # --- IG QUEUE (reels > carousel > image) ---
+            try:
+                candidate_images = extract_best_images(link, max_images=IG_CAROUSEL_MAX_IMAGES)
+
+                r2_images: List[str] = []
+                for img_url in candidate_images:
+                    try:
+                        b, ext = download_image_bytes(img_url)
+                        r2_img = upload_bytes_to_r2_public(b, ext)
+                        if r2_img not in r2_images:
+                            r2_images.append(r2_img)
+                    except Exception:
+                        continue
+                    if len(r2_images) >= IG_CAROUSEL_MAX_IMAGES:
+                        break
+
+                # Si aún no hay ninguna imagen, al menos usa la de Threads rehost (si existe)
+                threads_img = None
+                if isinstance(res, dict):
+                    threads_img = res.get("image_url")
+                if not r2_images and threads_img:
+                    r2_images = [threads_img]
+
+                # Reels reales requieren video; por ahora no inventamos.
+                has_video = False
+                reel_video_url = None
+
+                ig_format = choose_ig_format(has_video=has_video, image_count=len(r2_images))
+                ig_caption = build_instagram_caption(item, mode=mode, link=link)
+
+                ig_payload = {
+                    "created_at": iso_now(),
+                    "source": {
+                        "link": link,
+                        "feed": item.get("feed"),
+                        "mode": mode,
+                        "title": item.get("title"),
+                    },
+                    "format": ig_format,  # "reel" | "carousel" | "image"
+                    "caption": ig_caption,
+                    "assets": {
+                        "images": r2_images[:IG_CAROUSEL_MAX_IMAGES],
+                        "reel_video_url": reel_video_url,
+                    },
+                    "threads": {
+                        "publish_id": (res.get("publish") or {}).get("id") if isinstance(res, dict) else None,
+                        "image_url": threads_img,
+                    },
+                }
+
+                ig_key = save_ig_queue_item(ig_payload)
+                print("IG queue guardado en R2:", ig_key)
+            except Exception as e:
+                print("IG queue: falló (no rompe el run):", str(e))
+
         except Exception as e:
             print("Auto-post Threads: FALLÓ ❌")
             print("ERROR:", str(e))
@@ -591,6 +745,10 @@ if __name__ == "__main__":
             "repost_enable": REPOST_ENABLE,
             "repost_max_times": REPOST_MAX_TIMES,
             "repost_window_days": REPOST_WINDOW_DAYS,
+        },
+        "ig_queue": {
+            "prefix": IG_QUEUE_PREFIX,
+            "carousel_max_images": IG_CAROUSEL_MAX_IMAGES,
         },
         "result": result,
     }

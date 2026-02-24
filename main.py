@@ -4,6 +4,7 @@ import json
 import time
 import hashlib
 import random
+import subprocess
 from datetime import datetime, timezone
 from urllib.parse import urljoin
 from typing import Optional, Tuple, Dict, Any, List
@@ -24,14 +25,18 @@ except Exception:
     OpenAI = None
 
 
-print("RUNNING MEDIA ENGINE (Threads REAL + IG Queue + Multi-account via accounts.json)")
+print("RUNNING MEDIA ENGINE (Threads REAL + IG Queue + REEL AUTO + Multi-account via accounts.json)")
 
 # =========================
-# GLOBAL ENV (infra)
+# GLOBAL ENV
 # =========================
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+
+# TTS
+OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "alloy")
 
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -58,6 +63,18 @@ IG_CAROUSEL_MAX_IMAGES = int(os.getenv("IG_CAROUSEL_MAX_IMAGES", "5"))
 # MODO A: publicar sí o sí (sin verificación estricta / sin trends)
 VERIFY_NEWS = os.getenv("VERIFY_NEWS", "false").lower() == "true"
 ENABLE_TRENDS = os.getenv("ENABLE_TRENDS", "false").lower() == "true"
+
+# Reel auto
+ENABLE_REELS = os.getenv("ENABLE_REELS", "true").lower() == "true"
+REEL_SECONDS = int(os.getenv("REEL_SECONDS", "15"))
+REEL_W = int(os.getenv("REEL_W", "1080"))
+REEL_H = int(os.getenv("REEL_H", "1920"))
+ASSET_BG = os.getenv("ASSET_BG", "assets/bg.jpg")
+ASSET_LOGO = os.getenv("ASSET_LOGO", "assets/logo.png")
+ASSET_MUSIC = os.getenv("ASSET_MUSIC", "assets/music.mp3")  # opcional
+
+# Font for drawtext (GitHub ubuntu runners usually have DejaVu)
+FONT_BOLD = os.getenv("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 
 # =========================
 # TIME
@@ -155,24 +172,31 @@ def _guess_ext_from_content_type(ct: str) -> str:
         return ".webp"
     if "jpeg" in ct or "jpg" in ct:
         return ".jpg"
-    return ".jpg"
+    if "mp4" in ct:
+        return ".mp4"
+    if "mpeg" in ct or "mp3" in ct:
+        return ".mp3"
+    return ".bin"
 
-def upload_bytes_to_r2_public(image_bytes: bytes, ext: str, prefix: str) -> str:
+def upload_bytes_to_r2_public(data_bytes: bytes, ext: str, prefix: str, content_type: Optional[str] = None) -> str:
     s3 = r2_client()
-    h = hashlib.sha1(image_bytes).hexdigest()[:16]
+    h = hashlib.sha1(data_bytes).hexdigest()[:16]
     key = f"{prefix}/{h}{ext}"
 
-    content_type = {
-        ".png": "image/png",
-        ".webp": "image/webp",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-    }.get(ext, "image/jpeg")
+    if not content_type:
+        content_type = {
+            ".png": "image/png",
+            ".webp": "image/webp",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".mp4": "video/mp4",
+            ".mp3": "audio/mpeg",
+        }.get(ext, "application/octet-stream")
 
     s3.put_object(
         Bucket=BUCKET_NAME,
         Key=key,
-        Body=image_bytes,
+        Body=data_bytes,
         ContentType=content_type,
     )
 
@@ -183,8 +207,13 @@ def upload_bytes_to_r2_public(image_bytes: bytes, ext: str, prefix: str) -> str:
         raise RuntimeError(f"R2 public URL no accesible (status {head.status_code}): {url}")
 
     ct = (head.headers.get("Content-Type") or "").lower()
-    if "image" not in ct:
+    # Accept image/video/audio depending on type
+    if ext in (".png", ".jpg", ".jpeg", ".webp") and "image" not in ct:
         raise RuntimeError(f"R2 URL no parece imagen (Content-Type={ct}): {url}")
+    if ext == ".mp4" and "video" not in ct:
+        # some CDNs may return octet-stream; allow it
+        if "octet-stream" not in ct:
+            raise RuntimeError(f"R2 URL no parece video (Content-Type={ct}): {url}")
 
     return url
 
@@ -243,6 +272,13 @@ def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
     except Exception:
         return []
 
+def download_bytes(url: str) -> Tuple[bytes, str]:
+    headers = {"User-Agent": "Mozilla/5.0"}
+    r = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
+    r.raise_for_status()
+    ext = _guess_ext_from_content_type(r.headers.get("Content-Type", ""))
+    return r.content, ext
+
 def download_image_bytes(image_url: str) -> Tuple[bytes, str]:
     headers = {
         "User-Agent": "Mozilla/5.0",
@@ -252,6 +288,8 @@ def download_image_bytes(image_url: str) -> Tuple[bytes, str]:
     r = requests.get(image_url, headers=headers, timeout=30, allow_redirects=True)
     r.raise_for_status()
     ext = _guess_ext_from_content_type(r.headers.get("Content-Type", ""))
+    if ext not in (".png", ".jpg", ".jpeg", ".webp"):
+        ext = ".jpg"
     return r.content, ext
 
 def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -> List[Dict[str, Any]]:
@@ -276,6 +314,7 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
         except Exception:
             continue
 
+    # de-dup por link
     seen = set()
     deduped: List[Dict[str, Any]] = []
     for a in raw:
@@ -283,6 +322,7 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
             seen.add(a["link"])
             deduped.append(a)
 
+    # balance por feed
     if max_per_feed > 0:
         counts: Dict[str, int] = {}
         balanced: List[Dict[str, Any]] = []
@@ -318,7 +358,7 @@ def is_bad_title(title: str) -> bool:
     return any(re.search(p, t) for p in BAD_TITLE_PATTERNS)
 
 # =========================
-# OpenAI (text)
+# OpenAI (text + TTS)
 # =========================
 
 def openai_client():
@@ -337,11 +377,37 @@ def openai_text(prompt: str) -> str:
             return out.strip()
     except Exception:
         pass
+
     resp = client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=[{"role": "user", "content": prompt}],
     )
     return resp.choices[0].message.content.strip()
+
+def openai_tts_to_mp3(text: str) -> bytes:
+    """
+    Returns MP3 bytes from OpenAI TTS.
+    """
+    client = openai_client()
+    # Newer SDK supports audio.speech.create
+    try:
+        audio = client.audio.speech.create(
+            model=OPENAI_TTS_MODEL,
+            voice=OPENAI_TTS_VOICE,
+            input=text,
+            format="mp3",
+        )
+        # audio might be bytes-like or have .read()
+        if hasattr(audio, "read"):
+            return audio.read()
+        if isinstance(audio, (bytes, bytearray)):
+            return bytes(audio)
+        # some SDK returns an object with .content
+        if hasattr(audio, "content"):
+            return audio.content
+    except Exception as e:
+        raise RuntimeError(f"TTS falló: {e}")
+    raise RuntimeError("TTS falló: respuesta inesperada")
 
 def build_threads_text(item: Dict[str, Any], mode: str = "new") -> str:
     title = item.get("title", "")
@@ -390,6 +456,43 @@ Link: {link}
     if "Fuente:" not in text:
         text = f"{text}\n\nFuente: {link}"
     return text
+
+def build_reel_script(item: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Returns: {"hook":..., "body":..., "cta":..., "voice":...}
+    """
+    title = item.get("title", "")
+    link = item.get("link", "")
+    prompt = f"""
+Eres guionista de reels gaming para LATAM.
+Con base en el título, crea un guion ultra corto para 15s:
+- hook (máx 8 palabras)
+- body (1 frase clara)
+- cta (máx 7 palabras)
+- voiceover: 2-3 frases naturales (máx 40 palabras total), tono hype gamer, sin decir "según", sin sonar noticiero formal.
+No inventes datos. Si no hay datos del link, habla en general del anuncio/noticia por el título.
+Entrega JSON con keys: hook, body, cta, voice.
+Título: {title}
+Link: {link}
+"""
+    raw = openai_text(prompt)
+    # try parse json
+    try:
+        j = json.loads(raw)
+        return {
+            "hook": str(j.get("hook", "")).strip(),
+            "body": str(j.get("body", "")).strip(),
+            "cta": str(j.get("cta", "")).strip(),
+            "voice": str(j.get("voice", "")).strip(),
+        }
+    except Exception:
+        # fallback: simple
+        return {
+            "hook": "HOY EN GAMING",
+            "body": title[:90],
+            "cta": "¿Qué opinas?",
+            "voice": f"Atención gamers. {title}. ¿Qué opinas de esto?",
+        }
 
 # =========================
 # Threads API (real)
@@ -451,7 +554,7 @@ def threads_publish_text_image(user_id: str, access_token: str, dry_run: bool, t
         raise RuntimeError("Falta THREADS_USER_ACCESS_TOKEN")
 
     img_bytes, ext = download_image_bytes(image_url_from_news)
-    r2_url = upload_bytes_to_r2_public(img_bytes, ext, prefix=threads_media_prefix)
+    r2_url = upload_bytes_to_r2_public(img_bytes, ext, prefix=threads_media_prefix, content_type=None)
     print("IMAGE re-hosted on R2:", r2_url)
 
     container_id = threads_create_container_image(user_id, access_token, text, r2_url)
@@ -537,6 +640,170 @@ def save_ig_queue_item(prefix: str, payload: Dict[str, Any]) -> str:
     return key
 
 # =========================
+# Reel generator (FFmpeg)
+# =========================
+
+def _ffmpeg_exists() -> bool:
+    try:
+        r = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, check=False)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+def _safe_drawtext(text: str) -> str:
+    # escape for ffmpeg drawtext
+    t = (text or "").replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'").replace("\n", " ")
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+def create_reel_mp4(
+    *,
+    account_id: str,
+    title: str,
+    article_image_url: str,
+    reel_script: Dict[str, str],
+    tmp_dir: str = "/tmp"
+) -> str:
+    """
+    Creates mp4, returns local path.
+    """
+    if not _ffmpeg_exists():
+        raise RuntimeError("ffmpeg no está disponible en el runner.")
+
+    if not os.path.exists(ASSET_BG):
+        raise RuntimeError(f"Falta fondo: {ASSET_BG}. Súbelo al repo.")
+    if not os.path.exists(ASSET_LOGO):
+        raise RuntimeError(f"Falta logo: {ASSET_LOGO}. Súbelo al repo.")
+
+    # download article image
+    img_bytes, img_ext = download_image_bytes(article_image_url)
+    article_img_path = os.path.join(tmp_dir, f"article_{account_id}{img_ext}")
+    with open(article_img_path, "wb") as f:
+        f.write(img_bytes)
+
+    # TTS
+    voice_text = reel_script.get("voice") or f"Atención gamers. {title}. ¿Qué opinas?"
+    tts_mp3_bytes = openai_tts_to_mp3(voice_text)
+    voice_path = os.path.join(tmp_dir, f"voice_{account_id}.mp3")
+    with open(voice_path, "wb") as f:
+        f.write(tts_mp3_bytes)
+
+    # Optional music
+    music_exists = os.path.exists(ASSET_MUSIC)
+
+    # Output
+    out_path = os.path.join(tmp_dir, f"reel_{account_id}_{now_utc().strftime('%Y%m%d_%H%M%S')}.mp4")
+
+    hook = _safe_drawtext(reel_script.get("hook") or "HOY EN GAMING")
+    body = _safe_drawtext(reel_script.get("body") or title)
+    cta = _safe_drawtext(reel_script.get("cta") or "¿Qué opinas?")
+
+    # Timing
+    # 0-4 hook, 4-11 body, 11-15 cta
+    # Build filter_complex
+    # Base bg image loops, then overlays logo and article card and text.
+    # Article card: scaled to fit center.
+    logo_scale_w = 500  # adjust
+    card_w = 900
+    card_h = 520
+
+    # drawtext boxes for readability
+    # We'll use x centered and y positions
+    fc = []
+    fc.append(f"[0:v]scale={REEL_W}:{REEL_H},format=yuv420p[bg]")
+    fc.append(f"[2:v]scale={logo_scale_w}:-1[logo]")
+    fc.append(f"[1:v]scale={card_w}:{card_h}:force_original_aspect_ratio=decrease,pad={card_w}:{card_h}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba[card]")
+
+    # Overlay card then logo
+    fc.append(f"[bg][card]overlay=(W-w)/2:(H-h)/2-140:enable='between(t,0,{REEL_SECONDS})'[v1]")
+    fc.append(f"[v1][logo]overlay=(W-w)/2:120:enable='between(t,0,{REEL_SECONDS})'[v2]")
+
+    # Text layers
+    # Hook
+    fc.append(
+        f"[v2]drawtext=fontfile={FONT_BOLD}:text='{hook}':fontsize=72:fontcolor=white:"
+        f"x=(w-text_w)/2:y=740:box=1:boxcolor=black@0.35:boxborderw=18:"
+        f"enable='between(t,0,4)'[v3]"
+    )
+    # Body
+    fc.append(
+        f"[v3]drawtext=fontfile={FONT_BOLD}:text='{body}':fontsize=44:fontcolor=white:"
+        f"x=(w-text_w)/2:y=860:box=1:boxcolor=black@0.35:boxborderw=18:"
+        f"enable='between(t,4,11)'[v4]"
+    )
+    # CTA
+    fc.append(
+        f"[v4]drawtext=fontfile={FONT_BOLD}:text='{cta}':fontsize=56:fontcolor=white:"
+        f"x=(w-text_w)/2:y=1560:box=1:boxcolor=black@0.35:boxborderw=18:"
+        f"enable='between(t,11,{REEL_SECONDS})'[vout]"
+    )
+
+    filter_complex = ";".join(fc)
+
+    # Audio mixing:
+    # input 3 = voice mp3
+    # input 4 = music mp3 (optional)
+    # We'll normalize voice and (optional) mix music low volume.
+    if music_exists:
+        audio_fc = (
+            "[3:a]aformat=fltp:44100:stereo,volume=1.0[voice];"
+            "[4:a]aformat=fltp:44100:stereo,volume=0.18[music];"
+            "[voice][music]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+        )
+        full_fc = filter_complex + ";" + audio_fc
+        cmd = [
+            "ffmpeg", "-y",
+            "-loop", "1", "-t", str(REEL_SECONDS), "-i", ASSET_BG,          # 0
+            "-i", article_img_path,                                         # 1
+            "-i", ASSET_LOGO,                                                # 2
+            "-i", voice_path,                                                # 3
+            "-stream_loop", "-1", "-i", ASSET_MUSIC,                         # 4
+            "-filter_complex", full_fc,
+            "-map", "[vout]",
+            "-map", "[aout]",
+            "-t", str(REEL_SECONDS),
+            "-r", "30",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-c:a", "aac", "-b:a", "192k",
+            out_path
+        ]
+    else:
+        audio_fc = "[3:a]aformat=fltp:44100:stereo,volume=1.0[aout]"
+        full_fc = filter_complex + ";" + audio_fc
+        cmd = [
+            "ffmpeg", "-y",
+            "-loop", "1", "-t", str(REEL_SECONDS), "-i", ASSET_BG,          # 0
+            "-i", article_img_path,                                         # 1
+            "-i", ASSET_LOGO,                                                # 2
+            "-i", voice_path,                                                # 3
+            "-filter_complex", full_fc,
+            "-map", "[vout]",
+            "-map", "[aout]",
+            "-t", str(REEL_SECONDS),
+            "-r", "30",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-c:a", "aac", "-b:a", "192k",
+            out_path
+        ]
+
+    print("FFmpeg cmd:", " ".join(cmd))
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        print("FFmpeg STDOUT:", r.stdout[-2000:])
+        print("FFmpeg STDERR:", r.stderr[-4000:])
+        raise RuntimeError("FFmpeg falló generando el reel.")
+
+    if not os.path.exists(out_path) or os.path.getsize(out_path) < 50_000:
+        raise RuntimeError("Reel mp4 generado inválido.")
+
+    return out_path
+
+def upload_mp4_to_r2_public(local_path: str, prefix: str) -> str:
+    with open(local_path, "rb") as f:
+        data = f.read()
+    return upload_bytes_to_r2_public(data, ".mp4", prefix=prefix, content_type="video/mp4")
+
+# =========================
 # Accounts loading
 # =========================
 
@@ -586,7 +853,8 @@ def load_accounts() -> List[Dict[str, Any]]:
         },
         "r2": {
             "threads_media_prefix": "threads_media/estratosferica",
-            "ig_queue_prefix": "ugc/ig_queue/estratosferica"
+            "ig_queue_prefix": "ugc/ig_queue/estratosferica",
+            "reels_prefix": "ugc/reels/estratosferica"
         }
     }]
 
@@ -616,6 +884,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     r2_cfg = cfg.get("r2", {})
     threads_media_prefix = r2_cfg.get("threads_media_prefix", f"threads_media/{account_id}").strip().strip("/")
     ig_queue_prefix = r2_cfg.get("ig_queue_prefix", f"ugc/ig_queue/{account_id}").strip().strip("/")
+    reels_prefix = r2_cfg.get("reels_prefix", f"ugc/reels/{account_id}").strip().strip("/")
 
     # RSS
     print("Obteniendo artículos (RSS)...")
@@ -628,7 +897,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     processed = []
     for a in articles[:max_ai_items]:
         processed.append(a)
-        time.sleep(0.05)
+        time.sleep(0.03)
 
     state = load_threads_state(state_key)
     print("STATE posted_items:", len(state.get("posted_items", {})))
@@ -654,17 +923,17 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         # (Modo A) No forzamos verificación para que siempre publique
         if VERIFY_NEWS:
-            # si algún día quieres activarlo, lo implementamos bien con más señales
             pass
 
-        text = build_threads_text(item, mode=mode)
-
         # Imagen para Threads (al menos 1)
-        imgs_1 = extract_best_images(link, max_images=1)
+        imgs_1 = extract_best_images(link, max_images=2)
         if not imgs_1:
             print("No se encontró imagen (og/twitter/img). Se omite para evitar post sin imagen.")
             processed = [x for x in processed if x.get("link") != link]
             continue
+
+        # Threads text
+        text = build_threads_text(item, mode=mode)
 
         if not auto_post:
             print("THREADS_AUTO_POST desactivado. (No se publica)")
@@ -689,7 +958,34 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             results.append({"link": link, "mode": mode, "posted": True, "threads": threads_res})
             print("Auto-post Threads: OK ✅")
 
-            # IG queue (por ahora: carousel/image). Luego lo pasamos a reel mp4 automático.
+            # =========================
+            # REEL AUTO (mp4 + voice)
+            # =========================
+            reel_video_url = None
+            reel_local_path = None
+            reel_script = None
+            try:
+                if ENABLE_REELS:
+                    print("Generando REEL automático (15s)...")
+                    reel_script = build_reel_script(item)
+
+                    # Use second image if exists, else first
+                    article_img_for_reel = imgs_1[1] if len(imgs_1) > 1 else imgs_1[0]
+
+                    reel_local_path = create_reel_mp4(
+                        account_id=account_id,
+                        title=item.get("title", ""),
+                        article_image_url=article_img_for_reel,
+                        reel_script=reel_script,
+                    )
+                    reel_video_url = upload_mp4_to_r2_public(reel_local_path, prefix=reels_prefix)
+                    print("REEL subido a R2:", reel_video_url)
+            except Exception as e:
+                print("REEL: falló (no rompe el run):", str(e))
+
+            # =========================
+            # IG QUEUE
+            # =========================
             try:
                 candidates = extract_best_images(link, max_images=IG_CAROUSEL_MAX_IMAGES)
 
@@ -697,7 +993,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 for img_url in candidates:
                     try:
                         b, ext = download_image_bytes(img_url)
-                        r2_img = upload_bytes_to_r2_public(b, ext, prefix=threads_media_prefix)
+                        r2_img = upload_bytes_to_r2_public(b, ext, prefix=threads_media_prefix, content_type=None)
                         if r2_img not in r2_images:
                             r2_images.append(r2_img)
                     except Exception:
@@ -709,9 +1005,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 if not r2_images and threads_img:
                     r2_images = [threads_img]
 
-                has_video = False
-                reel_video_url = None
-
+                has_video = bool(reel_video_url)
                 ig_format = choose_ig_format(has_video=has_video, image_count=len(r2_images))
                 ig_caption = build_instagram_caption(item, mode=mode, link=link)
 
@@ -729,6 +1023,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     "assets": {
                         "images": r2_images[:IG_CAROUSEL_MAX_IMAGES],
                         "reel_video_url": reel_video_url,
+                        "reel_script": reel_script,  # útil para subtítulos/copy
                     },
                     "threads": {
                         "publish_id": (threads_res.get("publish") or {}).get("id") if isinstance(threads_res, dict) else None,
@@ -760,6 +1055,8 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "settings": {
             "verify_news": VERIFY_NEWS,
             "enable_trends": ENABLE_TRENDS,
+            "enable_reels": ENABLE_REELS,
+            "reel_seconds": REEL_SECONDS,
         },
         "result": {
             "posted_count": posted_count,

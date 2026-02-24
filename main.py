@@ -109,12 +109,12 @@ def _raise_meta_error(r: requests.Response, label: str = "HTTP") -> None:
     print(f"\n====== {label} ERROR ======")
     print("URL:", r.request.url)
     print("METHOD:", r.request.method)
-    print("STATUS:", r.status_code)
     if r.request.body:
         body = r.request.body
         if isinstance(body, bytes):
             body = body.decode("utf-8", errors="replace")
         print("REQUEST BODY:", body)
+    print("STATUS:", r.status_code)
     print("RESPONSE TEXT:", r.text)
     print("========================\n")
     r.raise_for_status()
@@ -186,7 +186,7 @@ def upload_bytes_to_r2_public(
     """
     Sube bytes a R2 y devuelve URL pública.
     Para imágenes, valida que la URL responda Content-Type image/*
-    Para video, valida video/*.
+    Para video, valida video/* (si viene octet-stream no rompe duro).
     """
     s3 = r2_client()
     h = hashlib.sha1(file_bytes).hexdigest()[:16]
@@ -211,7 +211,6 @@ def upload_bytes_to_r2_public(
         if expect_kind == "image" and "image" not in ct:
             raise RuntimeError(f"R2 URL no parece imagen (Content-Type={ct}): {url}")
         if expect_kind == "video" and "video" not in ct:
-            # Algunos CDNs devuelven application/octet-stream; no rompemos duro.
             print(f"AVISO: Content-Type inesperado para video: {ct} (URL {url})")
     except Exception as e:
         print("AVISO: validación HEAD falló (no rompe):", str(e))
@@ -373,14 +372,14 @@ def openai_text(prompt: str) -> str:
 
 def tts_to_mp3_bytes(text: str) -> bytes:
     """
-    OpenAI TTS -> mp3 bytes
+    OpenAI TTS -> mp3 bytes (NO lo usamos en FASE 1 de reels)
     """
     client = openai_client()
     audio = client.audio.speech.create(
         model=os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
         voice=os.getenv("OPENAI_TTS_VOICE", "alloy"),
         input=text,
-        response_format="mp3",  # ✅ CORRECTO (ya no es format=)
+        response_format="mp3",
     )
     return audio.read()
 
@@ -434,7 +433,7 @@ Link: {link}
 
 def build_reel_voiceover_text(item: Dict[str, Any]) -> str:
     """
-    Guion corto para voz (15s).
+    Guion corto para voz (15s). (NO lo usamos en FASE 1)
     """
     title = (item.get("title") or "").strip()
     prompt = f"""
@@ -445,7 +444,6 @@ No menciones enlaces.
 Titular: {title}
 """
     out = openai_text(prompt).strip()
-    # Limpieza
     out = out.replace("\n", " ").strip()
     return out[:260]
 
@@ -480,7 +478,7 @@ def clip_threads_text(text: str, max_chars: int = 500) -> str:
 
 def threads_create_container_image(user_id: str, access_token: str, text: str, image_url: str) -> str:
     url = f"{THREADS_GRAPH}/{user_id}/threads"
-    text = clip_threads_text(text, 500)  # ✅ evita error 500 chars
+    text = clip_threads_text(text, 500)
     data = {"media_type": "IMAGE", "image_url": image_url, "text": text}
     r = _post_with_retries(url, headers=_threads_headers(access_token), data=data, label="THREADS CREATE_CONTAINER")
     return r.json()["id"]
@@ -637,7 +635,7 @@ def save_ig_queue_item(prefix: str, payload: Dict[str, Any]) -> str:
 
 
 # =========================
-# REEL generator (ffmpeg)
+# REEL generator (ffmpeg) - FASE 1 SIN VOZ + TIMEOUT
 # =========================
 
 def _require_file(path: str, label: str) -> None:
@@ -645,7 +643,6 @@ def _require_file(path: str, label: str) -> None:
         raise RuntimeError(f"Falta {label} en repo: {path}")
 
 def _safe_text_for_drawtext(s: str) -> str:
-    # Escapar caracteres problemáticos para ffmpeg drawtext
     s = (s or "").strip()
     s = s.replace("\\", "\\\\")
     s = s.replace(":", "\\:")
@@ -661,55 +658,39 @@ def generate_reel_mp4_bytes(
     bg_path: str,
     seconds: int
 ) -> bytes:
+    """
+    FASE 1 (estable): REEL sin voz.
+    - ffmpeg con -nostdin + timeout para que NUNCA se cuelgue el workflow.
+    - 1080x1920, imagen + overlay + música opcional.
+    """
     _require_file(bg_path, "ASSET_BG")
     _require_file(logo_path, "ASSET_LOGO")
     if not os.path.exists(news_image_path):
         raise RuntimeError(f"Falta news image local: {news_image_path}")
+    if not os.path.exists(FONT_BOLD):
+        raise RuntimeError(f"Falta FONT_BOLD en runner: {FONT_BOLD}")
 
-    headline = _safe_text_for_drawtext(headline[:110])
+    headline = _safe_text_for_drawtext((headline or "")[:110])
+    music_ok = os.path.exists(ASSET_MUSIC)
 
     with tempfile.TemporaryDirectory() as td:
         out_mp4 = os.path.join(td, "reel.mp4")
-        voice_mp3 = os.path.join(td, "voice.mp3")
-
-        # Voz
-        voice_text = headline
-        try:
-            voice_bytes = tts_to_mp3_bytes(voice_text)
-            with open(voice_mp3, "wb") as f:
-                f.write(voice_bytes)
-        except Exception as e:
-            raise RuntimeError(f"TTS falló: {str(e)}")
-
-        # Música opcional
-        music_ok = os.path.exists(ASSET_MUSIC)
-
-        # ffmpeg
-        # Inputs:
-        # 0: bg (loop)
-        # 1: news image
-        # 2: logo
-        # 3: voice mp3
-        # 4: music mp3 (optional)
 
         cmd = [
             "ffmpeg",
             "-y",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel", "error",
             "-stream_loop", "-1",
             "-i", bg_path,
             "-i", news_image_path,
             "-i", logo_path,
-            "-i", voice_mp3,
         ]
 
         if music_ok:
             cmd += ["-i", ASSET_MUSIC]
 
-        # video filters
-        # scale bg to 1080x1920
-        # scale news image to fit width 980, keep aspect, add rounded-ish effect via box + blur not included (simple)
-        # overlay logo at top
-        # draw headline + CTA
         vf = (
             f"[0:v]scale={REEL_W}:{REEL_H},format=rgba[bg];"
             f"[1:v]scale={REEL_W-120}:-1,format=rgba[news];"
@@ -725,34 +706,38 @@ def generate_reel_mp4_bytes(
             f"[vout]"
         )
 
-        # audio filters
+        cmd += ["-filter_complex", vf, "-map", "[vout]"]
+
         if music_ok:
-            af = (
-                "[3:a]volume=1.0[a_voice];"
-                "[4:a]volume=0.15[a_music];"
-                "[a_voice][a_music]amix=inputs=2:duration=shortest:dropout_transition=2[aout]"
-            )
+            cmd += [
+                "-map", "3:a",
+                "-filter:a", "volume=0.15",
+                "-c:a", "aac",
+                "-b:a", "128k",
+            ]
         else:
-            af = "[3:a]volume=1.0[aout]"
+            cmd += ["-an"]
 
         cmd += [
-            "-filter_complex", vf + ";" + af,
-            "-map", "[vout]",
-            "-map", "[aout]",
             "-t", str(seconds),
             "-r", "30",
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
-            "-c:a", "aac",
-            "-b:a", "128k",
+            "-movflags", "+faststart",
             "-shortest",
             out_mp4
         ]
 
-        # Ejecutar
-        p = subprocess.run(cmd, capture_output=True, text=True)
+        p = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
         if p.returncode != 0:
-            raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{p.stderr[:2000]}")
+            raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:2000]}")
 
         with open(out_mp4, "rb") as f:
             return f.read()
@@ -900,21 +885,14 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 candidates = extract_best_images(link, max_images=IG_CAROUSEL_MAX_IMAGES)
 
                 r2_images: List[str] = []
-                local_first_image_path = None
 
                 # Re-host imágenes para IG
-                for idx, img_url in enumerate(candidates):
+                for img_url in candidates:
                     try:
                         b, ext = download_image_bytes(img_url)
                         r2_img = upload_image_bytes_to_r2_public(b, ext, prefix=threads_media_prefix)
                         if r2_img not in r2_images:
                             r2_images.append(r2_img)
-
-                        # Guardar primera imagen local para el reel
-                        if idx == 0:
-                            with tempfile.TemporaryDirectory() as td:
-                                # No podemos conservar path fuera del TD; lo bajamos luego otra vez si necesitamos
-                                pass
                     except Exception:
                         continue
                     if len(r2_images) >= IG_CAROUSEL_MAX_IMAGES:
@@ -931,7 +909,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 if ENABLE_REELS and r2_images:
                     print(f"Generando REEL automático ({REEL_SECONDS}s)...")
                     try:
-                        # Descargamos la primera imagen (ya sea r2 o source) para usarla local en ffmpeg
                         src_img_for_reel = r2_images[0]
                         img_bytes = requests.get(src_img_for_reel, timeout=30).content
 
@@ -942,15 +919,15 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
                             print("REEL: llamando generate_reel_mp4_bytes", flush=True)
 
-    reel_bytes = generate_reel_mp4_bytes(
-    headline=(item.get("title") or "Noticia gamer"),
-    news_image_path=news_img_path,
-    logo_path=ASSET_LOGO,
-    bg_path=ASSET_BG,
-    seconds=REEL_SECONDS
-)
+                            reel_bytes = generate_reel_mp4_bytes(
+                                headline=(item.get("title") or "Noticia gamer"),
+                                news_image_path=news_img_path,
+                                logo_path=ASSET_LOGO,
+                                bg_path=ASSET_BG,
+                                seconds=REEL_SECONDS
+                            )
 
-print("REEL: generate_reel_mp4_bytes terminó", flush=True)
+                            print("REEL: generate_reel_mp4_bytes terminó", flush=True)
 
                         reel_video_url = upload_video_mp4_to_r2_public(reel_bytes, prefix=reels_prefix)
                         has_video = True

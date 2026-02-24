@@ -8,7 +8,7 @@
         "https://www.pcgamer.com/rss/"
       ],
       "max_per_feed": 3,
-      "shuffle_articles": true,
+      "shuffle_articles": True,
       "max_ai_items": 15,
       "threads": {
         "user_id": "me",

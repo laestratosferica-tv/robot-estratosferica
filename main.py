@@ -635,7 +635,7 @@ def save_ig_queue_item(prefix: str, payload: Dict[str, Any]) -> str:
 
 
 # =========================
-# REEL generator (ffmpeg) - FASE 1 SIN VOZ + TIMEOUT + TEXTFILE
+# REEL generator (ffmpeg) - ESTABLE + COMPLETO (texto + logo + bg) + TIMEOUT
 # =========================
 
 def _require_file(path: str, label: str) -> None:
@@ -650,9 +650,12 @@ def generate_reel_mp4_bytes(
     seconds: int
 ) -> bytes:
     """
-    FASE 1 (estable): REEL sin voz.
-    - drawtext usa textfile para evitar errores por comillas/acentos.
-    - ffmpeg con -nostdin + timeout para que NUNCA se cuelgue el workflow.
+    REEL completo y estable:
+    - bg + imagen + logo + headline + cta
+    - texto con textfile (no se rompe con comillas/acentos)
+    - ffmpeg con -nostdin + timeout (no cuelga)
+    - loop de imagen y logo (evita rarezas / cuelgues)
+    - música opcional
     """
     _require_file(bg_path, "ASSET_BG")
     _require_file(logo_path, "ASSET_LOGO")
@@ -682,10 +685,13 @@ def generate_reel_mp4_bytes(
             "-nostdin",
             "-hide_banner",
             "-loglevel", "error",
-            "-stream_loop", "-1",
-            "-i", bg_path,
-            "-i", news_image_path,
-            "-i", logo_path,
+
+            # bg loop infinito
+            "-stream_loop", "-1", "-i", bg_path,
+
+            # imagen y logo como "video" (loop 1)
+            "-loop", "1", "-i", news_image_path,
+            "-loop", "1", "-i", logo_path,
         ]
 
         if music_ok:
@@ -707,7 +713,10 @@ def generate_reel_mp4_bytes(
             f"[vout]"
         )
 
-        cmd += ["-filter_complex", vf, "-map", "[vout]"]
+        cmd += [
+            "-filter_complex", vf,
+            "-map", "[vout]",
+        ]
 
         if music_ok:
             cmd += [
@@ -912,7 +921,9 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     print(f"Generando REEL automático ({REEL_SECONDS}s)...")
                     try:
                         src_img_for_reel = r2_images[0]
-                        img_bytes = requests.get(src_img_for_reel, timeout=30).content
+                        rr = requests.get(src_img_for_reel, timeout=30)
+                        rr.raise_for_status()
+                        img_bytes = rr.content
 
                         with tempfile.TemporaryDirectory() as td:
                             news_img_path = os.path.join(td, "news.jpg")

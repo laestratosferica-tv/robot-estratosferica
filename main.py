@@ -23,6 +23,12 @@ try:
 except Exception:
     OpenAI = None
 
+# Google Trends (pytrends) - opcional pero recomendado
+try:
+    from pytrends.request import TrendReq
+except Exception:
+    TrendReq = None
+
 
 print("RUNNING MEDIA ENGINE (Threads REAL + IG Queue + Multi-account via accounts.json)")
 
@@ -54,6 +60,15 @@ CONTAINER_WAIT_TIMEOUT = int(os.getenv("CONTAINER_WAIT_TIMEOUT", "120"))
 CONTAINER_POLL_INTERVAL = float(os.getenv("CONTAINER_POLL_INTERVAL", "2"))
 
 IG_CAROUSEL_MAX_IMAGES = int(os.getenv("IG_CAROUSEL_MAX_IMAGES", "5"))
+
+# Verificación anti-humo (2 fuentes RSS distintas)
+VERIFY_NEWS = os.getenv("VERIFY_NEWS", "true").lower() == "true"
+VERIFY_MIN_OVERLAP = float(os.getenv("VERIFY_MIN_OVERLAP", "0.45"))
+
+# Tendencias (LATAM proxy)
+ENABLE_TRENDS = os.getenv("ENABLE_TRENDS", "true").lower() == "true"
+TRENDS_COUNTRY = os.getenv("TRENDS_COUNTRY", "mexico")  # mexico | argentina | colombia | chile | peru etc.
+TRENDS_TOP_N = int(os.getenv("TRENDS_TOP_N", "10"))
 
 # =========================
 # TIME
@@ -89,12 +104,12 @@ def _raise_meta_error(r: requests.Response, label: str = "HTTP") -> None:
     print(f"\n====== {label} ERROR ======")
     print("URL:", r.request.url)
     print("METHOD:", r.request.method)
-    print("STATUS:", r.status_code)
     if r.request.body:
         body = r.request.body
         if isinstance(body, bytes):
             body = body.decode("utf-8", errors="replace")
         print("REQUEST BODY:", body)
+    print("STATUS:", r.status_code)
     print("RESPONSE TEXT:", r.text)
     print("========================\n")
     r.raise_for_status()
@@ -272,6 +287,7 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
         except Exception:
             continue
 
+    # de-dup por link
     seen = set()
     deduped: List[Dict[str, Any]] = []
     for a in raw:
@@ -279,6 +295,7 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
             seen.add(a["link"])
             deduped.append(a)
 
+    # balance por feed
     if max_per_feed > 0:
         counts: Dict[str, int] = {}
         balanced: List[Dict[str, Any]] = []
@@ -294,6 +311,65 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
         random.shuffle(deduped)
 
     return deduped
+
+# =========================
+# Trending (Google Trends)
+# =========================
+
+def get_trending_keywords_latam(top_n: int = 10, country: str = "mexico") -> List[str]:
+    """
+    Retorna keywords trending del país (proxy LATAM).
+    Si falla o no está pytrends instalado, retorna [].
+    """
+    if not TrendReq:
+        return []
+    try:
+        pytrend = TrendReq(hl='es-419', tz=0)
+        trending = pytrend.trending_searches(pn=country)
+        keywords = trending[0].tolist()
+        return [k for k in keywords if isinstance(k, str)][:top_n]
+    except Exception as e:
+        print("Google Trends error:", str(e))
+        return []
+
+# =========================
+# Verification (anti-humo)
+# =========================
+
+def normalize_title(t: str) -> str:
+    t = (t or "").lower()
+    t = re.sub(r"[^a-z0-9áéíóúñ\s]", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+def title_tokens(t: str) -> set:
+    stop = {
+        "the","a","an","and","or","to","of","in","on","for","with","vs",
+        "de","la","el","y","en","para","con","un","una","del","al"
+    }
+    toks = set([x for x in normalize_title(t).split() if len(x) > 2 and x not in stop])
+    return toks
+
+def is_verified_by_rss(item: Dict[str, Any], all_items: List[Dict[str, Any]], min_overlap: float = 0.45) -> bool:
+    """
+    Verifica si el título aparece "similar" en otro feed distinto.
+    """
+    t1 = title_tokens(item.get("title",""))
+    if not t1:
+        return False
+    feed1 = item.get("feed")
+    for other in all_items:
+        if other is item:
+            continue
+        if other.get("feed") == feed1:
+            continue
+        t2 = title_tokens(other.get("title",""))
+        if not t2:
+            continue
+        overlap = len(t1 & t2) / max(1, len(t1))
+        if overlap >= min_overlap:
+            return True
+    return False
 
 # =========================
 # OpenAI (text)
@@ -355,7 +431,7 @@ Link: {link}
 def build_instagram_caption(item: Dict[str, Any], mode: str, link: str) -> str:
     title = item.get("title", "")
     prompt = f"""
-Eres editor de Instagram (esports/gaming).
+Eres editor de Instagram (esports/gaming) para público en ESPAÑOL LATAM.
 Escribe un caption natural y humano:
 - 1-2 párrafos cortos
 - 5-10 hashtags relevantes al final
@@ -533,17 +609,24 @@ def load_accounts() -> List[Dict[str, Any]]:
     except Exception:
         pass
 
-    # Default 1 cuenta (para no complicarte)
+    # Default 1 cuenta (fuentes mejoradas)
     return [{
         "account_id": "estratosferica",
         "rss_feeds": [
+            # Gaming / esports
             "https://www.dexerto.com/feed/",
-            "https://www.gamespot.com/feeds/news/",
-            "https://www.pcgamer.com/rss/"
+            "https://dotesports.com/feed",
+            "https://www.videogameschronicle.com/feed/",
+            "https://www.eurogamer.net/feed",
+            "https://www.pcgamer.com/rss/",
+            "https://www.polygon.com/rss/index.xml",
+            # Tech / Hardware (gamer)
+            "https://www.theverge.com/rss/index.xml",
+            "https://www.tomshardware.com/feeds/all",
         ],
         "max_per_feed": int(os.getenv("MAX_PER_FEED", "3")),
         "shuffle_articles": os.getenv("SHUFFLE_ARTICLES", "true").lower() == "true",
-        "max_ai_items": int(os.getenv("MAX_AI_ITEMS", "15")),
+        "max_ai_items": int(os.getenv("MAX_AI_ITEMS", "20")),
         "threads": {
             "user_id": os.getenv("THREADS_USER_ID", "me"),
             "state_key": "accounts/estratosferica/threads_state.json",
@@ -595,6 +678,20 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     print("FEEDS EN ESTA CORRIDA:", feeds_in_run)
     print("TOTAL FEEDS:", len(feeds_in_run))
 
+    # Tendencias: empuja arriba los artículos que contengan keywords trending
+    trending_keywords: List[str] = []
+    if ENABLE_TRENDS:
+        trending_keywords = get_trending_keywords_latam(top_n=TRENDS_TOP_N, country=TRENDS_COUNTRY)
+        if trending_keywords:
+            print("Trending LATAM:", trending_keywords)
+            articles = sorted(
+                articles,
+                key=lambda a: any(kw.lower() in (a.get("title", "").lower()) for kw in trending_keywords),
+                reverse=True
+            )
+        else:
+            print("Trending LATAM: (sin datos / no disponible)")
+
     processed = []
     for a in articles[:max_ai_items]:
         processed.append(a)
@@ -615,6 +712,13 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         link = item["link"]
         label = "NUEVO" if mode == "new" else "REPOST"
         print(f"Seleccionado ({label}): {link}")
+
+        # Anti-humo: exige confirmación por otra fuente RSS
+        if VERIFY_NEWS:
+            if not is_verified_by_rss(item, processed, min_overlap=VERIFY_MIN_OVERLAP):
+                print("No verificado por segunda fuente RSS. Saltando para evitar humo:", link)
+                processed = [x for x in processed if x.get("link") != link]
+                continue
 
         text = build_threads_text(item, mode=mode)
 
@@ -715,6 +819,16 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "shuffle": shuffle,
             "max_per_feed": max_per_feed,
             "max_ai_items": max_ai_items,
+        },
+        "trends": {
+            "enabled": ENABLE_TRENDS,
+            "country": TRENDS_COUNTRY,
+            "top_n": TRENDS_TOP_N,
+            "keywords": trending_keywords,
+        },
+        "verification": {
+            "enabled": VERIFY_NEWS,
+            "min_overlap": VERIFY_MIN_OVERLAP,
         },
         "result": {
             "posted_count": posted_count,

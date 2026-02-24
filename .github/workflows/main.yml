@@ -71,4 +71,4 @@ jobs:
           # ASSET_MUSIC: "assets/music.mp3"  # opcional si lo subes
 
         run: |
-          python main.py
+          python -u main.py

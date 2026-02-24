@@ -940,13 +940,17 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             with open(news_img_path, "wb") as f:
                                 f.write(img_bytes)
 
-                            reel_bytes = generate_reel_mp4_bytes(
-                                headline=(item.get("title") or "Noticia gamer"),
-                                news_image_path=news_img_path,
-                                logo_path=ASSET_LOGO,
-                                bg_path=ASSET_BG,
-                                seconds=REEL_SECONDS
-                            )
+                            print("REEL: llamando generate_reel_mp4_bytes", flush=True)
+
+    reel_bytes = generate_reel_mp4_bytes(
+    headline=(item.get("title") or "Noticia gamer"),
+    news_image_path=news_img_path,
+    logo_path=ASSET_LOGO,
+    bg_path=ASSET_BG,
+    seconds=REEL_SECONDS
+)
+
+print("REEL: generate_reel_mp4_bytes terminó", flush=True)
 
                         reel_video_url = upload_video_mp4_to_r2_public(reel_bytes, prefix=reels_prefix)
                         has_video = True

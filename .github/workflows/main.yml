@@ -27,6 +27,12 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+
       - name: Run robot
         env:
           # 🔐 R2
@@ -54,6 +60,15 @@ jobs:
           REPOST_ENABLE: "true"
           REPOST_MAX_TIMES: "3"
           REPOST_WINDOW_DAYS: "7"
+
+          # 🎬 REELS (activos por defecto)
+          ENABLE_REELS: "true"
+          REEL_SECONDS: "15"
+          REEL_W: "1080"
+          REEL_H: "1920"
+          ASSET_BG: "assets/bg.jpg"
+          ASSET_LOGO: "assets/logo.png"
+          # ASSET_MUSIC: "assets/music.mp3"  # opcional si lo subes
 
         run: |
           python main.py

@@ -7,7 +7,7 @@ import random
 import subprocess
 import tempfile
 from datetime import datetime, timezone
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from typing import Optional, Tuple, Dict, Any, List
 
 import requests
@@ -92,6 +92,51 @@ def days_since(dt_iso: str) -> int:
         return int((now_utc() - dt).total_seconds() // 86400)
     except Exception:
         return 999999
+
+
+# =========================
+# URL helpers (fix broken images)
+# =========================
+
+def normalize_url(maybe_url: str, base_url: str) -> Optional[str]:
+    """
+    Arregla cosas típicas:
+    - //cdn.com/img.jpg  -> https://cdn.com/img.jpg
+    - /img.jpg           -> https://host.com/img.jpg
+    - https:///wp...     -> https://host.com/wp...
+    Si aún queda inválida -> None
+    """
+    if not maybe_url:
+        return None
+
+    u = (maybe_url or "").strip()
+    if not u:
+        return None
+
+    # protocol-relative
+    if u.startswith("//"):
+        base = urlparse(base_url)
+        scheme = base.scheme or "https"
+        u = f"{scheme}:{u}"
+
+    # malformed "https:///path"
+    if u.startswith("https:///") or u.startswith("http:///"):
+        base = urlparse(base_url)
+        scheme = base.scheme or "https"
+        host = base.netloc
+        path = u.split(":///", 1)[1]
+        u = f"{scheme}://{host}/{path.lstrip('/')}"
+
+    # relative path
+    parsed = urlparse(u)
+    if not parsed.scheme or not parsed.netloc:
+        u = urljoin(base_url, u)
+
+    parsed2 = urlparse(u)
+    if not parsed2.scheme or not parsed2.netloc:
+        return None
+
+    return u
 
 
 # =========================
@@ -241,22 +286,20 @@ def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
         for k in ["og:image", "twitter:image"]:
             for (name, img) in metas:
                 if name == k and img:
-                    if img.startswith("/"):
-                        img = urljoin(page_url, img)
-                    if img not in found:
-                        found.append(img)
+                    img2 = normalize_url(img, page_url)
+                    if img2 and img2 not in found:
+                        found.append(img2)
 
         if len(found) < max_images:
             for m in IMG_SRC_RE.finditer(html):
                 img = m.group(1).strip()
                 if not img:
                     continue
-                if img.startswith("/"):
-                    img = urljoin(page_url, img)
                 if img.lower().startswith("data:"):
                     continue
-                if img not in found:
-                    found.append(img)
+                img2 = normalize_url(img, page_url)
+                if img2 and img2 not in found:
+                    found.append(img2)
                 if len(found) >= max_images:
                     break
 
@@ -265,6 +308,11 @@ def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
         return []
 
 def download_image_bytes(image_url: str) -> Tuple[bytes, str]:
+    # Validación fuerte para evitar "https:///" y similares
+    parsed = urlparse(image_url)
+    if not parsed.scheme or not parsed.netloc:
+        raise RuntimeError(f"URL de imagen inválida: {image_url}")
+
     headers = {
         "User-Agent": "Mozilla/5.0",
         "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
@@ -675,12 +723,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     if auto_post_limit <= 0 or not rss_feeds:
         print(f"Cuenta {account_id} está apagada (auto_post_limit=0 o rss_feeds vacío). Saltando ✅")
-        return {
-            "generated_at": iso_now(),
-            "account_id": account_id,
-            "skipped": True,
-            "reason": "disabled_or_no_feeds"
-        }
+        return {"generated_at": iso_now(), "account_id": account_id, "skipped": True, "reason": "disabled_or_no_feeds"}
 
     print("Obteniendo artículos (RSS)...")
     articles = fetch_rss_articles(rss_feeds, max_per_feed=max_per_feed, shuffle=shuffle)
@@ -709,9 +752,25 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         text = build_threads_text(item, mode=mode)
 
-        imgs_1 = extract_best_images(link, max_images=1)
-        if not imgs_1:
+        # SACAMOS VARIAS IMÁGENES Y PROBAMOS HASTA QUE UNA FUNCIONE
+        img_candidates = extract_best_images(link, max_images=5)
+        if not img_candidates:
             print("No se encontró imagen. Se omite.")
+            processed = [x for x in processed if x.get("link") != link]
+            continue
+
+        chosen_img = None
+        for u in img_candidates:
+            try:
+                # prueba rápida para ver si es descargable
+                _ = download_image_bytes(u)
+                chosen_img = u
+                break
+            except Exception:
+                continue
+
+        if not chosen_img:
+            print("Todas las imágenes del artículo fallaron. Se omite.")
             processed = [x for x in processed if x.get("link") != link]
             continue
 
@@ -727,7 +786,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 access_token=THREADS_USER_ACCESS_TOKEN,
                 dry_run=dry_run,
                 text=text,
-                image_url_from_news=imgs_1[0],
+                image_url_from_news=chosen_img,
                 threads_media_prefix=threads_media_prefix,
             )
 
@@ -799,18 +858,10 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 ig_payload = {
                     "created_at": iso_now(),
                     "account_id": account_id,
-                    "source": {
-                        "link": link,
-                        "feed": item.get("feed"),
-                        "mode": mode,
-                        "title": item.get("title"),
-                    },
+                    "source": {"link": link, "feed": item.get("feed"), "mode": mode, "title": item.get("title")},
                     "format": ig_format,
                     "caption": ig_caption,
-                    "assets": {
-                        "images": r2_images[:IG_CAROUSEL_MAX_IMAGES],
-                        "reel_video_url": reel_video_url,
-                    },
+                    "assets": {"images": r2_images[:IG_CAROUSEL_MAX_IMAGES], "reel_video_url": reel_video_url},
                     "threads": {
                         "publish_id": (threads_res.get("publish") or {}).get("id") if isinstance(threads_res, dict) else None,
                         "image_url": threads_img,

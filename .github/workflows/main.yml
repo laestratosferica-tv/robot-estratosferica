@@ -2,11 +2,11 @@ name: Robot Editorial Scheduler
 
 on:
   schedule:
-    # 9:00 AM Colombia (UTC-5 → 14:00 UTC)
+    # 9:00 AM Colombia (UTC-5 -> 14:00 UTC)
     - cron: "0 14 * * *"
-    # 3:00 PM Colombia (UTC-5 → 20:00 UTC)
+    # 3:00 PM Colombia (UTC-5 -> 20:00 UTC)
     - cron: "0 20 * * *"
-    # 9:00 PM Colombia (UTC-5 → 02:00 UTC)
+    # 9:00 PM Colombia (UTC-5 -> 02:00 UTC)
     - cron: "0 2 * * *"
   workflow_dispatch:
 
@@ -41,15 +41,23 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
           # 🤖 OpenAI
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
 
           # 🧵 Threads
           THREADS_USER_ACCESS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
 
-          # 📰 MIX & BALANCE (IMPORTANTES)
+          # 📸 Instagram Publishing (✅ activado)
+          ENABLE_IG_PUBLISH: "true"
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          GRAPH_VERSION: "v25.0"
+
+          # 📰 MIX & BALANCE
           RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
           MAX_PER_FEED: ${{ secrets.MAX_PER_FEED }}
           MAX_AI_ITEMS: ${{ secrets.MAX_AI_ITEMS }}
@@ -61,7 +69,7 @@ jobs:
           REPOST_MAX_TIMES: "3"
           REPOST_WINDOW_DAYS: "7"
 
-          # 🎬 REELS (activos por defecto)
+          # 🎬 REELS
           ENABLE_REELS: "true"
           REEL_SECONDS: "15"
           REEL_W: "1080"

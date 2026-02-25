@@ -339,7 +339,7 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
 
 
 # =========================
-# OpenAI (text + TTS)
+# OpenAI (text)
 # =========================
 
 def openai_client():
@@ -363,16 +363,6 @@ def openai_text(prompt: str) -> str:
         messages=[{"role": "user", "content": prompt}],
     )
     return resp.choices[0].message.content.strip()
-
-def tts_to_mp3_bytes(text: str) -> bytes:
-    client = openai_client()
-    audio = client.audio.speech.create(
-        model=os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
-        voice=os.getenv("OPENAI_TTS_VOICE", "alloy"),
-        input=text,
-        response_format="mp3",
-    )
-    return audio.read()
 
 def build_threads_text(item: Dict[str, Any], mode: str = "new") -> str:
     title = item.get("title", "")
@@ -421,19 +411,6 @@ Link: {link}
     if "Fuente:" not in text:
         text = f"{text}\n\nFuente: {link}"
     return text
-
-def build_reel_voiceover_text(item: Dict[str, Any]) -> str:
-    title = (item.get("title") or "").strip()
-    prompt = f"""
-Eres locutor gamer en español LATAM.
-Crea un guion de voz en máximo 2 frases, 10 a 18 segundos.
-Tono: hype, cool, informativo.
-No menciones enlaces.
-Titular: {title}
-"""
-    out = openai_text(prompt).strip()
-    out = out.replace("\n", " ").strip()
-    return out[:260]
 
 
 # =========================
@@ -623,7 +600,7 @@ def save_ig_queue_item(prefix: str, payload: Dict[str, Any]) -> str:
 
 
 # =========================
-# REEL generator (ffmpeg) - ESTABLE + COMPLETO (SIN -loop)
+# REEL generator (ffmpeg) - LAVFI BASE (NO LOOP), ESTABLE
 # =========================
 
 def _require_file(path: str, label: str) -> None:
@@ -646,6 +623,7 @@ def generate_reel_mp4_bytes(
 
     headline_clean = (headline or "").strip().replace("\n", " ")[:140]
     cta_text = "Sigue para más hype gamer 🚀"
+
     music_ok = os.path.exists(ASSET_MUSIC)
 
     with tempfile.TemporaryDirectory() as td:
@@ -658,8 +636,7 @@ def generate_reel_mp4_bytes(
         with open(cta_txt, "w", encoding="utf-8") as f:
             f.write(cta_text)
 
-        # IMPORTANTE: SIN -loop (tu ffmpeg no lo soporta)
-        # Usamos -stream_loop -1 para BG, NEWS y LOGO
+        # Base video: color lavfi (duración controlada)
         cmd = [
             "ffmpeg",
             "-y",
@@ -667,21 +644,26 @@ def generate_reel_mp4_bytes(
             "-hide_banner",
             "-loglevel", "error",
 
-            "-stream_loop", "-1", "-i", bg_path,
-            "-stream_loop", "-1", "-i", news_image_path,
-            "-stream_loop", "-1", "-i", logo_path,
+            "-f", "lavfi",
+            "-i", f"color=c=black:s={REEL_W}x{REEL_H}:r=30:d={int(seconds)}",
+
+            "-i", bg_path,
+            "-i", news_image_path,
+            "-i", logo_path,
         ]
 
         if music_ok:
             cmd += ["-i", ASSET_MUSIC]
 
+        # 0=vbase, 1=bg, 2=news, 3=logo
         vf = (
-            f"[0:v]scale={REEL_W}:{REEL_H},format=rgba[bg];"
-            f"[1:v]scale={REEL_W-120}:-1,format=rgba[news];"
-            f"[2:v]scale=700:-1,format=rgba[logo];"
-            f"[bg][news]overlay=(W-w)/2:520:format=auto[bg2];"
-            f"[bg2][logo]overlay=(W-w)/2:170:format=auto[bg3];"
-            f"[bg3]"
+            f"[1:v]scale={REEL_W}:{REEL_H},format=rgba[bg];"
+            f"[0:v][bg]overlay=0:0:format=auto[v1];"
+            f"[2:v]scale={REEL_W-120}:-1,format=rgba[news];"
+            f"[v1][news]overlay=(W-w)/2:520:format=auto[v2];"
+            f"[3:v]scale=700:-1,format=rgba[logo];"
+            f"[v2][logo]overlay=(W-w)/2:170:format=auto[v3];"
+            f"[v3]"
             f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
             f"x=60:y=1320:fontsize=48:fontcolor=white:"
             f"box=1:boxcolor=black@0.45:boxborderw=24,"
@@ -695,7 +677,7 @@ def generate_reel_mp4_bytes(
 
         if music_ok:
             cmd += [
-                "-map", "3:a",
+                "-map", "4:a",
                 "-filter:a", "volume=0.15",
                 "-c:a", "aac",
                 "-b:a", "128k",
@@ -714,14 +696,18 @@ def generate_reel_mp4_bytes(
             out_mp4
         ]
 
-        p = subprocess.run(
-            cmd,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=180,
-            check=False,
-        )
+        try:
+            p = subprocess.run(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=180,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("ffmpeg se demoró demasiado y se cortó por timeout (180s).")
+
         if p.returncode != 0:
             raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 

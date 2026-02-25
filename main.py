@@ -26,7 +26,7 @@ except Exception:
     OpenAI = None
 
 
-print("RUNNING MEDIA ENGINE (Threads REAL + IG Queue + REEL AUTO + Multi-account via accounts.json)")
+print("RUNNING MEDIA ENGINE (Threads REAL + IG Queue + REEL AUTO + IG REELS PUBLISH + Multi-account via accounts.json)")
 
 # =========================
 # GLOBAL ENV (infra)
@@ -48,11 +48,16 @@ R2_PUBLIC_BASE_URL = os.getenv(
 THREADS_GRAPH = os.getenv("THREADS_GRAPH", "https://graph.threads.net").rstrip("/")
 THREADS_USER_ACCESS_TOKEN = os.getenv("THREADS_USER_ACCESS_TOKEN")
 
+# Meta Graph (Instagram / Facebook)
+META_GRAPH_BASE = os.getenv("META_GRAPH_BASE", "https://graph.facebook.com").rstrip("/")
+META_GRAPH_VERSION = os.getenv("META_GRAPH_VERSION", "v21.0")  # puedes ajustar
+META_GRAPH = f"{META_GRAPH_BASE}/{META_GRAPH_VERSION}".rstrip("/")
+
 HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "30"))
 POST_RETRY_MAX = int(os.getenv("POST_RETRY_MAX", "2"))
 POST_RETRY_SLEEP = float(os.getenv("POST_RETRY_SLEEP", "2"))
 
-CONTAINER_WAIT_TIMEOUT = int(os.getenv("CONTAINER_WAIT_TIMEOUT", "120"))
+CONTAINER_WAIT_TIMEOUT = int(os.getenv("CONTAINER_WAIT_TIMEOUT", "180"))
 CONTAINER_POLL_INTERVAL = float(os.getenv("CONTAINER_POLL_INTERVAL", "2"))
 
 IG_CAROUSEL_MAX_IMAGES = int(os.getenv("IG_CAROUSEL_MAX_IMAGES", "5"))
@@ -60,7 +65,7 @@ IG_CAROUSEL_MAX_IMAGES = int(os.getenv("IG_CAROUSEL_MAX_IMAGES", "5"))
 VERIFY_NEWS = os.getenv("VERIFY_NEWS", "false").lower() == "true"
 ENABLE_TRENDS = os.getenv("ENABLE_TRENDS", "false").lower() == "true"
 
-# Reels
+# Reels generator (video)
 ENABLE_REELS = os.getenv("ENABLE_REELS", "true").lower() == "true"
 REEL_SECONDS = int(os.getenv("REEL_SECONDS", "15"))
 REEL_W = int(os.getenv("REEL_W", "1080"))
@@ -71,6 +76,11 @@ DEFAULT_ASSET_LOGO = os.getenv("ASSET_LOGO", "assets/logo.png")
 DEFAULT_ASSET_MUSIC = os.getenv("ASSET_MUSIC", "assets/music.mp3")  # opcional
 
 FONT_BOLD = os.getenv("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+
+# Instagram publishing (nuevo)
+ENABLE_IG_PUBLISH = os.getenv("ENABLE_IG_PUBLISH", "false").lower() == "true"
+IG_USER_ID_ENV = os.getenv("IG_USER_ID")  # fallback global
+IG_ACCESS_TOKEN_ENV = os.getenv("IG_ACCESS_TOKEN")  # fallback global
 
 
 # =========================
@@ -308,7 +318,6 @@ def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
         return []
 
 def download_image_bytes(image_url: str) -> Tuple[bytes, str]:
-    # Validación fuerte para evitar "https:///" y similares
     parsed = urlparse(image_url)
     if not parsed.scheme or not parsed.netloc:
         raise RuntimeError(f"URL de imagen inválida: {image_url}")
@@ -523,6 +532,82 @@ def threads_publish_text_image(user_id: str, access_token: str, dry_run: bool, t
 
 
 # =========================
+# Instagram Graph API (Reels publish) - NUEVO
+# =========================
+
+def ig_headers() -> Dict[str, str]:
+    return {"Content-Type": "application/x-www-form-urlencoded"}
+
+def ig_create_reel_container(ig_user_id: str, access_token: str, video_url: str, caption: str) -> str:
+    url = f"{META_GRAPH}/{ig_user_id}/media"
+    data = {
+        "media_type": "REELS",
+        "video_url": video_url,
+        "caption": caption,
+        "access_token": access_token,
+    }
+    r = _post_with_retries(url, headers=ig_headers(), data=data, label="IG CREATE_MEDIA (REELS)")
+    j = r.json()
+    cid = j.get("id")
+    if not cid:
+        raise RuntimeError(f"IG create container no devolvió id: {j}")
+    return cid
+
+def ig_get_container_status(container_id: str, access_token: str) -> Dict[str, Any]:
+    url = f"{META_GRAPH}/{container_id}"
+    params = {
+        "fields": "status_code,status,error_message",
+        "access_token": access_token,
+    }
+    r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
+    _raise_meta_error(r, "IG CONTAINER STATUS")
+    return r.json()
+
+def ig_wait_container(container_id: str, access_token: str, timeout_sec: Optional[int] = None) -> Dict[str, Any]:
+    if timeout_sec is None:
+        timeout_sec = CONTAINER_WAIT_TIMEOUT
+
+    start = time.time()
+    last = None
+    while time.time() - start < timeout_sec:
+        j = ig_get_container_status(container_id, access_token)
+        last = j
+        sc = (j.get("status_code") or j.get("status") or "").upper()
+
+        # status_code suele ser FINISHED / IN_PROGRESS / ERROR
+        if sc in ("FINISHED", "COMPLETED", "READY"):
+            return j
+        if sc in ("ERROR", "FAILED"):
+            raise RuntimeError(f"IG container failed: {j}")
+
+        time.sleep(CONTAINER_POLL_INTERVAL)
+
+    raise TimeoutError(f"IG container not ready after {timeout_sec}s: {last}")
+
+def ig_publish_container(ig_user_id: str, access_token: str, creation_id: str) -> Dict[str, Any]:
+    url = f"{META_GRAPH}/{ig_user_id}/media_publish"
+    data = {
+        "creation_id": creation_id,
+        "access_token": access_token,
+    }
+    r = _post_with_retries(url, headers=ig_headers(), data=data, label="IG MEDIA_PUBLISH")
+    return r.json()
+
+def ig_publish_reel(ig_user_id: str, access_token: str, video_url: str, caption: str) -> Dict[str, Any]:
+    print("IG: creando contenedor Reel...")
+    container_id = ig_create_reel_container(ig_user_id, access_token, video_url, caption)
+    print("IG: container_id:", container_id)
+
+    print("IG: esperando procesamiento...")
+    ig_wait_container(container_id, access_token)
+
+    print("IG: publicando Reel...")
+    pub = ig_publish_container(ig_user_id, access_token, container_id)
+    print("IG: publish response:", pub)
+    return {"container_id": container_id, "publish": pub}
+
+
+# =========================
 # State
 # =========================
 
@@ -688,6 +773,29 @@ def load_accounts() -> List[Dict[str, Any]]:
 
 
 # =========================
+# IG creds per account
+# =========================
+
+def resolve_ig_creds(cfg: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Prioridad:
+    1) cfg["instagram"]["user_id"], cfg["instagram"]["access_token"]
+       - access_token puede ser "env:VAR_NAME" para sacarlo de env
+    2) env global: IG_USER_ID, IG_ACCESS_TOKEN
+    """
+    ig_cfg = cfg.get("instagram", {}) or {}
+    user_id = ig_cfg.get("user_id") or IG_USER_ID_ENV
+
+    tok = ig_cfg.get("access_token")
+    if isinstance(tok, str) and tok.startswith("env:"):
+        env_name = tok.split("env:", 1)[1].strip()
+        tok = os.getenv(env_name)
+
+    access_token = tok or IG_ACCESS_TOKEN_ENV
+    return (str(user_id) if user_id else None, str(access_token) if access_token else None)
+
+
+# =========================
 # Main per account run
 # =========================
 
@@ -720,6 +828,10 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     threads_media_prefix = r2_cfg.get("threads_media_prefix", f"threads_media/{account_id}").strip().strip("/")
     ig_queue_prefix = r2_cfg.get("ig_queue_prefix", f"ugc/ig_queue/{account_id}").strip().strip("/")
     reels_prefix = r2_cfg.get("reels_prefix", f"ugc/reels/{account_id}").strip().strip("/")
+
+    # Instagram publish flags per account
+    ig_cfg = cfg.get("instagram", {}) or {}
+    ig_auto_publish = bool(ig_cfg.get("auto_publish_reels", False))
 
     if auto_post_limit <= 0 or not rss_feeds:
         print(f"Cuenta {account_id} está apagada (auto_post_limit=0 o rss_feeds vacío). Saltando ✅")
@@ -762,7 +874,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         chosen_img = None
         for u in img_candidates:
             try:
-                # prueba rápida para ver si es descargable
                 _ = download_image_bytes(u)
                 chosen_img = u
                 break
@@ -834,7 +945,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             with open(news_img_path, "wb") as f:
                                 f.write(img_bytes)
 
-                            print("REEL: llamando generate_reel_mp4_bytes", flush=True)
                             reel_bytes = generate_reel_mp4_bytes(
                                 headline=(item.get("title") or "Update esports"),
                                 news_image_path=news_img_path,
@@ -844,7 +954,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                                 music_path=asset_music,
                                 cta_text=cta_text
                             )
-                            print("REEL: generate_reel_mp4_bytes terminó", flush=True)
 
                         reel_video_url = upload_video_mp4_to_r2_public(reel_bytes, prefix=reels_prefix)
                         has_video = True
@@ -871,6 +980,18 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 ig_key = save_ig_queue_item(ig_queue_prefix, ig_payload)
                 print("IG queue guardado en R2:", ig_key)
 
+                # PUBLICAR REEL REAL EN IG (si está activo)
+                if ENABLE_IG_PUBLISH and ig_auto_publish and reel_video_url:
+                    ig_user_id, ig_token = resolve_ig_creds(cfg)
+                    if not ig_user_id or not ig_token:
+                        print("IG publish activado pero faltan credenciales (IG user_id / token). Se omite.")
+                    else:
+                        print("IG: auto-publicando REEL...")
+                        pubres = ig_publish_reel(ig_user_id, ig_token, reel_video_url, ig_caption)
+                        ig_payload["publish"] = pubres
+                        save_to_r2_json(ig_key, ig_payload)
+                        print("IG: Reel publicado ✅ y actualizado el payload en R2.")
+
             except Exception as e:
                 print("IG queue: falló (no rompe el run):", str(e))
 
@@ -886,7 +1007,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "generated_at": iso_now(),
         "account_id": account_id,
         "mix": {"shuffle": shuffle, "max_per_feed": max_per_feed, "max_ai_items": max_ai_items},
-        "settings": {"verify_news": VERIFY_NEWS, "enable_trends": ENABLE_TRENDS, "enable_reels": ENABLE_REELS, "reel_seconds": REEL_SECONDS},
+        "settings": {"verify_news": VERIFY_NEWS, "enable_trends": ENABLE_TRENDS, "enable_reels": ENABLE_REELS, "reel_seconds": REEL_SECONDS, "enable_ig_publish": ENABLE_IG_PUBLISH},
         "result": {"posted_count": posted_count, "results": results}
     }
     return run_payload

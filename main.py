@@ -370,9 +370,11 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
     return deduped
 
 
+# OPENAI CONFIG (BLINDADO)
 # =========================
-# OpenAI (text)
-# =========================
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = "gpt-4.1-mini"  # 🔒 FIJO - no depende de GitHub
 
 def openai_client():
     if not OpenAI:
@@ -383,17 +385,26 @@ def openai_client():
 
 def openai_text(prompt: str) -> str:
     client = openai_client()
+
+    # Método moderno (Responses API)
     try:
-        resp = client.responses.create(model=OPENAI_MODEL, input=prompt)
+        resp = client.responses.create(
+            model=OPENAI_MODEL,
+            input=prompt
+        )
         out = getattr(resp, "output_text", None)
         if out:
             return out.strip()
     except Exception:
         pass
-    resp = client.chat.completions.create(model=OPENAI_MODEL, messages=[{"role": "user", "content": prompt}])
+
+    # Fallback Chat API (seguro)
+    resp = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[{"role": "user", "content": prompt}]
+    )
     return resp.choices[0].message.content.strip()
-
-
+    
 # =========================
 # Copy (gaming esports)
 # =========================

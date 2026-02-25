@@ -2,14 +2,38 @@
   "accounts": [
     {
       "account_id": "estratosferica",
+      "niche": "gaming_esports",
       "rss_feeds": [
         "https://www.dexerto.com/feed/",
+        "https://www.pcgamer.com/rss/",
         "https://www.gamespot.com/feeds/news/",
-        "https://www.pcgamer.com/rss/"
+        "https://esportsinsider.com/feed",
+        "https://dotesports.com/feed",
+        "https://www.esports.net/feed/",
+        "https://upcomer.com/feed/",
+        "https://www.gamesradar.com/rss/",
+        "https://www.eurogamer.net/feed",
+        "https://www.hltv.org/rss/news",
+
+        "https://www.youtube.com/feeds/videos.xml?channel_id=UCvqRdlKsE5Q8mf8YXbdIJLw",
+        "https://www.youtube.com/feeds/videos.xml?channel_id=UCzVgCrOcBAWYEHTtVOMPAtw",
+        "https://www.youtube.com/feeds/videos.xml?channel_id=UCzvDSoNrl2Uva7t_Z936VUw",
+        "https://www.youtube.com/feeds/videos.xml?channel_id=UCey_lF3R2uW6ndgqH4sE5Sg"
       ],
       "max_per_feed": 3,
       "shuffle_articles": true,
-      "max_ai_items": 15,
+      "max_ai_items": 20,
+      "assets": {
+        "bg": "assets/bg.jpg",
+        "logo": "assets/logo.png",
+        "music": "assets/music.mp3",
+        "cta": "Sigue para más hype esports 🚀"
+      },
+      "copy": {
+        "threads_prompt": "",
+        "ig_prompt": "",
+        "disclaimer": ""
+      },
       "threads": {
         "user_id": "me",
         "state_key": "accounts/estratosferica/threads_state.json",
@@ -22,31 +46,42 @@
       },
       "r2": {
         "threads_media_prefix": "threads_media/estratosferica",
-        "ig_queue_prefix": "ugc/ig_queue/estratosferica"
+        "ig_queue_prefix": "ugc/ig_queue/estratosferica",
+        "reels_prefix": "ugc/reels/estratosferica"
       }
     },
     {
       "account_id": "cliente2",
-      "rss_feeds": [
-        "https://www.dexerto.com/feed/",
-        "https://www.pcgamer.com/rss/"
-      ],
-      "max_per_feed": 2,
-      "shuffle_articles": true,
-      "max_ai_items": 10,
+      "niche": "affiliate_agc",
+      "rss_feeds": [],
+      "max_per_feed": 0,
+      "shuffle_articles": false,
+      "max_ai_items": 0,
+      "assets": {
+        "bg": "assets/bg.jpg",
+        "logo": "assets/logo.png",
+        "music": "assets/music.mp3",
+        "cta": "Link en bio 🔗"
+      },
+      "copy": {
+        "threads_prompt": "",
+        "ig_prompt": "",
+        "disclaimer": "#ad #afiliado"
+      },
       "threads": {
         "user_id": "me",
         "state_key": "accounts/cliente2/threads_state.json",
-        "auto_post": true,
-        "auto_post_limit": 1,
+        "auto_post": false,
+        "auto_post_limit": 0,
         "dry_run": true,
-        "repost_enable": true,
-        "repost_max_times": 3,
-        "repost_window_days": 7
+        "repost_enable": false,
+        "repost_max_times": 0,
+        "repost_window_days": 999
       },
       "r2": {
         "threads_media_prefix": "threads_media/cliente2",
-        "ig_queue_prefix": "ugc/ig_queue/cliente2"
+        "ig_queue_prefix": "ugc/ig_queue/cliente2",
+        "reels_prefix": "ugc/reels/cliente2"
       }
     }
   ]

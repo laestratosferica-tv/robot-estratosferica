@@ -181,13 +181,8 @@ def upload_bytes_to_r2_public(
     ext: str,
     prefix: str,
     content_type: str,
-    expect_kind: str = "any"  # "image" | "video" | "any"
+    expect_kind: str = "any"
 ) -> str:
-    """
-    Sube bytes a R2 y devuelve URL pública.
-    Para imágenes, valida que la URL responda Content-Type image/*
-    Para video, valida video/* (si viene octet-stream no rompe duro).
-    """
     s3 = r2_client()
     h = hashlib.sha1(file_bytes).hexdigest()[:16]
     key = f"{prefix}/{h}{ext}"
@@ -201,7 +196,6 @@ def upload_bytes_to_r2_public(
 
     url = f"{R2_PUBLIC_BASE_URL}/{key}"
 
-    # Validación liviana (HEAD)
     try:
         head = requests.head(url, timeout=10, allow_redirects=True)
         if head.status_code != 200:
@@ -371,9 +365,6 @@ def openai_text(prompt: str) -> str:
     return resp.choices[0].message.content.strip()
 
 def tts_to_mp3_bytes(text: str) -> bytes:
-    """
-    OpenAI TTS -> mp3 bytes (NO lo usamos en FASE 1 de reels)
-    """
     client = openai_client()
     audio = client.audio.speech.create(
         model=os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
@@ -432,9 +423,6 @@ Link: {link}
     return text
 
 def build_reel_voiceover_text(item: Dict[str, Any]) -> str:
-    """
-    Guion corto para voz (15s). (NO lo usamos en FASE 1)
-    """
     title = (item.get("title") or "").strip()
     prompt = f"""
 Eres locutor gamer en español LATAM.
@@ -635,7 +623,7 @@ def save_ig_queue_item(prefix: str, payload: Dict[str, Any]) -> str:
 
 
 # =========================
-# REEL generator (ffmpeg) - ESTABLE + COMPLETO (texto + logo + bg) + TIMEOUT
+# REEL generator (ffmpeg) - ESTABLE + COMPLETO (SIN -loop)
 # =========================
 
 def _require_file(path: str, label: str) -> None:
@@ -649,14 +637,6 @@ def generate_reel_mp4_bytes(
     bg_path: str,
     seconds: int
 ) -> bytes:
-    """
-    REEL completo y estable:
-    - bg + imagen + logo + headline + cta
-    - texto con textfile (no se rompe con comillas/acentos)
-    - ffmpeg con -nostdin + timeout (no cuelga)
-    - loop de imagen y logo (evita rarezas / cuelgues)
-    - música opcional
-    """
     _require_file(bg_path, "ASSET_BG")
     _require_file(logo_path, "ASSET_LOGO")
     if not os.path.exists(news_image_path):
@@ -666,7 +646,6 @@ def generate_reel_mp4_bytes(
 
     headline_clean = (headline or "").strip().replace("\n", " ")[:140]
     cta_text = "Sigue para más hype gamer 🚀"
-
     music_ok = os.path.exists(ASSET_MUSIC)
 
     with tempfile.TemporaryDirectory() as td:
@@ -679,6 +658,8 @@ def generate_reel_mp4_bytes(
         with open(cta_txt, "w", encoding="utf-8") as f:
             f.write(cta_text)
 
+        # IMPORTANTE: SIN -loop (tu ffmpeg no lo soporta)
+        # Usamos -stream_loop -1 para BG, NEWS y LOGO
         cmd = [
             "ffmpeg",
             "-y",
@@ -686,12 +667,9 @@ def generate_reel_mp4_bytes(
             "-hide_banner",
             "-loglevel", "error",
 
-            # bg loop infinito
             "-stream_loop", "-1", "-i", bg_path,
-
-            # imagen y logo como "video" (loop 1)
-            "-loop", "1", "-i", news_image_path,
-            "-loop", "1", "-i", logo_path,
+            "-stream_loop", "-1", "-i", news_image_path,
+            "-stream_loop", "-1", "-i", logo_path,
         ]
 
         if music_ok:
@@ -713,10 +691,7 @@ def generate_reel_mp4_bytes(
             f"[vout]"
         )
 
-        cmd += [
-            "-filter_complex", vf,
-            "-map", "[vout]",
-        ]
+        cmd += ["-filter_complex", vf, "-map", "[vout]"]
 
         if music_ok:
             cmd += [
@@ -759,10 +734,6 @@ def generate_reel_mp4_bytes(
 # =========================
 
 def load_accounts() -> List[Dict[str, Any]]:
-    """
-    Si existe 'accounts.json' en el repo, lo usa.
-    Si no existe, corre 1 cuenta default (estratosferica).
-    """
     try:
         with open("accounts.json", "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -829,7 +800,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     ig_queue_prefix = r2_cfg.get("ig_queue_prefix", f"ugc/ig_queue/{account_id}").strip().strip("/")
     reels_prefix = r2_cfg.get("reels_prefix", f"ugc/reels/{account_id}").strip().strip("/")
 
-    # RSS
     print("Obteniendo artículos (RSS)...")
     articles = fetch_rss_articles(rss_feeds, max_per_feed=max_per_feed, shuffle=shuffle)
     print(f"{len(articles)} artículos candidatos tras mix/balance (MAX_PER_FEED={max_per_feed}, SHUFFLE={shuffle})")
@@ -860,7 +830,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         text = build_threads_text(item, mode=mode)
 
-        # Imagen para Threads (al menos 1)
         imgs_1 = extract_best_images(link, max_images=1)
         if not imgs_1:
             print("No se encontró imagen (og/twitter/img). Se omite para evitar post sin imagen.")
@@ -891,13 +860,10 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             results.append({"link": link, "mode": mode, "posted": True, "threads": threads_res})
             print("Auto-post Threads: OK ✅")
 
-            # IG queue (reels > carousel > image)
             try:
                 candidates = extract_best_images(link, max_images=IG_CAROUSEL_MAX_IMAGES)
 
                 r2_images: List[str] = []
-
-                # Re-host imágenes para IG
                 for img_url in candidates:
                     try:
                         b, ext = download_image_bytes(img_url)
@@ -916,7 +882,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 has_video = False
                 reel_video_url = None
 
-                # Generar REEL
                 if ENABLE_REELS and r2_images:
                     print(f"Generando REEL automático ({REEL_SECONDS}s)...")
                     try:
@@ -960,7 +925,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         "mode": mode,
                         "title": item.get("title"),
                     },
-                    "format": ig_format,  # reel | carousel | image
+                    "format": ig_format,
                     "caption": ig_caption,
                     "assets": {
                         "images": r2_images[:IG_CAROUSEL_MAX_IMAGES],

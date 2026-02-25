@@ -57,20 +57,19 @@ CONTAINER_POLL_INTERVAL = float(os.getenv("CONTAINER_POLL_INTERVAL", "2"))
 
 IG_CAROUSEL_MAX_IMAGES = int(os.getenv("IG_CAROUSEL_MAX_IMAGES", "5"))
 
-# MODO A: publicar sí o sí (sin verificación estricta / sin trends)
 VERIFY_NEWS = os.getenv("VERIFY_NEWS", "false").lower() == "true"
 ENABLE_TRENDS = os.getenv("ENABLE_TRENDS", "false").lower() == "true"
 
-# Reel auto
+# Reels
 ENABLE_REELS = os.getenv("ENABLE_REELS", "true").lower() == "true"
 REEL_SECONDS = int(os.getenv("REEL_SECONDS", "15"))
 REEL_W = int(os.getenv("REEL_W", "1080"))
 REEL_H = int(os.getenv("REEL_H", "1920"))
-ASSET_BG = os.getenv("ASSET_BG", "assets/bg.jpg")
-ASSET_LOGO = os.getenv("ASSET_LOGO", "assets/logo.png")
-ASSET_MUSIC = os.getenv("ASSET_MUSIC", "assets/music.mp3")  # opcional
 
-# Font for drawtext (GitHub ubuntu runners usually have DejaVu)
+DEFAULT_ASSET_BG = os.getenv("ASSET_BG", "assets/bg.jpg")
+DEFAULT_ASSET_LOGO = os.getenv("ASSET_LOGO", "assets/logo.png")
+DEFAULT_ASSET_MUSIC = os.getenv("ASSET_MUSIC", "assets/music.mp3")  # opcional
+
 FONT_BOLD = os.getenv("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 
 
@@ -105,7 +104,6 @@ def _threads_headers(token: str) -> Dict[str, str]:
 def _raise_meta_error(r: requests.Response, label: str = "HTTP") -> None:
     if r.status_code < 400:
         return
-
     print(f"\n====== {label} ERROR ======")
     print("URL:", r.request.url)
     print("METHOD:", r.request.method)
@@ -176,31 +174,18 @@ def _guess_ext_from_content_type(ct: str) -> str:
         return ".mp4"
     return ".bin"
 
-def upload_bytes_to_r2_public(
-    file_bytes: bytes,
-    ext: str,
-    prefix: str,
-    content_type: str,
-    expect_kind: str = "any"
-) -> str:
+def upload_bytes_to_r2_public(file_bytes: bytes, ext: str, prefix: str, content_type: str, expect_kind: str = "any") -> str:
     s3 = r2_client()
     h = hashlib.sha1(file_bytes).hexdigest()[:16]
     key = f"{prefix}/{h}{ext}"
 
-    s3.put_object(
-        Bucket=BUCKET_NAME,
-        Key=key,
-        Body=file_bytes,
-        ContentType=content_type,
-    )
-
+    s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=file_bytes, ContentType=content_type)
     url = f"{R2_PUBLIC_BASE_URL}/{key}"
 
     try:
         head = requests.head(url, timeout=10, allow_redirects=True)
         if head.status_code != 200:
             raise RuntimeError(f"R2 public URL no accesible (status {head.status_code}): {url}")
-
         ct = (head.headers.get("Content-Type") or "").lower()
         if expect_kind == "image" and "image" not in ct:
             raise RuntimeError(f"R2 URL no parece imagen (Content-Type={ct}): {url}")
@@ -305,12 +290,7 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
                 title = getattr(e, "title", "") or ""
                 published = getattr(e, "published", "") or getattr(e, "updated", "") or ""
                 if link:
-                    raw.append({
-                        "title": title.strip(),
-                        "link": link.strip(),
-                        "published": published,
-                        "feed": feed,
-                    })
+                    raw.append({"title": title.strip(), "link": link.strip(), "published": published, "feed": feed})
         except Exception:
             continue
 
@@ -358,47 +338,25 @@ def openai_text(prompt: str) -> str:
             return out.strip()
     except Exception:
         pass
-    resp = client.chat.completions.create(
-        model=OPENAI_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    resp = client.chat.completions.create(model=OPENAI_MODEL, messages=[{"role": "user", "content": prompt}])
     return resp.choices[0].message.content.strip()
 
-def build_threads_text(item: Dict[str, Any], mode: str = "new") -> str:
-    title = item.get("title", "")
-    link = item.get("link", "")
 
-    if mode == "repost":
-        prompt = f"""
-Eres editor para una cuenta de Threads sobre esports/gaming en español LATAM.
-Reescribe este post como un REPOST con otra mirada/opinión, sin sonar repetido.
-- 1 párrafo corto.
-- Termina con una pregunta para la comunidad.
-- Incluye "Fuente:" + link al final.
-Datos:
-Título: {title}
-Link: {link}
-"""
-    else:
-        prompt = f"""
-Eres editor para una cuenta de Threads sobre esports/gaming en español LATAM.
+# =========================
+# Copy (gaming esports)
+# =========================
+
+THREADS_PROMPT_ESPORTS = """Eres editor para una cuenta de Threads sobre esports/gaming en español LATAM.
 Crea un post:
-- 1 párrafo corto.
+- 1 párrafo corto, claro y con vibe esports.
 - Termina con una pregunta a la comunidad.
 - Incluye "Fuente:" + link al final.
 Datos:
 Título: {title}
 Link: {link}
 """
-    text = openai_text(prompt).strip()
-    if "Fuente:" not in text:
-        text = f"{text}\n\nFuente: {link}"
-    return text.strip()
 
-def build_instagram_caption(item: Dict[str, Any], mode: str, link: str) -> str:
-    title = item.get("title", "")
-    prompt = f"""
-Eres editor de Instagram (gaming/esports) en español LATAM.
+IG_PROMPT_ESPORTS = """Eres editor de Instagram (esports/gaming) en español LATAM.
 Escribe un caption natural y humano:
 - 1-2 párrafos cortos
 - 5-10 hashtags relevantes al final
@@ -407,10 +365,25 @@ Escribe un caption natural y humano:
 Título: {title}
 Link: {link}
 """
+
+def build_threads_text(item: Dict[str, Any], mode: str = "new") -> str:
+    title = item.get("title", "")
+    link = item.get("link", "")
+    prompt = THREADS_PROMPT_ESPORTS.format(title=title, link=link)
+    if mode == "repost":
+        prompt += "\nExtra: reescribe como REPOST con otra mirada/opinión, sin sonar repetido."
     text = openai_text(prompt).strip()
     if "Fuente:" not in text:
         text = f"{text}\n\nFuente: {link}"
-    return text
+    return text.strip()
+
+def build_instagram_caption(item: Dict[str, Any], link: str) -> str:
+    title = item.get("title", "")
+    prompt = IG_PROMPT_ESPORTS.format(title=title, link=link)
+    text = openai_text(prompt).strip()
+    if "Fuente:" not in text:
+        text = f"{text}\n\nFuente: {link}"
+    return text.strip()
 
 
 # =========================
@@ -457,12 +430,7 @@ def threads_wait_container(container_id: str, access_token: str, timeout_sec: Op
     last = None
 
     while time.time() - start < timeout_sec:
-        r = requests.get(
-            url,
-            headers=_threads_headers(access_token),
-            params={"fields": "status,error_message"},
-            timeout=HTTP_TIMEOUT
-        )
+        r = requests.get(url, headers=_threads_headers(access_token), params={"fields": "status,error_message"}, timeout=HTTP_TIMEOUT)
         _raise_meta_error(r, "THREADS CONTAINER STATUS")
 
         j = r.json()
@@ -480,22 +448,10 @@ def threads_wait_container(container_id: str, access_token: str, timeout_sec: Op
 
 def threads_publish(user_id: str, access_token: str, container_id: str) -> Dict[str, Any]:
     url = f"{THREADS_GRAPH}/{user_id}/threads_publish"
-    r = _post_with_retries(
-        url,
-        headers=_threads_headers(access_token),
-        data={"creation_id": container_id},
-        label="THREADS PUBLISH"
-    )
+    r = _post_with_retries(url, headers=_threads_headers(access_token), data={"creation_id": container_id}, label="THREADS PUBLISH")
     return r.json()
 
-def threads_publish_text_image(
-    user_id: str,
-    access_token: str,
-    dry_run: bool,
-    text: str,
-    image_url_from_news: str,
-    threads_media_prefix: str
-) -> Dict[str, Any]:
+def threads_publish_text_image(user_id: str, access_token: str, dry_run: bool, text: str, image_url_from_news: str, threads_media_prefix: str) -> Dict[str, Any]:
     if dry_run:
         print("[DRY_RUN] Threads post:", clip_threads_text(text, 500))
         print("[DRY_RUN] Image source:", image_url_from_news)
@@ -512,7 +468,6 @@ def threads_publish_text_image(
     print("Container created:", container_id)
 
     threads_wait_container(container_id, access_token)
-
     res = threads_publish(user_id, access_token, container_id)
     print("Threads publish response:", res)
 
@@ -560,13 +515,7 @@ def repost_eligible(state: Dict[str, Any], link: str, repost_max_times: int, rep
         return True
     return days_since(last) >= repost_window_days
 
-def pick_item(
-    articles: List[Dict[str, Any]],
-    state: Dict[str, Any],
-    repost_enable: bool,
-    repost_max_times: int,
-    repost_window_days: int
-) -> Tuple[Optional[Dict[str, Any]], str]:
+def pick_item(articles: List[Dict[str, Any]], state: Dict[str, Any], repost_enable: bool, repost_max_times: int, repost_window_days: int) -> Tuple[Optional[Dict[str, Any]], str]:
     for a in articles:
         if a.get("link") and is_new_allowed(state, a["link"]):
             return a, "new"
@@ -600,20 +549,14 @@ def save_ig_queue_item(prefix: str, payload: Dict[str, Any]) -> str:
 
 
 # =========================
-# REEL generator (ffmpeg) - LAVFI BASE (NO LOOP), ESTABLE
+# REEL generator (stable lavfi base)
 # =========================
 
 def _require_file(path: str, label: str) -> None:
     if not os.path.exists(path):
         raise RuntimeError(f"Falta {label} en repo: {path}")
 
-def generate_reel_mp4_bytes(
-    headline: str,
-    news_image_path: str,
-    logo_path: str,
-    bg_path: str,
-    seconds: int
-) -> bytes:
+def generate_reel_mp4_bytes(headline: str, news_image_path: str, logo_path: str, bg_path: str, seconds: int, music_path: Optional[str] = None, cta_text: Optional[str] = None) -> bytes:
     _require_file(bg_path, "ASSET_BG")
     _require_file(logo_path, "ASSET_LOGO")
     if not os.path.exists(news_image_path):
@@ -622,9 +565,8 @@ def generate_reel_mp4_bytes(
         raise RuntimeError(f"Falta FONT_BOLD en runner: {FONT_BOLD}")
 
     headline_clean = (headline or "").strip().replace("\n", " ")[:140]
-    cta_text = "Sigue para más hype gamer 🚀"
-
-    music_ok = os.path.exists(ASSET_MUSIC)
+    cta = (cta_text or "Sigue para más").strip()
+    music_ok = bool(music_path) and os.path.exists(music_path)
 
     with tempfile.TemporaryDirectory() as td:
         out_mp4 = os.path.join(td, "reel.mp4")
@@ -634,28 +576,18 @@ def generate_reel_mp4_bytes(
         with open(title_txt, "w", encoding="utf-8") as f:
             f.write(headline_clean)
         with open(cta_txt, "w", encoding="utf-8") as f:
-            f.write(cta_text)
+            f.write(cta)
 
-        # Base video: color lavfi (duración controlada)
         cmd = [
-            "ffmpeg",
-            "-y",
-            "-nostdin",
-            "-hide_banner",
-            "-loglevel", "error",
-
-            "-f", "lavfi",
-            "-i", f"color=c=black:s={REEL_W}x{REEL_H}:r=30:d={int(seconds)}",
-
+            "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", f"color=c=black:s={REEL_W}x{REEL_H}:r=30:d={int(seconds)}",
             "-i", bg_path,
             "-i", news_image_path,
             "-i", logo_path,
         ]
-
         if music_ok:
-            cmd += ["-i", ASSET_MUSIC]
+            cmd += ["-i", music_path]  # index 4
 
-        # 0=vbase, 1=bg, 2=news, 3=logo
         vf = (
             f"[1:v]scale={REEL_W}:{REEL_H},format=rgba[bg];"
             f"[0:v][bg]overlay=0:0:format=auto[v1];"
@@ -664,47 +596,22 @@ def generate_reel_mp4_bytes(
             f"[3:v]scale=700:-1,format=rgba[logo];"
             f"[v2][logo]overlay=(W-w)/2:170:format=auto[v3];"
             f"[v3]"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
-            f"x=60:y=1320:fontsize=48:fontcolor=white:"
-            f"box=1:boxcolor=black@0.45:boxborderw=24,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
-            f"x=60:y=1540:fontsize=42:fontcolor=white:"
-            f"box=1:boxcolor=black@0.35:boxborderw=18"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:x=60:y=1320:fontsize=48:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=24,"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:x=60:y=1540:fontsize=42:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18"
             f"[vout]"
         )
 
         cmd += ["-filter_complex", vf, "-map", "[vout]"]
 
         if music_ok:
-            cmd += [
-                "-map", "4:a",
-                "-filter:a", "volume=0.15",
-                "-c:a", "aac",
-                "-b:a", "128k",
-            ]
+            cmd += ["-map", "4:a", "-filter:a", "volume=0.15", "-c:a", "aac", "-b:a", "128k"]
         else:
             cmd += ["-an"]
 
-        cmd += [
-            "-t", str(seconds),
-            "-r", "30",
-            "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
-            "-shortest",
-            out_mp4
-        ]
+        cmd += ["-t", str(seconds), "-r", "30", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-shortest", out_mp4]
 
         try:
-            p = subprocess.run(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=180,
-                check=False,
-            )
+            p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=180, check=False)
         except subprocess.TimeoutExpired:
             raise RuntimeError("ffmpeg se demoró demasiado y se cortó por timeout (180s).")
 
@@ -729,33 +636,7 @@ def load_accounts() -> List[Dict[str, Any]]:
             return data
     except Exception:
         pass
-
-    return [{
-        "account_id": "estratosferica",
-        "rss_feeds": [
-            "https://www.dexerto.com/feed/",
-            "https://www.gamespot.com/feeds/news/",
-            "https://www.pcgamer.com/rss/"
-        ],
-        "max_per_feed": int(os.getenv("MAX_PER_FEED", "3")),
-        "shuffle_articles": os.getenv("SHUFFLE_ARTICLES", "true").lower() == "true",
-        "max_ai_items": int(os.getenv("MAX_AI_ITEMS", "15")),
-        "threads": {
-            "user_id": os.getenv("THREADS_USER_ID", "me"),
-            "state_key": os.getenv("THREADS_STATE_KEY", "accounts/estratosferica/threads_state.json"),
-            "auto_post": os.getenv("THREADS_AUTO_POST", "true").lower() == "true",
-            "auto_post_limit": int(os.getenv("THREADS_AUTO_POST_LIMIT", "1")),
-            "dry_run": os.getenv("THREADS_DRY_RUN", "false").lower() == "true",
-            "repost_enable": os.getenv("REPOST_ENABLE", "true").lower() == "true",
-            "repost_max_times": int(os.getenv("REPOST_MAX_TIMES", "3")),
-            "repost_window_days": int(os.getenv("REPOST_WINDOW_DAYS", "7"))
-        },
-        "r2": {
-            "threads_media_prefix": "threads_media/estratosferica",
-            "ig_queue_prefix": "ugc/ig_queue/estratosferica",
-            "reels_prefix": "ugc/reels/estratosferica"
-        }
-    }]
+    return []
 
 
 # =========================
@@ -770,6 +651,12 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     max_per_feed = int(cfg.get("max_per_feed", 3))
     shuffle = bool(cfg.get("shuffle_articles", True))
     max_ai_items = int(cfg.get("max_ai_items", 15))
+
+    assets_cfg = cfg.get("assets", {}) or {}
+    asset_bg = assets_cfg.get("bg") or DEFAULT_ASSET_BG
+    asset_logo = assets_cfg.get("logo") or DEFAULT_ASSET_LOGO
+    asset_music = assets_cfg.get("music") or DEFAULT_ASSET_MUSIC
+    cta_text = assets_cfg.get("cta") or "Sigue para más"
 
     threads_cfg = cfg.get("threads", {})
     threads_user_id = threads_cfg.get("user_id", "me")
@@ -786,12 +673,18 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     ig_queue_prefix = r2_cfg.get("ig_queue_prefix", f"ugc/ig_queue/{account_id}").strip().strip("/")
     reels_prefix = r2_cfg.get("reels_prefix", f"ugc/reels/{account_id}").strip().strip("/")
 
+    if auto_post_limit <= 0 or not rss_feeds:
+        print(f"Cuenta {account_id} está apagada (auto_post_limit=0 o rss_feeds vacío). Saltando ✅")
+        return {
+            "generated_at": iso_now(),
+            "account_id": account_id,
+            "skipped": True,
+            "reason": "disabled_or_no_feeds"
+        }
+
     print("Obteniendo artículos (RSS)...")
     articles = fetch_rss_articles(rss_feeds, max_per_feed=max_per_feed, shuffle=shuffle)
     print(f"{len(articles)} artículos candidatos tras mix/balance (MAX_PER_FEED={max_per_feed}, SHUFFLE={shuffle})")
-    feeds_in_run = sorted(set([a.get("feed", "") for a in articles]))
-    print("FEEDS EN ESTA CORRIDA:", feeds_in_run)
-    print("TOTAL FEEDS:", len(feeds_in_run))
 
     processed = []
     for a in articles[:max_ai_items]:
@@ -818,7 +711,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         imgs_1 = extract_best_images(link, max_images=1)
         if not imgs_1:
-            print("No se encontró imagen (og/twitter/img). Se omite para evitar post sin imagen.")
+            print("No se encontró imagen. Se omite.")
             processed = [x for x in processed if x.get("link") != link]
             continue
 
@@ -846,6 +739,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             results.append({"link": link, "mode": mode, "posted": True, "threads": threads_res})
             print("Auto-post Threads: OK ✅")
 
+            # IG queue + reels
             try:
                 candidates = extract_best_images(link, max_images=IG_CAROUSEL_MAX_IMAGES)
 
@@ -882,15 +776,15 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                                 f.write(img_bytes)
 
                             print("REEL: llamando generate_reel_mp4_bytes", flush=True)
-
                             reel_bytes = generate_reel_mp4_bytes(
-                                headline=(item.get("title") or "Noticia gamer"),
+                                headline=(item.get("title") or "Update esports"),
                                 news_image_path=news_img_path,
-                                logo_path=ASSET_LOGO,
-                                bg_path=ASSET_BG,
-                                seconds=REEL_SECONDS
+                                logo_path=asset_logo,
+                                bg_path=asset_bg,
+                                seconds=REEL_SECONDS,
+                                music_path=asset_music,
+                                cta_text=cta_text
                             )
-
                             print("REEL: generate_reel_mp4_bytes terminó", flush=True)
 
                         reel_video_url = upload_video_mp4_to_r2_public(reel_bytes, prefix=reels_prefix)
@@ -900,7 +794,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         print("REEL: falló (no rompe el run):", str(e))
 
                 ig_format = choose_ig_format(has_video=has_video, image_count=len(r2_images))
-                ig_caption = build_instagram_caption(item, mode=mode, link=link)
+                ig_caption = build_instagram_caption(item, link=link)
 
                 ig_payload = {
                     "created_at": iso_now(),
@@ -940,21 +834,9 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     run_payload = {
         "generated_at": iso_now(),
         "account_id": account_id,
-        "mix": {
-            "shuffle": shuffle,
-            "max_per_feed": max_per_feed,
-            "max_ai_items": max_ai_items,
-        },
-        "settings": {
-            "verify_news": VERIFY_NEWS,
-            "enable_trends": ENABLE_TRENDS,
-            "enable_reels": ENABLE_REELS,
-            "reel_seconds": REEL_SECONDS
-        },
-        "result": {
-            "posted_count": posted_count,
-            "results": results,
-        }
+        "mix": {"shuffle": shuffle, "max_per_feed": max_per_feed, "max_ai_items": max_ai_items},
+        "settings": {"verify_news": VERIFY_NEWS, "enable_trends": ENABLE_TRENDS, "enable_reels": ENABLE_REELS, "reel_seconds": REEL_SECONDS},
+        "result": {"posted_count": posted_count, "results": results}
     }
     return run_payload
 
@@ -972,6 +854,8 @@ def save_run_payload(account_id: str, payload: Dict[str, Any]) -> str:
 
 if __name__ == "__main__":
     accounts = load_accounts()
+    if not accounts:
+        raise RuntimeError("No se encontraron cuentas. Falta accounts.json o está vacío.")
 
     all_results = []
     for cfg in accounts:

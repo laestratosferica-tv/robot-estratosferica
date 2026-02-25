@@ -33,17 +33,16 @@ print("RUNNING MEDIA ENGINE (Threads REAL + IG Queue + REEL AUTO + IG PUBLISH + 
 # =========================
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+OPENAI_MODEL = "gpt-4.1-mini"  # 🔒 FIJO (blindado)
 
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL")
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 
-R2_PUBLIC_BASE_URL = os.getenv(
-    "R2_PUBLIC_BASE_URL",
-    "https://pub-8937244ee725495691514507bb8f431e.r2.dev"
-).rstrip("/")
+_DEFAULT_R2_PUBLIC = "https://pub-8937244ee725495691514507bb8f431e.r2.dev"
+_r2_env = (os.getenv("R2_PUBLIC_BASE_URL") or "").strip()
+R2_PUBLIC_BASE_URL = (_r2_env if _r2_env else _DEFAULT_R2_PUBLIC).rstrip("/")
 
 THREADS_GRAPH = os.getenv("THREADS_GRAPH", "https://graph.threads.net").rstrip("/")
 THREADS_USER_ACCESS_TOKEN = os.getenv("THREADS_USER_ACCESS_TOKEN")
@@ -74,8 +73,8 @@ FONT_BOLD = os.getenv("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSans-
 
 # Instagram Publish (Graph API)
 ENABLE_IG_PUBLISH = os.getenv("ENABLE_IG_PUBLISH", "false").lower() == "true"
-IG_ACCESS_TOKEN_ENV = os.getenv("IG_ACCESS_TOKEN")
-IG_USER_ID_ENV = os.getenv("IG_USER_ID")
+IG_ACCESS_TOKEN_ENV = (os.getenv("IG_ACCESS_TOKEN") or "").strip()
+IG_USER_ID_ENV = (os.getenv("IG_USER_ID") or "").strip()
 GRAPH_VERSION = os.getenv("GRAPH_VERSION", "v25.0")
 GRAPH_BASE = os.getenv("GRAPH_BASE", "https://graph.facebook.com").rstrip("/")
 
@@ -102,7 +101,7 @@ def days_since(dt_iso: str) -> int:
 
 
 # =========================
-# URL helpers (fix broken images)
+# URL helpers
 # =========================
 
 def normalize_url(maybe_url: str, base_url: str) -> Optional[str]:
@@ -113,13 +112,11 @@ def normalize_url(maybe_url: str, base_url: str) -> Optional[str]:
     if not u:
         return None
 
-    # protocol-relative
     if u.startswith("//"):
         base = urlparse(base_url)
         scheme = base.scheme or "https"
         u = f"{scheme}:{u}"
 
-    # malformed "https:///path"
     if u.startswith("https:///") or u.startswith("http:///"):
         base = urlparse(base_url)
         scheme = base.scheme or "https"
@@ -127,7 +124,6 @@ def normalize_url(maybe_url: str, base_url: str) -> Optional[str]:
         path = u.split(":///", 1)[1]
         u = f"{scheme}://{host}/{path.lstrip('/')}"
 
-    # relative path
     parsed = urlparse(u)
     if not parsed.scheme or not parsed.netloc:
         u = urljoin(base_url, u)
@@ -177,11 +173,6 @@ def _post_with_retries(url: str, *, headers=None, data=None, params=None, label:
                 raise
     raise last_err  # type: ignore[misc]
 
-def _get_with_raise(url: str, *, headers=None, params=None, label: str = "HTTP GET") -> requests.Response:
-    r = requests.get(url, headers=headers, params=params, timeout=HTTP_TIMEOUT)
-    _raise_meta_error(r, label)
-    return r
-
 
 # =========================
 # R2 (S3)
@@ -230,6 +221,10 @@ def upload_bytes_to_r2_public(file_bytes: bytes, ext: str, prefix: str, content_
     key = f"{prefix}/{h}{ext}"
 
     s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=file_bytes, ContentType=content_type)
+
+    if not R2_PUBLIC_BASE_URL.startswith("http"):
+        raise RuntimeError("R2_PUBLIC_BASE_URL inválida. Debe empezar por https:// ...")
+
     url = f"{R2_PUBLIC_BASE_URL}/{key}"
 
     try:
@@ -370,11 +365,9 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
     return deduped
 
 
-# OPENAI CONFIG (BLINDADO)
 # =========================
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = "gpt-4.1-mini"  # 🔒 FIJO - no depende de GitHub
+# OpenAI (text) - blindado
+# =========================
 
 def openai_client():
     if not OpenAI:
@@ -385,26 +378,20 @@ def openai_client():
 
 def openai_text(prompt: str) -> str:
     client = openai_client()
-
-    # Método moderno (Responses API)
     try:
-        resp = client.responses.create(
-            model=OPENAI_MODEL,
-            input=prompt
-        )
+        resp = client.responses.create(model=OPENAI_MODEL, input=prompt)
         out = getattr(resp, "output_text", None)
         if out:
             return out.strip()
     except Exception:
         pass
-
-    # Fallback Chat API (seguro)
     resp = client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=[{"role": "user", "content": prompt}]
     )
     return resp.choices[0].message.content.strip()
-    
+
+
 # =========================
 # Copy (gaming esports)
 # =========================
@@ -612,7 +599,7 @@ def save_ig_queue_item(prefix: str, payload: Dict[str, Any]) -> str:
 
 
 # =========================
-# REEL generator (stable lavfi base)
+# REEL generator
 # =========================
 
 def _require_file(path: str, label: str) -> None:
@@ -649,7 +636,7 @@ def generate_reel_mp4_bytes(headline: str, news_image_path: str, logo_path: str,
             "-i", logo_path,
         ]
         if music_ok:
-            cmd += ["-i", music_path]  # index 4
+            cmd += ["-i", music_path]
 
         vf = (
             f"[1:v]scale={REEL_W}:{REEL_H},format=rgba[bg];"
@@ -671,13 +658,10 @@ def generate_reel_mp4_bytes(headline: str, news_image_path: str, logo_path: str,
         else:
             cmd += ["-an"]
 
-        cmd += ["-t", str(seconds), "-r", "30", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-shortest", out_mp4]
+        cmd += ["-t", str(seconds), "-r", "30", "-c:v", "libx264", "-preset", "ultrafast",
+                "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-shortest", out_mp4]
 
-        try:
-            p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=180, check=False)
-        except subprocess.TimeoutExpired:
-            raise RuntimeError("ffmpeg se demoró demasiado y se cortó por timeout (180s).")
-
+        p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=180, check=False)
         if p.returncode != 0:
             raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
@@ -690,8 +674,7 @@ def generate_reel_mp4_bytes(headline: str, news_image_path: str, logo_path: str,
 # =========================
 
 def graph_url(path: str) -> str:
-    path = path.lstrip("/")
-    return f"{GRAPH_BASE}/{GRAPH_VERSION}/{path}"
+    return f"{GRAPH_BASE}/{GRAPH_VERSION}/{path.lstrip('/')}"
 
 def ig_post(url: str, data: Dict[str, Any], label: str) -> Dict[str, Any]:
     r = requests.post(url, data=data, timeout=HTTP_TIMEOUT)
@@ -703,7 +686,7 @@ def ig_get(url: str, params: Dict[str, Any], label: str) -> Dict[str, Any]:
     _raise_meta_error(r, label)
     return r.json()
 
-def ig_wait_container(creation_id: str, access_token: str, timeout_sec: int = 300) -> Dict[str, Any]:
+def ig_wait_container(creation_id: str, access_token: str, timeout_sec: int = 600) -> None:
     start = time.time()
     last = None
     while time.time() - start < timeout_sec:
@@ -715,27 +698,24 @@ def ig_wait_container(creation_id: str, access_token: str, timeout_sec: int = 30
         last = j
         status = (j.get("status_code") or "").upper()
         if status == "FINISHED":
-            return j
+            return
         if status in ("ERROR", "FAILED"):
             raise RuntimeError(f"IG container failed: {j}")
         time.sleep(2)
     raise TimeoutError(f"IG container not ready after {timeout_sec}s: {last}")
 
 def ig_publish_creation(ig_user_id: str, creation_id: str, access_token: str) -> Dict[str, Any]:
-    j = ig_post(
+    return ig_post(
         graph_url(f"{ig_user_id}/media_publish"),
         data={"creation_id": creation_id, "access_token": access_token},
         label="IG MEDIA_PUBLISH"
     )
-    return j
 
 def ig_create_image_container(ig_user_id: str, image_url: str, caption: str, access_token: str, is_carousel_item: bool = False) -> str:
-    data = {
-        "image_url": image_url,
-        "caption": caption if not is_carousel_item else "",
-        "access_token": access_token,
-    }
-    if is_carousel_item:
+    data = {"image_url": image_url, "access_token": access_token}
+    if not is_carousel_item:
+        data["caption"] = caption
+    else:
         data["is_carousel_item"] = "true"
     j = ig_post(graph_url(f"{ig_user_id}/media"), data=data, label="IG CREATE IMAGE CONTAINER")
     return j["id"]
@@ -771,7 +751,7 @@ def ig_publish_payload(ig_user_id: str, access_token: str, payload: Dict[str, An
         if not reel_video_url:
             raise RuntimeError("IG publish: format=reel pero no hay reel_video_url.")
         creation_id = ig_create_reel_container(ig_user_id, reel_video_url, caption, access_token)
-        ig_wait_container(creation_id, access_token, timeout_sec=600)
+        ig_wait_container(creation_id, access_token, timeout_sec=900)
         pub = ig_publish_creation(ig_user_id, creation_id, access_token)
         return {"ok": True, "type": "reel", "creation_id": creation_id, "publish": pub}
 
@@ -783,15 +763,14 @@ def ig_publish_payload(ig_user_id: str, access_token: str, payload: Dict[str, An
             cid = ig_create_image_container(ig_user_id, img, caption="", access_token=access_token, is_carousel_item=True)
             children.append(cid)
         parent_id = ig_create_carousel_container(ig_user_id, children, caption, access_token)
-        ig_wait_container(parent_id, access_token, timeout_sec=600)
+        ig_wait_container(parent_id, access_token, timeout_sec=900)
         pub = ig_publish_creation(ig_user_id, parent_id, access_token)
         return {"ok": True, "type": "carousel", "creation_id": parent_id, "children": children, "publish": pub}
 
-    # default image
     if not images:
-        raise RuntimeError("IG publish: no hay imágenes en payload para publicar.")
+        raise RuntimeError("IG publish: no hay imágenes para publicar.")
     creation_id = ig_create_image_container(ig_user_id, images[0], caption, access_token)
-    ig_wait_container(creation_id, access_token, timeout_sec=300)
+    ig_wait_container(creation_id, access_token, timeout_sec=600)
     pub = ig_publish_creation(ig_user_id, creation_id, access_token)
     return {"ok": True, "type": "image", "creation_id": creation_id, "publish": pub}
 
@@ -821,7 +800,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     account_id = cfg.get("account_id", "unknown")
     print(f"\n===== RUN ACCOUNT: {account_id} =====")
 
-    # RSS config
     rss_feeds = cfg.get("rss_feeds") or []
     max_per_feed = int(cfg.get("max_per_feed", int(os.getenv("MAX_PER_FEED", "3"))))
     shuffle = bool(cfg.get("shuffle_articles", os.getenv("SHUFFLE_ARTICLES", "true").lower() == "true"))
@@ -833,7 +811,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     asset_music = assets_cfg.get("music") or DEFAULT_ASSET_MUSIC
     cta_text = assets_cfg.get("cta") or "Sigue para más"
 
-    # Threads config
     threads_cfg = cfg.get("threads", {})
     threads_user_id = threads_cfg.get("user_id", os.getenv("THREADS_USER_ID", "me"))
     state_key = threads_cfg.get("state_key", os.getenv("THREADS_STATE_KEY", f"accounts/{account_id}/threads_state.json"))
@@ -849,11 +826,18 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     ig_queue_prefix = (r2_cfg.get("ig_queue_prefix") or f"ugc/ig_queue/{account_id}").strip().strip("/")
     reels_prefix = (r2_cfg.get("reels_prefix") or f"ugc/reels/{account_id}").strip().strip("/")
 
-    # Instagram config (per account override, else ENV)
     ig_cfg = cfg.get("instagram", {}) or {}
-    ig_user_id = ig_cfg.get("user_id") or IG_USER_ID_ENV
-    ig_access_token = ig_cfg.get("access_token") or IG_ACCESS_TOKEN_ENV
-    enable_ig_publish_for_account = bool(ig_cfg.get("enable_publish", ENABLE_IG_PUBLISH))
+    ig_user_id = (ig_cfg.get("user_id") or IG_USER_ID_ENV).strip()
+    ig_access_token = (ig_cfg.get("access_token") or IG_ACCESS_TOKEN_ENV).strip()
+
+    enable_override = ig_cfg.get("enable_publish", None)
+    if enable_override is None:
+        enable_ig_publish_for_account = ENABLE_IG_PUBLISH
+    else:
+        if isinstance(enable_override, str):
+            enable_ig_publish_for_account = enable_override.lower().strip() == "true"
+        else:
+            enable_ig_publish_for_account = bool(enable_override)
 
     if auto_post_limit <= 0 or not rss_feeds:
         print(f"Cuenta {account_id} está apagada (auto_post_limit=0 o rss_feeds vacío). Saltando ✅")
@@ -886,7 +870,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         text = build_threads_text(item, mode=mode)
 
-        # Extract images
         img_candidates = extract_best_images(link, max_images=5)
         if not img_candidates:
             print("No se encontró imagen. Se omite.")
@@ -931,7 +914,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             results.append({"link": link, "mode": mode, "posted": True, "threads": threads_res})
             print("Auto-post Threads: OK ✅")
 
-            # IG payload build + publish
+            # IG pipeline
             try:
                 candidates = extract_best_images(link, max_images=IG_CAROUSEL_MAX_IMAGES)
 
@@ -993,25 +976,22 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     "format": ig_format,
                     "caption": ig_caption,
                     "assets": {"images": r2_images[:IG_CAROUSEL_MAX_IMAGES], "reel_video_url": reel_video_url},
-                    "threads": {
-                        "publish_id": (threads_res.get("publish") or {}).get("id") if isinstance(threads_res, dict) else None,
-                        "image_url": threads_img,
-                    },
+                    "threads": {"publish_id": (threads_res.get("publish") or {}).get("id") if isinstance(threads_res, dict) else None,
+                                "image_url": threads_img},
                 }
 
                 ig_key = save_ig_queue_item(ig_queue_prefix, ig_payload)
                 print("IG queue guardado en R2:", ig_key)
 
-                # ✅ Publish to IG (TODO: reel o carrusel o imagen)
                 if enable_ig_publish_for_account:
                     if not ig_user_id or not ig_access_token:
                         print("IG publish activo pero falta IG_USER_ID o IG_ACCESS_TOKEN. Saltando publish.")
                     else:
-                        print("Publicando en Instagram ahora (según payload)...")
+                        print("Publicando en Instagram ahora (reel/carrusel/imagen)...")
                         pub_res = ig_publish_payload(str(ig_user_id), str(ig_access_token), ig_payload)
                         print("IG publish result:", pub_res)
                         ig_payload["ig_publish"] = pub_res
-                        save_to_r2_json(ig_key, ig_payload)  # actualiza el mismo queue con resultado
+                        save_to_r2_json(ig_key, ig_payload)
 
             except Exception as e:
                 print("IG pipeline: falló (no rompe el run):", str(e))
@@ -1028,14 +1008,12 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "generated_at": iso_now(),
         "account_id": account_id,
         "mix": {"shuffle": shuffle, "max_per_feed": max_per_feed, "max_ai_items": max_ai_items},
-        "settings": {
-            "verify_news": VERIFY_NEWS,
-            "enable_trends": ENABLE_TRENDS,
-            "enable_reels": ENABLE_REELS,
-            "reel_seconds": REEL_SECONDS,
-            "enable_ig_publish": ENABLE_IG_PUBLISH,
-            "graph_version": GRAPH_VERSION,
-        },
+        "settings": {"verify_news": VERIFY_NEWS,
+                     "enable_trends": ENABLE_TRENDS,
+                     "enable_reels": ENABLE_REELS,
+                     "reel_seconds": REEL_SECONDS,
+                     "enable_ig_publish": ENABLE_IG_PUBLISH,
+                     "graph_version": GRAPH_VERSION},
         "result": {"posted_count": posted_count, "results": results}
     }
     return run_payload

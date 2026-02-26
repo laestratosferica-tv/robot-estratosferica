@@ -26,8 +26,6 @@ except Exception:
     OpenAI = None
 
 
-print("RUNNING MEDIA ENGINE (Threads REAL + IG Queue + REEL AUTO + IG PUBLISH + Multi-account via accounts.json)")
-
 # =========================
 # Helpers: env safe (no empty)
 # =========================
@@ -65,7 +63,7 @@ def env_float(name: str, default: float) -> float:
 
 
 # =========================
-# MODE SWITCH (A or B)
+# MODE SWITCH (A or B)  ✅ SINGLE SOURCE OF TRUTH
 # =========================
 RUN_MODE = (env_nonempty("RUN_MODE", "A") or "A").strip().upper()
 if RUN_MODE in ("B", "UGC", "MODE_B", "MODEB"):
@@ -73,6 +71,9 @@ if RUN_MODE in ("B", "UGC", "MODE_B", "MODEB"):
     from ugc_mode_b import run_mode_b
     run_mode_b()
     raise SystemExit(0)
+
+
+print("RUNNING MEDIA ENGINE (Threads REAL + IG Queue + REEL AUTO + IG PUBLISH + Multi-account via accounts.json)")
 
 
 # =========================
@@ -783,7 +784,6 @@ def ig_publish_carousel(ig_user_id: str, access_token: str, image_urls: List[str
     return ig_publish_media(ig_user_id, access_token, creation_id)
 
 def ig_publish_reel(ig_user_id: str, access_token: str, video_url: str, caption: str) -> Dict[str, Any]:
-    # For Reels: media_type=REELS + video_url
     j = ig_api_post(
         f"{ig_user_id}/media",
         {"media_type": "REELS", "video_url": video_url, "caption": caption, "access_token": access_token},
@@ -791,7 +791,6 @@ def ig_publish_reel(ig_user_id: str, access_token: str, video_url: str, caption:
     creation_id = j.get("id")
     if not creation_id:
         raise RuntimeError(f"IG reels create failed: {j}")
-    # Some accounts need wait before publish
     try:
         ig_wait_container(creation_id, access_token, timeout_sec=420)
     except Exception as e:
@@ -829,7 +828,6 @@ def maybe_publish_to_instagram(ig_payload: Dict[str, Any]) -> Optional[Dict[str,
             print("IG PUBLISH OK (image):", res)
             return {"ok": True, "format": "image", "res": res}
 
-        # fallback
         if video_url:
             res = ig_publish_reel(IG_USER_ID, IG_ACCESS_TOKEN, video_url, caption)
             print("IG PUBLISH OK (fallback reel):", res)
@@ -928,7 +926,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         label = "NUEVO" if mode == "new" else "REPOST"
         print(f"Seleccionado ({label}): {link}")
 
-        # Genera texto
         try:
             text = build_threads_text(item, mode=mode)
         except Exception as e:
@@ -936,7 +933,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             processed = [x for x in processed if x.get("link") != link]
             continue
 
-        # Buscar imagen
         img_candidates = extract_best_images(link, max_images=5)
         if not img_candidates:
             print("No se encontró imagen. Se omite.")
@@ -962,7 +958,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             results.append({"link": link, "mode": mode, "posted": False, "reason": "auto_post_off"})
             break
 
-        # Publicar en Threads
         print(f"Publicando en Threads ({label})...")
         try:
             threads_res = threads_publish_text_image(
@@ -982,7 +977,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             results.append({"link": link, "mode": mode, "posted": True, "threads": threads_res})
             print("Auto-post Threads: OK ✅")
 
-            # IG queue + reels + publish
             try:
                 candidates = extract_best_images(link, max_images=IG_CAROUSEL_MAX_IMAGES)
 
@@ -1096,12 +1090,6 @@ def save_run_payload(account_id: str, payload: Dict[str, Any]) -> str:
 # =========================
 # MAIN
 # =========================
-
-if os.getenv("RUN_MODE", "A").upper() == "B":
-    print(">>> RUN_MODE=B detectado. Ejecutando Modo B.")
-    from ugc_mode_b import run_mode_b
-    run_mode_b()
-    raise SystemExit(0)
 
 if __name__ == "__main__":
     accounts = load_accounts()

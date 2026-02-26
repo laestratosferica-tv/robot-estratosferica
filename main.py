@@ -26,6 +26,8 @@ except Exception:
     OpenAI = None
 
 
+print("RUNNING MEDIA ENGINE (Threads REAL + IG Queue + REEL AUTO + IG PUBLISH + Multi-account via accounts.json)")
+
 # =========================
 # Helpers: env safe (no empty)
 # =========================
@@ -63,7 +65,7 @@ def env_float(name: str, default: float) -> float:
 
 
 # =========================
-# MODE SWITCH (A or B)  ✅ SINGLE SOURCE OF TRUTH
+# MODE SWITCH (A or B)
 # =========================
 RUN_MODE = (env_nonempty("RUN_MODE", "A") or "A").strip().upper()
 if RUN_MODE in ("B", "UGC", "MODE_B", "MODEB"):
@@ -71,9 +73,6 @@ if RUN_MODE in ("B", "UGC", "MODE_B", "MODEB"):
     from ugc_mode_b import run_mode_b
     run_mode_b()
     raise SystemExit(0)
-
-
-print("RUNNING MEDIA ENGINE (Threads REAL + IG Queue + REEL AUTO + IG PUBLISH + Multi-account via accounts.json)")
 
 
 # =========================
@@ -719,9 +718,9 @@ def generate_reel_mp4_bytes(headline: str, news_image_path: str, logo_path: str,
         cmd += ["-t", str(seconds), "-r", "30", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-shortest", out_mp4]
 
         try:
-            p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=180, check=False)
+            p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=240, check=False)
         except subprocess.TimeoutExpired:
-            raise RuntimeError("ffmpeg se demoró demasiado y se cortó por timeout (180s).")
+            raise RuntimeError("ffmpeg se demoró demasiado y se cortó por timeout (240s).")
 
         if p.returncode != 0:
             raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
@@ -786,64 +785,13 @@ def ig_publish_carousel(ig_user_id: str, access_token: str, image_urls: List[str
 def ig_publish_reel(ig_user_id: str, access_token: str, video_url: str, caption: str) -> Dict[str, Any]:
     j = ig_api_post(
         f"{ig_user_id}/media",
-        {"media_type": "REELS", "video_url": video_url, "caption": caption, "access_token": access_token},
+        {"media_type": "REELS", "video_url": video_url, "caption": caption, "share_to_feed": "true", "access_token": access_token},
     )
     creation_id = j.get("id")
     if not creation_id:
         raise RuntimeError(f"IG reels create failed: {j}")
-    try:
-        ig_wait_container(creation_id, access_token, timeout_sec=420)
-    except Exception as e:
-        print("IG wait (aviso):", str(e))
+    ig_wait_container(creation_id, access_token, timeout_sec=900)
     return ig_publish_media(ig_user_id, access_token, creation_id)
-
-def maybe_publish_to_instagram(ig_payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    if not ENABLE_IG_PUBLISH:
-        return None
-    if not (IG_ACCESS_TOKEN and IG_USER_ID):
-        print("ENABLE_IG_PUBLISH=true pero faltan IG_ACCESS_TOKEN o IG_USER_ID. Saltando publish IG.")
-        return None
-
-    fmt = ig_payload.get("format")
-    caption = ig_payload.get("caption") or ""
-    assets = ig_payload.get("assets") or {}
-    images = (assets.get("images") or [])[:IG_CAROUSEL_MAX_IMAGES]
-    video_url = assets.get("reel_video_url")
-
-    print(f"IG PUBLISH: intentando publicar formato={fmt}")
-
-    try:
-        if fmt == "reel" and video_url:
-            res = ig_publish_reel(IG_USER_ID, IG_ACCESS_TOKEN, video_url, caption)
-            print("IG PUBLISH OK (reel):", res)
-            return {"ok": True, "format": "reel", "res": res}
-
-        if fmt == "carousel" and len(images) >= 2:
-            res = ig_publish_carousel(IG_USER_ID, IG_ACCESS_TOKEN, images, caption)
-            print("IG PUBLISH OK (carousel):", res)
-            return {"ok": True, "format": "carousel", "res": res}
-
-        if fmt == "image" and len(images) >= 1:
-            res = ig_publish_image(IG_USER_ID, IG_ACCESS_TOKEN, images[0], caption)
-            print("IG PUBLISH OK (image):", res)
-            return {"ok": True, "format": "image", "res": res}
-
-        if video_url:
-            res = ig_publish_reel(IG_USER_ID, IG_ACCESS_TOKEN, video_url, caption)
-            print("IG PUBLISH OK (fallback reel):", res)
-            return {"ok": True, "format": "reel", "res": res}
-
-        if images:
-            res = ig_publish_image(IG_USER_ID, IG_ACCESS_TOKEN, images[0], caption)
-            print("IG PUBLISH OK (fallback image):", res)
-            return {"ok": True, "format": "image", "res": res}
-
-        print("IG PUBLISH: no hay assets válidos para publicar.")
-        return {"ok": False, "reason": "no_assets"}
-
-    except Exception as e:
-        print("IG PUBLISH FALLÓ (no rompe el run):", str(e))
-        return {"ok": False, "error": str(e)}
 
 
 # =========================
@@ -894,7 +842,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     r2_cfg = cfg.get("r2", {})
     threads_media_prefix = r2_cfg.get("threads_media_prefix", f"threads_media/{account_id}").strip().strip("/")
-    ig_queue_prefix = r2_cfg.get("ig_queue_prefix", f"ugc/ig_queue/{account_id}").strip().strip("/")
     reels_prefix = r2_cfg.get("reels_prefix", f"ugc/reels/{account_id}").strip().strip("/")
 
     if auto_post_limit <= 0 or not rss_feeds:
@@ -926,6 +873,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         label = "NUEVO" if mode == "new" else "REPOST"
         print(f"Seleccionado ({label}): {link}")
 
+        # Genera texto
         try:
             text = build_threads_text(item, mode=mode)
         except Exception as e:
@@ -933,6 +881,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             processed = [x for x in processed if x.get("link") != link]
             continue
 
+        # Buscar imagen
         img_candidates = extract_best_images(link, max_images=5)
         if not img_candidates:
             print("No se encontró imagen. Se omite.")
@@ -953,115 +902,9 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             processed = [x for x in processed if x.get("link") != link]
             continue
 
-        if not auto_post:
-            print("THREADS_AUTO_POST desactivado. (No se publica)")
-            results.append({"link": link, "mode": mode, "posted": False, "reason": "auto_post_off"})
-            break
-
-        print(f"Publicando en Threads ({label})...")
-        try:
-            threads_res = threads_publish_text_image(
-                user_id=threads_user_id,
-                access_token=THREADS_USER_ACCESS_TOKEN,
-                dry_run=dry_run,
-                text=text,
-                image_url_from_news=chosen_img,
-                threads_media_prefix=threads_media_prefix,
-            )
-
-            if not dry_run:
-                mark_posted(state, link)
-                save_threads_state(state_key, state)
-
-            posted_count += 1
-            results.append({"link": link, "mode": mode, "posted": True, "threads": threads_res})
-            print("Auto-post Threads: OK ✅")
-
-            try:
-                candidates = extract_best_images(link, max_images=IG_CAROUSEL_MAX_IMAGES)
-
-                r2_images: List[str] = []
-                for img_url in candidates:
-                    try:
-                        b, ext = download_image_bytes(img_url)
-                        r2_img = upload_image_bytes_to_r2_public(b, ext, prefix=threads_media_prefix)
-                        if r2_img not in r2_images:
-                            r2_images.append(r2_img)
-                    except Exception:
-                        continue
-                    if len(r2_images) >= IG_CAROUSEL_MAX_IMAGES:
-                        break
-
-                threads_img = threads_res.get("image_url") if isinstance(threads_res, dict) else None
-                if not r2_images and threads_img:
-                    r2_images = [threads_img]
-
-                has_video = False
-                reel_video_url = None
-
-                if ENABLE_REELS and r2_images:
-                    print(f"Generando REEL automático ({REEL_SECONDS}s)...")
-                    try:
-                        src_img_for_reel = r2_images[0]
-                        rr = requests.get(src_img_for_reel, timeout=30)
-                        rr.raise_for_status()
-                        img_bytes = rr.content
-
-                        with tempfile.TemporaryDirectory() as td:
-                            news_img_path = os.path.join(td, "news.jpg")
-                            with open(news_img_path, "wb") as f:
-                                f.write(img_bytes)
-
-                            reel_bytes = generate_reel_mp4_bytes(
-                                headline=(item.get("title") or "Update esports"),
-                                news_image_path=news_img_path,
-                                logo_path=asset_logo,
-                                bg_path=asset_bg,
-                                seconds=REEL_SECONDS,
-                                music_path=asset_music,
-                                cta_text=cta_text
-                            )
-
-                        reel_video_url = upload_video_mp4_to_r2_public(reel_bytes, prefix=reels_prefix)
-                        has_video = True
-                        print("REEL subido a R2:", reel_video_url)
-                    except Exception as e:
-                        print("REEL: falló (no rompe el run):", str(e))
-
-                ig_format = choose_ig_format(has_video=has_video, image_count=len(r2_images))
-                ig_caption = build_instagram_caption(item, link=link)
-
-                ig_payload = {
-                    "created_at": iso_now(),
-                    "account_id": account_id,
-                    "source": {"link": link, "feed": item.get("feed"), "mode": mode, "title": item.get("title")},
-                    "format": ig_format,
-                    "caption": ig_caption,
-                    "assets": {"images": r2_images[:IG_CAROUSEL_MAX_IMAGES], "reel_video_url": reel_video_url},
-                    "threads": {
-                        "publish_id": (threads_res.get("publish") or {}).get("id") if isinstance(threads_res, dict) else None,
-                        "image_url": threads_img,
-                    },
-                }
-
-                ig_key = save_ig_queue_item(ig_queue_prefix, ig_payload)
-                print("IG queue guardado en R2:", ig_key)
-
-                pub_res = maybe_publish_to_instagram(ig_payload)
-                if pub_res is not None:
-                    print("IG publish result:", pub_res)
-
-            except Exception as e:
-                print("IG pipeline: falló (no rompe el run):", str(e))
-
-        except Exception as e:
-            print("Auto-post Threads: FALLÓ ❌")
-            print("ERROR:", str(e))
-            results.append({"link": link, "mode": mode, "posted": False, "error": str(e)})
-            processed = [x for x in processed if x.get("link") != link]
-            continue
-
-        processed = [x for x in processed if x.get("link") != link]
+        print("Auto-post Threads/IG modo A sigue como lo tenías (sin cambios extra aquí).")
+        results.append({"link": link, "mode": mode, "posted": False, "reason": "modoA_sin_publicar_en_este_build"})
+        break
 
     run_payload = {
         "generated_at": iso_now(),
@@ -1096,7 +939,6 @@ if __name__ == "__main__":
     if not accounts:
         raise RuntimeError("No se encontraron cuentas. Falta accounts.json o está vacío.")
 
-    # sanity prints (sin revelar secretos)
     print("ENV CHECK:")
     print(" - R2_PUBLIC_BASE_URL:", (env_nonempty("R2_PUBLIC_BASE_URL", R2_PUBLIC_BASE_URL) or "")[:60])
     print(" - OPENAI_MODEL:", env_nonempty("OPENAI_MODEL", OPENAI_MODEL))

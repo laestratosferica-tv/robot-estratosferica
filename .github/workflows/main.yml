@@ -2,13 +2,19 @@ name: Robot Editorial Scheduler
 
 on:
   schedule:
-    # 9:00 AM Colombia (UTC-5 → 14:00 UTC)
     - cron: "0 14 * * *"
-    # 3:00 PM Colombia (UTC-5 → 20:00 UTC)
     - cron: "0 20 * * *"
-    # 9:00 PM Colombia (UTC-5 → 02:00 UTC)
     - cron: "0 2 * * *"
   workflow_dispatch:
+    inputs:
+      run_mode:
+        description: "A = Editorial (RSS). B = UGC (videos en R2 ugc/inbox/)"
+        required: true
+        default: "A"
+        type: choice
+        options:
+          - "A"
+          - "B"
 
 jobs:
   run-robot:
@@ -32,9 +38,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           ffmpeg -version
+          ffprobe -version
 
       - name: Run robot
         env:
+          RUN_MODE: ${{ github.event.inputs.run_mode || 'A' }}
+
           # 🔐 R2
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
@@ -68,7 +77,7 @@ jobs:
           REPOST_MAX_TIMES: "3"
           REPOST_WINDOW_DAYS: "7"
 
-          # 🎬 REELS
+          # 🎬 REELS (Modo A)
           ENABLE_REELS: "true"
           REEL_SECONDS: "5"
           REEL_W: "1080"

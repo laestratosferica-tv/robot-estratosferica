@@ -304,7 +304,7 @@ def ig_wait_container(cfg: UGCConfig, creation_id: str, timeout_sec: int = 900) 
     start = time.time()
     last = None
     while time.time() - start < timeout_sec:
-        j = ig_get(cfg, creation_id, {"fields": "status_code,error_message", "access_token": cfg.ig_access_token})
+        j = ig_get(cfg, creation_id, {"fields": "status_code", "access_token": cfg.ig_access_token})
         last = j
         status = (j.get("status_code") or "").upper()
         if status in ("FINISHED", "PUBLISHED"):

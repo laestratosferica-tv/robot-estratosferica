@@ -1097,6 +1097,12 @@ def save_run_payload(account_id: str, payload: Dict[str, Any]) -> str:
 # MAIN
 # =========================
 
+if os.getenv("RUN_MODE", "A").upper() == "B":
+    print(">>> RUN_MODE=B detectado. Ejecutando Modo B.")
+    from ugc_mode_b import run_mode_b
+    run_mode_b()
+    raise SystemExit(0)
+
 if __name__ == "__main__":
     accounts = load_accounts()
     if not accounts:

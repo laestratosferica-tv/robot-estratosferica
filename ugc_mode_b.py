@@ -3,16 +3,15 @@ import os
 import re
 import json
 import time
-import shutil
 import tempfile
 import subprocess
 from dataclasses import dataclass
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 
 import boto3
 import requests
 
-# OpenAI
+# OpenAI (opcional: si falla, usa fallback)
 try:
     from openai import OpenAI
 except Exception:
@@ -41,15 +40,6 @@ def env_int(name: str, default: int) -> int:
         return default
     try:
         return int(v.strip())
-    except Exception:
-        return default
-
-def env_float(name: str, default: float) -> float:
-    v = os.getenv(name)
-    if not v or not v.strip():
-        return default
-    try:
-        return float(v.strip())
     except Exception:
         return default
 
@@ -85,12 +75,8 @@ class UGCConfig:
 
     # Processing
     cap_seconds: int          # max duration if video is long
-    min_seconds: int          # min duration (avoid too short)
+    min_seconds: int          # min duration
     default_target_seconds: int  # fallback if cannot detect duration
-
-    # Assets (overlay)
-    asset_bg: str
-    asset_logo: str
 
 
 def load_config() -> UGCConfig:
@@ -124,9 +110,6 @@ def load_config() -> UGCConfig:
         cap_seconds=env_int("UGC_CAP_SECONDS", 20),
         min_seconds=env_int("UGC_MIN_SECONDS", 5),
         default_target_seconds=env_int("UGC_DEFAULT_SECONDS", 10),
-
-        asset_bg=env_nonempty("ASSET_BG", "assets/bg.jpg") or "assets/bg.jpg",
-        asset_logo=env_nonempty("ASSET_LOGO", "assets/logo.png") or "assets/logo.png",
     )
 
 
@@ -192,8 +175,19 @@ def r2_save_json(cfg: UGCConfig, key: str, payload: Dict[str, Any]) -> None:
 
 
 # -----------------------------
-# OpenAI caption
+# Caption (OpenAI, fallback)
 # -----------------------------
+CAPTION_PROMPT = """Eres caster/editor de esports en español LATAM.
+Escribe un caption corto para Instagram Reels sobre un clip de gameplay.
+
+Reglas:
+- 1 línea fuerte (hook) con vibe esports.
+- 1 línea extra de opinión o hype.
+- Cierra con pregunta.
+- 6-10 hashtags (esports/gaming latam).
+No menciones "IA" ni "OpenAI". No pongas links.
+"""
+
 def openai_client(cfg: UGCConfig):
     if not OpenAI:
         raise RuntimeError("No se pudo importar OpenAI. Revisa requirements.txt (openai).")
@@ -204,7 +198,6 @@ def openai_client(cfg: UGCConfig):
 def openai_text(cfg: UGCConfig, prompt: str) -> str:
     client = openai_client(cfg)
     model = cfg.openai_model or "gpt-4.1-mini"
-
     try:
         resp = client.responses.create(model=model, input=prompt)
         out = getattr(resp, "output_text", None)
@@ -212,29 +205,18 @@ def openai_text(cfg: UGCConfig, prompt: str) -> str:
             return out.strip()
     except Exception:
         pass
-
     resp = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
     )
     return (resp.choices[0].message.content or "").strip()
 
-CAPTION_PROMPT = """Eres caster/editor de esports en español LATAM.
-Vas a escribir un caption corto para Instagram Reels sobre un clip de gameplay.
-
-Reglas:
-- 1 línea fuerte (hook) con vibe esports.
-- 1 línea extra de opinión o hype.
-- Cierra con pregunta.
-- 6-10 hashtags (esports/gaming latam).
-No menciones "IA" ni "OpenAI". No pongas links.
-"""
-
 def build_caption(cfg: UGCConfig) -> str:
     try:
+        if not cfg.openai_api_key:
+            raise RuntimeError("no key")
         return openai_text(cfg, CAPTION_PROMPT).strip()
     except Exception:
-        # fallback simple
         return "¡Qué jugada! 🔥 ¿Tú también la intentas o te tilteas?\n#EsportsLATAM #GamingLatam #Gameplay #Gamers #LatamEsports #LevelUp #JuegaFuerte"
 
 
@@ -254,7 +236,6 @@ def parse_forced_seconds_from_name(key: str) -> Optional[int]:
         return None
 
 def ffprobe_duration_seconds(path: str) -> Optional[float]:
-    # Requires ffprobe available in runner
     try:
         cmd = [
             "ffprobe", "-v", "error",
@@ -272,42 +253,29 @@ def ffprobe_duration_seconds(path: str) -> Optional[float]:
     except Exception:
         return None
 
-def make_vertical_reel(input_mp4: str, output_mp4: str, seconds: int, bg_path: str, logo_path: str) -> None:
-    # Very simple: scale/crop to 1080x1920, overlay logo top
-    # If input is horizontal, we center-crop.
-    if not os.path.exists(bg_path):
-        raise RuntimeError(f"Falta ASSET_BG: {bg_path}")
-    if not os.path.exists(logo_path):
-        raise RuntimeError(f"Falta ASSET_LOGO: {logo_path}")
-
-    w, h = 1080, 1920
-
+def make_vertical_reel_FAST(input_mp4: str, output_mp4: str, seconds: int) -> None:
+    """
+    SUPER estable en GitHub Actions:
+    - corta a N segundos
+    - fuerza vertical 1080x1920
+    - crop centrado si el video es horizontal
+    - SIN overlays / SIN audio (evita cuelgues)
+    """
     cmd = [
         "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-        "-stream_loop", "-1", "-i", bg_path,          # 0 bg
-        "-i", input_mp4,                               # 1 video
-        "-i", logo_path,                               # 2 logo
+        "-i", input_mp4,
         "-t", str(int(seconds)),
-        "-filter_complex",
-        (
-            f"[0:v]scale={w}:{h},format=rgba[bg];"
-            f"[1:v]scale=-2:{h},crop={w}:{h}:(in_w-{w})/2:(in_h-{h})/2,format=rgba[v];"
-            f"[bg][v]overlay=0:0:format=auto[tmp];"
-            f"[2:v]scale=700:-1,format=rgba[logo];"
-            f"[tmp][logo]overlay=(W-w)/2:120:format=auto[vout]"
-        ),
-        "-map", "[vout]",
-        "-map", "1:a?",
+        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+        "-r", "30",
         "-c:v", "libx264",
-        "-preset", "veryfast",
+        "-preset", "ultrafast",
         "-pix_fmt", "yuv420p",
-        "-c:a", "aac",
-        "-b:a", "128k",
         "-movflags", "+faststart",
+        "-an",
         output_mp4
     ]
-
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=240, check=False)
+    # más tiempo para evitar falsos timeouts
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=480, check=False)
     if p.returncode != 0:
         raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
@@ -322,7 +290,6 @@ def ig_post(cfg: UGCConfig, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
     url = f"{graph_base(cfg)}/{path.lstrip('/')}"
     r = requests.post(url, data=data, timeout=60)
     if r.status_code >= 400:
-        # Print full error (THIS is what we need if it fails again)
         raise RuntimeError(f"IG POST error {r.status_code} url={url} resp={r.text}")
     return r.json()
 
@@ -348,7 +315,6 @@ def ig_wait_container(cfg: UGCConfig, creation_id: str, timeout_sec: int = 900) 
     raise RuntimeError(f"IG container not ready after {timeout_sec}s. last={last}")
 
 def ig_publish_reel_wait_retry(cfg: UGCConfig, video_url: str, caption: str) -> Dict[str, Any]:
-    # Create container
     j = ig_post(cfg, f"{cfg.ig_user_id}/media", {
         "media_type": "REELS",
         "video_url": video_url,
@@ -359,10 +325,8 @@ def ig_publish_reel_wait_retry(cfg: UGCConfig, video_url: str, caption: str) -> 
     if not creation_id:
         raise RuntimeError(f"IG create reels container no devolvió id: {j}")
 
-    # Wait FINISHED (key fix)
     ig_wait_container(cfg, creation_id, timeout_sec=900)
 
-    # Publish with retries (key fix)
     last_err = None
     for attempt in range(1, 6):
         try:
@@ -373,8 +337,8 @@ def ig_publish_reel_wait_retry(cfg: UGCConfig, video_url: str, caption: str) -> 
             return pub
         except Exception as e:
             last_err = e
-            # Many times IG says "media not ready" or similar; waiting helps.
             time.sleep(8 * attempt)
+
     raise RuntimeError(f"IG publish falló tras reintentos. Last error: {last_err}")
 
 
@@ -447,12 +411,11 @@ def run_mode_b() -> None:
                 caption = build_caption(cfg)
                 print("[UGC] Caption:\n", caption)
 
-                make_vertical_reel(
+                # SUPER estable
+                make_vertical_reel_FAST(
                     input_mp4=in_path,
                     output_mp4=out_path,
-                    seconds=target,
-                    bg_path=cfg.asset_bg,
-                    logo_path=cfg.asset_logo
+                    seconds=target
                 )
 
                 with open(out_path, "rb") as f:

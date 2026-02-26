@@ -1,3 +1,4 @@
+# ugc_mode_b.py
 import os
 import re
 import json
@@ -6,12 +7,21 @@ import shutil
 import tempfile
 import subprocess
 from dataclasses import dataclass
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 import boto3
 import requests
 
+# OpenAI
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
 
+
+# -----------------------------
+# Env helpers
+# -----------------------------
 def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
     v = os.getenv(name)
     if v is None:
@@ -34,68 +44,98 @@ def env_int(name: str, default: int) -> int:
     except Exception:
         return default
 
+def env_float(name: str, default: float) -> float:
+    v = os.getenv(name)
+    if not v or not v.strip():
+        return default
+    try:
+        return float(v.strip())
+    except Exception:
+        return default
 
+
+# -----------------------------
+# Config
+# -----------------------------
 @dataclass
 class UGCConfig:
+    # R2
     r2_endpoint_url: str
     aws_access_key_id: str
     aws_secret_access_key: str
     bucket_name: str
     r2_public_base_url: str
 
+    # OpenAI
     openai_api_key: str
     openai_model: str
 
+    # Instagram
     enable_ig_publish: bool
     ig_user_id: str
     ig_access_token: str
     graph_version: str
 
+    # Prefixes / state
     inbox_prefix: str
     processed_prefix: str
     failed_prefix: str
     output_reels_prefix: str
     state_key: str
 
-    reel_seconds_max: int
-    max_per_run: int
+    # Processing
+    cap_seconds: int          # max duration if video is long
+    min_seconds: int          # min duration (avoid too short)
+    default_target_seconds: int  # fallback if cannot detect duration
+
+    # Assets (overlay)
+    asset_bg: str
+    asset_logo: str
 
 
-def load_cfg() -> UGCConfig:
+def load_config() -> UGCConfig:
     r2_public = (env_nonempty("R2_PUBLIC_BASE_URL") or "").rstrip("/")
     if not r2_public:
         raise RuntimeError("Falta R2_PUBLIC_BASE_URL")
 
     graph_version = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
-    model = env_nonempty("OPENAI_MODEL", "gpt-4.1-mini") or "gpt-4.1-mini"
 
     return UGCConfig(
-        r2_endpoint_url=os.environ["R2_ENDPOINT_URL"],
-        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
-        bucket_name=os.environ["BUCKET_NAME"],
+        r2_endpoint_url=env_nonempty("R2_ENDPOINT_URL") or "",
+        aws_access_key_id=env_nonempty("AWS_ACCESS_KEY_ID") or "",
+        aws_secret_access_key=env_nonempty("AWS_SECRET_ACCESS_KEY") or "",
+        bucket_name=env_nonempty("BUCKET_NAME") or "",
         r2_public_base_url=r2_public,
 
-        openai_api_key=os.environ["OPENAI_API_KEY"],
-        openai_model=model,
+        openai_api_key=env_nonempty("OPENAI_API_KEY") or "",
+        openai_model=env_nonempty("OPENAI_MODEL", "gpt-4.1-mini") or "gpt-4.1-mini",
 
-        enable_ig_publish=env_bool("ENABLE_IG_PUBLISH", False),
-        ig_user_id=env_nonempty("IG_USER_ID", "") or "",
-        ig_access_token=env_nonempty("IG_ACCESS_TOKEN", "") or "",
+        enable_ig_publish=env_bool("ENABLE_IG_PUBLISH", True),
+        ig_user_id=env_nonempty("IG_USER_ID") or "",
+        ig_access_token=env_nonempty("IG_ACCESS_TOKEN") or "",
         graph_version=graph_version,
 
-        inbox_prefix=(env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox/") or "ugc/inbox/"),
-        processed_prefix=(env_nonempty("UGC_PROCESSED_PREFIX", "ugc/processed/") or "ugc/processed/"),
-        failed_prefix=(env_nonempty("UGC_FAILED_PREFIX", "ugc/failed/") or "ugc/failed/"),
-        output_reels_prefix=(env_nonempty("UGC_OUTPUT_REELS_PREFIX", "ugc/outputs/reels/") or "ugc/outputs/reels/"),
-        state_key=(env_nonempty("UGC_STATE_KEY", "ugc/state/state.json") or "ugc/state/state.json"),
+        inbox_prefix=(env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox/") or "ugc/inbox/").strip(),
+        processed_prefix=(env_nonempty("UGC_PROCESSED_PREFIX", "ugc/processed/") or "ugc/processed/").strip(),
+        failed_prefix=(env_nonempty("UGC_FAILED_PREFIX", "ugc/failed/") or "ugc/failed/").strip(),
+        output_reels_prefix=(env_nonempty("UGC_OUTPUT_REELS_PREFIX", "ugc/outputs/reels/") or "ugc/outputs/reels/").strip(),
+        state_key=(env_nonempty("UGC_STATE_KEY", "ugc/state/state.json") or "ugc/state/state.json").strip(),
 
-        reel_seconds_max=env_int("UGC_REEL_SECONDS", 20),
-        max_per_run=env_int("UGC_MAX_PER_RUN", 3),
+        cap_seconds=env_int("UGC_CAP_SECONDS", 20),
+        min_seconds=env_int("UGC_MIN_SECONDS", 5),
+        default_target_seconds=env_int("UGC_DEFAULT_SECONDS", 10),
+
+        asset_bg=env_nonempty("ASSET_BG", "assets/bg.jpg") or "assets/bg.jpg",
+        asset_logo=env_nonempty("ASSET_LOGO", "assets/logo.png") or "assets/logo.png",
     )
 
 
+# -----------------------------
+# R2 (S3)
+# -----------------------------
 def r2_client(cfg: UGCConfig):
+    if not (cfg.r2_endpoint_url and cfg.aws_access_key_id and cfg.aws_secret_access_key and cfg.bucket_name):
+        raise RuntimeError("Faltan credenciales R2/S3 (R2_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME)")
     return boto3.client(
         "s3",
         endpoint_url=cfg.r2_endpoint_url,
@@ -104,299 +144,351 @@ def r2_client(cfg: UGCConfig):
         region_name="auto",
     )
 
-def public_url(cfg: UGCConfig, key: str) -> str:
-    return f"{cfg.r2_public_base_url}/{key}"
-
-def list_mp4(s3, bucket: str, prefix: str) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    token = None
-    while True:
-        kwargs = {"Bucket": bucket, "Prefix": prefix, "MaxKeys": 1000}
-        if token:
-            kwargs["ContinuationToken"] = token
-        resp = s3.list_objects_v2(**kwargs)
-        for obj in resp.get("Contents", []):
-            k = obj["Key"]
-            if k.lower().endswith(".mp4") and not k.endswith("/"):
-                out.append(obj)
-        if resp.get("IsTruncated"):
-            token = resp.get("NextContinuationToken")
-        else:
-            break
+def r2_list_mp4_keys(cfg: UGCConfig, prefix: str, limit: int = 25) -> List[str]:
+    s3 = r2_client(cfg)
+    out: List[str] = []
+    resp = s3.list_objects_v2(Bucket=cfg.bucket_name, Prefix=prefix)
+    for obj in resp.get("Contents", [])[:limit]:
+        key = obj.get("Key") or ""
+        if key.lower().endswith(".mp4"):
+            out.append(key)
     return out
 
-def get_json_or_default(s3, bucket: str, key: str, default: Dict[str, Any]) -> Dict[str, Any]:
-    try:
-        obj = s3.get_object(Bucket=bucket, Key=key)
-        data = obj["Body"].read().decode("utf-8")
-        return json.loads(data)
-    except Exception:
-        return default
+def r2_get_bytes(cfg: UGCConfig, key: str) -> bytes:
+    s3 = r2_client(cfg)
+    obj = s3.get_object(Bucket=cfg.bucket_name, Key=key)
+    return obj["Body"].read()
 
-def put_json(s3, bucket: str, key: str, payload: Dict[str, Any]) -> None:
-    s3.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
-        ContentType="application/json",
+def r2_put_bytes(cfg: UGCConfig, key: str, data: bytes, content_type: str) -> None:
+    s3 = r2_client(cfg)
+    s3.put_object(Bucket=cfg.bucket_name, Key=key, Body=data, ContentType=content_type)
+
+def r2_copy(cfg: UGCConfig, src_key: str, dst_key: str) -> None:
+    s3 = r2_client(cfg)
+    s3.copy_object(
+        Bucket=cfg.bucket_name,
+        CopySource={"Bucket": cfg.bucket_name, "Key": src_key},
+        Key=dst_key,
     )
 
-def copy_then_delete(s3, bucket: str, src_key: str, dst_key: str) -> None:
-    s3.copy_object(Bucket=bucket, CopySource={"Bucket": bucket, "Key": src_key}, Key=dst_key)
-    s3.delete_object(Bucket=bucket, Key=src_key)
+def r2_delete(cfg: UGCConfig, key: str) -> None:
+    s3 = r2_client(cfg)
+    s3.delete_object(Bucket=cfg.bucket_name, Key=key)
+
+def r2_public_url(cfg: UGCConfig, key: str) -> str:
+    base = cfg.r2_public_base_url.rstrip("/")
+    return f"{base}/{key}"
+
+def r2_load_json(cfg: UGCConfig, key: str) -> Optional[Dict[str, Any]]:
+    try:
+        b = r2_get_bytes(cfg, key)
+        return json.loads(b.decode("utf-8"))
+    except Exception:
+        return None
+
+def r2_save_json(cfg: UGCConfig, key: str, payload: Dict[str, Any]) -> None:
+    b = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    r2_put_bytes(cfg, key, b, "application/json")
 
 
-def generate_caption(cfg: UGCConfig, filename: str) -> str:
-    prompt = f"""
-Eres un creador de contenido de esports LATAM (energético, divertido, sin groserías fuertes).
-Escribe un caption para un Reel de gameplay.
+# -----------------------------
+# OpenAI caption
+# -----------------------------
+def openai_client(cfg: UGCConfig):
+    if not OpenAI:
+        raise RuntimeError("No se pudo importar OpenAI. Revisa requirements.txt (openai).")
+    if not cfg.openai_api_key:
+        raise RuntimeError("Falta OPENAI_API_KEY.")
+    return OpenAI(api_key=cfg.openai_api_key)
 
-Archivo: {filename}
+def openai_text(cfg: UGCConfig, prompt: str) -> str:
+    client = openai_client(cfg)
+    model = cfg.openai_model or "gpt-4.1-mini"
+
+    try:
+        resp = client.responses.create(model=model, input=prompt)
+        out = getattr(resp, "output_text", None)
+        if out:
+            return out.strip()
+    except Exception:
+        pass
+
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return (resp.choices[0].message.content or "").strip()
+
+CAPTION_PROMPT = """Eres caster/editor de esports en español LATAM.
+Vas a escribir un caption corto para Instagram Reels sobre un clip de gameplay.
 
 Reglas:
-- 1-2 líneas máximo
-- termina con 5-10 hashtags (gaming/esports/latam)
-- NO inventes equipos/torneos específicos
-- cierra con una pregunta corta
+- 1 línea fuerte (hook) con vibe esports.
+- 1 línea extra de opinión o hype.
+- Cierra con pregunta.
+- 6-10 hashtags (esports/gaming latam).
+No menciones "IA" ni "OpenAI". No pongas links.
 """
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {cfg.openai_api_key}", "Content-Type": "application/json"}
-    body = {
-        "model": cfg.openai_model,
-        "messages": [
-            {"role": "system", "content": "Eres un experto en captions virales de esports LATAM."},
-            {"role": "user", "content": prompt.strip()},
-        ],
-        "temperature": 0.9,
-    }
-    r = requests.post(url, headers=headers, json=body, timeout=60)
-    r.raise_for_status()
-    j = r.json()
-    return (j["choices"][0]["message"]["content"] or "").strip()
+
+def build_caption(cfg: UGCConfig) -> str:
+    try:
+        return openai_text(cfg, CAPTION_PROMPT).strip()
+    except Exception:
+        # fallback simple
+        return "¡Qué jugada! 🔥 ¿Tú también la intentas o te tilteas?\n#EsportsLATAM #GamingLatam #Gameplay #Gamers #LatamEsports #LevelUp #JuegaFuerte"
 
 
-DURATION_TAG_RE = re.compile(r"__s(\d{1,3})", re.IGNORECASE)
+# -----------------------------
+# Video utils
+# -----------------------------
+S_FORCED_RE = re.compile(r"__s(\d{1,3})", re.IGNORECASE)
 
-def seconds_from_filename(filename: str) -> Optional[int]:
-    m = DURATION_TAG_RE.search(filename or "")
+def parse_forced_seconds_from_name(key: str) -> Optional[int]:
+    m = S_FORCED_RE.search(key)
     if not m:
         return None
     try:
-        s = int(m.group(1))
-        if 1 <= s <= 120:
-            return s
+        v = int(m.group(1))
+        return v if v > 0 else None
     except Exception:
         return None
-    return None
 
-def probe_video_duration_seconds(path: str) -> int:
+def ffprobe_duration_seconds(path: str) -> Optional[float]:
+    # Requires ffprobe available in runner
+    try:
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            path
+        ]
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
+        if p.returncode != 0:
+            return None
+        s = (p.stdout or "").strip()
+        if not s:
+            return None
+        return float(s)
+    except Exception:
+        return None
+
+def make_vertical_reel(input_mp4: str, output_mp4: str, seconds: int, bg_path: str, logo_path: str) -> None:
+    # Very simple: scale/crop to 1080x1920, overlay logo top
+    # If input is horizontal, we center-crop.
+    if not os.path.exists(bg_path):
+        raise RuntimeError(f"Falta ASSET_BG: {bg_path}")
+    if not os.path.exists(logo_path):
+        raise RuntimeError(f"Falta ASSET_LOGO: {logo_path}")
+
+    w, h = 1080, 1920
+
     cmd = [
-        "ffprobe",
-        "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        path,
-    ]
-    p = subprocess.run(cmd, capture_output=True, text=True)
-    if p.returncode != 0:
-        raise RuntimeError(f"ffprobe falló: {(p.stderr or '')[:1000]}")
-    raw = (p.stdout or "").strip()
-    if not raw:
-        raise RuntimeError("ffprobe no devolvió duración")
-    dur = int(float(raw))
-    return max(1, dur)
-
-
-def build_vertical_reel(input_mp4: str, output_mp4: str, seconds: int) -> None:
-    vf = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-    cmd = [
-        "ffmpeg", "-y",
-        "-i", input_mp4,
-        "-t", str(seconds),
-        "-vf", vf,
-        "-r", "30",
+        "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
+        "-stream_loop", "-1", "-i", bg_path,          # 0 bg
+        "-i", input_mp4,                               # 1 video
+        "-i", logo_path,                               # 2 logo
+        "-t", str(int(seconds)),
+        "-filter_complex",
+        (
+            f"[0:v]scale={w}:{h},format=rgba[bg];"
+            f"[1:v]scale=-2:{h},crop={w}:{h}:(in_w-{w})/2:(in_h-{h})/2,format=rgba[v];"
+            f"[bg][v]overlay=0:0:format=auto[tmp];"
+            f"[2:v]scale=700:-1,format=rgba[logo];"
+            f"[tmp][logo]overlay=(W-w)/2:120:format=auto[vout]"
+        ),
+        "-map", "[vout]",
+        "-map", "1:a?",
         "-c:v", "libx264",
         "-preset", "veryfast",
-        "-crf", "20",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "128k",
         "-movflags", "+faststart",
-        output_mp4,
+        output_mp4
     ]
-    p = subprocess.run(cmd, capture_output=True, text=True)
+
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=240, check=False)
     if p.returncode != 0:
         raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
 
+# -----------------------------
+# Instagram publish (wait + retry)
+# -----------------------------
 def graph_base(cfg: UGCConfig) -> str:
     return f"https://graph.facebook.com/v{cfg.graph_version}"
 
-def ig_create_container(cfg: UGCConfig, video_url: str, caption: str) -> str:
-    url = f"{graph_base(cfg)}/{cfg.ig_user_id}/media"
-    data = {
+def ig_post(cfg: UGCConfig, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    url = f"{graph_base(cfg)}/{path.lstrip('/')}"
+    r = requests.post(url, data=data, timeout=60)
+    if r.status_code >= 400:
+        # Print full error (THIS is what we need if it fails again)
+        raise RuntimeError(f"IG POST error {r.status_code} url={url} resp={r.text}")
+    return r.json()
+
+def ig_get(cfg: UGCConfig, path: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    url = f"{graph_base(cfg)}/{path.lstrip('/')}"
+    r = requests.get(url, params=params, timeout=60)
+    if r.status_code >= 400:
+        raise RuntimeError(f"IG GET error {r.status_code} url={url} resp={r.text}")
+    return r.json()
+
+def ig_wait_container(cfg: UGCConfig, creation_id: str, timeout_sec: int = 900) -> None:
+    start = time.time()
+    last = None
+    while time.time() - start < timeout_sec:
+        j = ig_get(cfg, creation_id, {"fields": "status_code,error_message", "access_token": cfg.ig_access_token})
+        last = j
+        status = (j.get("status_code") or "").upper()
+        if status in ("FINISHED", "PUBLISHED"):
+            return
+        if status in ("ERROR", "FAILED"):
+            raise RuntimeError(f"IG container failed: {j}")
+        time.sleep(5)
+    raise RuntimeError(f"IG container not ready after {timeout_sec}s. last={last}")
+
+def ig_publish_reel_wait_retry(cfg: UGCConfig, video_url: str, caption: str) -> Dict[str, Any]:
+    # Create container
+    j = ig_post(cfg, f"{cfg.ig_user_id}/media", {
         "media_type": "REELS",
         "video_url": video_url,
         "caption": caption,
-        "access_token": cfg.ig_access_token,
-    }
-    r = requests.post(url, data=data, timeout=60)
-    r.raise_for_status()
-    return r.json()["id"]
+        "access_token": cfg.ig_access_token
+    })
+    creation_id = j.get("id")
+    if not creation_id:
+        raise RuntimeError(f"IG create reels container no devolvió id: {j}")
 
-def ig_wait_ready(cfg: UGCConfig, creation_id: str, timeout_sec: int = 420) -> None:
-    url = f"{graph_base(cfg)}/{creation_id}"
-    start = time.time()
-    while time.time() - start < timeout_sec:
-        r = requests.get(url, params={"fields": "status_code", "access_token": cfg.ig_access_token}, timeout=30)
-        r.raise_for_status()
-        status = (r.json().get("status_code") or "").upper()
-        if status in ("FINISHED", "PUBLISHED"):
-            return
-        if status in ("ERROR", "FAILED", "EXPIRED"):
-            raise RuntimeError(f"IG container status={status}")
-        time.sleep(3)
-    raise TimeoutError("Timeout esperando IG container")
+    # Wait FINISHED (key fix)
+    ig_wait_container(cfg, creation_id, timeout_sec=900)
 
-def ig_publish(cfg: UGCConfig, creation_id: str) -> str:
-    url = f"{graph_base(cfg)}/{cfg.ig_user_id}/media_publish"
-    data = {"creation_id": creation_id, "access_token": cfg.ig_access_token}
-    r = requests.post(url, data=data, timeout=60)
-    r.raise_for_status()
-    return r.json()["id"]
+    # Publish with retries (key fix)
+    last_err = None
+    for attempt in range(1, 6):
+        try:
+            pub = ig_post(cfg, f"{cfg.ig_user_id}/media_publish", {
+                "creation_id": creation_id,
+                "access_token": cfg.ig_access_token
+            })
+            return pub
+        except Exception as e:
+            last_err = e
+            # Many times IG says "media not ready" or similar; waiting helps.
+            time.sleep(8 * attempt)
+    raise RuntimeError(f"IG publish falló tras reintentos. Last error: {last_err}")
 
 
-def default_state() -> Dict[str, Any]:
-    return {
-        "version": 1,
-        "processed": {},
-        "failed": {},
-        "last_run_at": None,
-    }
+# -----------------------------
+# State
+# -----------------------------
+def load_state(cfg: UGCConfig) -> Dict[str, Any]:
+    st = r2_load_json(cfg, cfg.state_key) or {}
+    st.setdefault("processed", {})  # key -> iso time
+    return st
 
-def already_done(state: Dict[str, Any], inbox_key: str, etag: str) -> bool:
-    info = (state.get("processed") or {}).get(inbox_key)
-    return bool(info and info.get("etag") == etag)
+def save_state(cfg: UGCConfig, st: Dict[str, Any]) -> None:
+    r2_save_json(cfg, cfg.state_key, st)
 
 
+# -----------------------------
+# Mode B runner
+# -----------------------------
 def run_mode_b() -> None:
-    cfg = load_cfg()
-    s3 = r2_client(cfg)
+    cfg = load_config()
 
     print("===== MODO B (UGC) =====")
-    print("Inbox:", cfg.inbox_prefix)
-    print("Output reels:", cfg.output_reels_prefix)
-    print("State:", cfg.state_key)
+    print(f"Inbox: {cfg.inbox_prefix}")
+    print(f"Output reels: {cfg.output_reels_prefix}")
+    print(f"State: {cfg.state_key}")
 
-    state = get_json_or_default(s3, cfg.bucket_name, cfg.state_key, default_state())
+    st = load_state(cfg)
 
-    items = list_mp4(s3, cfg.bucket_name, cfg.inbox_prefix)
-    if not items:
+    keys = r2_list_mp4_keys(cfg, cfg.inbox_prefix, limit=25)
+    if not keys:
         print("[UGC] No hay mp4 en inbox.")
-        state["last_run_at"] = int(time.time())
-        put_json(s3, cfg.bucket_name, cfg.state_key, state)
         return
 
-    items.sort(key=lambda o: o.get("LastModified"))
-    done_this_run = 0
+    processed_this_run = 0
 
-    for obj in items:
-        if done_this_run >= cfg.max_per_run:
-            break
-
-        inbox_key = obj["Key"]
-        etag = (obj.get("ETag") or "").strip('"')
-        filename = os.path.basename(inbox_key)
-
-        if already_done(state, inbox_key, etag):
-            print("[UGC] Saltando (ya procesado):", inbox_key)
+    for key in keys:
+        if key in st["processed"]:
             continue
 
-        print("\n[UGC] Procesando:", inbox_key)
+        print(f"\n[UGC] Procesando: {key}")
 
-        tmpdir = tempfile.mkdtemp(prefix="ugc_b_")
+        forced = parse_forced_seconds_from_name(key)
+
         try:
-            local_in = os.path.join(tmpdir, filename)
-            local_out = os.path.join(tmpdir, f"REEL_{filename}")
+            b = r2_get_bytes(cfg, key)
 
-            s3.download_file(cfg.bucket_name, inbox_key, local_in)
+            with tempfile.TemporaryDirectory() as td:
+                in_path = os.path.join(td, "in.mp4")
+                out_path = os.path.join(td, "out.mp4")
 
-            forced = seconds_from_filename(filename)
-            real_dur = probe_video_duration_seconds(local_in)
-            target = forced if forced is not None else min(real_dur, cfg.reel_seconds_max)
-            target = max(1, min(int(target), 120))
+                with open(in_path, "wb") as f:
+                    f.write(b)
 
-            print(f"[UGC] Duración real={real_dur}s | forced={forced} | target={target}s | cap={cfg.reel_seconds_max}s")
+                dur = ffprobe_duration_seconds(in_path)
+                real_sec = int(round(dur)) if dur and dur > 0 else None
 
-            caption = generate_caption(cfg, filename)
-            print("[UGC] Caption:\n", caption)
+                # Decide target duration
+                if forced:
+                    target = forced
+                elif real_sec:
+                    target = real_sec
+                else:
+                    target = cfg.default_target_seconds
 
-            build_vertical_reel(local_in, local_out, seconds=target)
+                # Apply min/max
+                target = max(cfg.min_seconds, min(cfg.cap_seconds, int(target)))
 
-            safe_name = filename.replace(" ", "_")
-            reel_key = f"{cfg.output_reels_prefix}{int(time.time())}_{safe_name}"
-            s3.upload_file(local_out, cfg.bucket_name, reel_key, ExtraArgs={"ContentType": "video/mp4"})
-            reel_url = public_url(cfg, reel_key)
-            print("[UGC] REEL subido a R2:", reel_url)
+                print(f"[UGC] Duración real={real_sec}s | forced={forced} | target={target}s | cap={cfg.cap_seconds}s")
 
-            ig_media_id = None
+                caption = build_caption(cfg)
+                print("[UGC] Caption:\n", caption)
+
+                make_vertical_reel(
+                    input_mp4=in_path,
+                    output_mp4=out_path,
+                    seconds=target,
+                    bg_path=cfg.asset_bg,
+                    logo_path=cfg.asset_logo
+                )
+
+                with open(out_path, "rb") as f:
+                    out_bytes = f.read()
+
+            # Upload reel output
+            out_key = f"{cfg.output_reels_prefix.rstrip('/')}/{os.path.basename(key)}"
+            r2_put_bytes(cfg, out_key, out_bytes, "video/mp4")
+            video_url = r2_public_url(cfg, out_key)
+            print(f"[UGC] REEL subido a R2: {video_url}")
+
             if cfg.enable_ig_publish:
-                if not cfg.ig_user_id or not cfg.ig_access_token:
-                    raise RuntimeError("ENABLE_IG_PUBLISH=true pero faltan IG_USER_ID / IG_ACCESS_TOKEN")
+                if not (cfg.ig_user_id and cfg.ig_access_token):
+                    raise RuntimeError("ENABLE_IG_PUBLISH=true pero faltan IG_USER_ID o IG_ACCESS_TOKEN.")
+                pub = ig_publish_reel_wait_retry(cfg, video_url, caption)
+                print("[UGC] IG PUBLISH OK:", pub)
 
-                creation_id = ig_create_container(cfg, reel_url, caption)
-                print("[UGC] IG container:", creation_id)
+            # Move original to processed
+            dst = f"{cfg.processed_prefix.rstrip('/')}/{os.path.basename(key)}"
+            r2_copy(cfg, key, dst)
+            r2_delete(cfg, key)
 
-                ig_wait_ready(cfg, creation_id)
-                ig_media_id = ig_publish(cfg, creation_id)
-                print("[UGC] IG PUBLISH OK:", {"id": ig_media_id})
-            else:
-                print("[UGC] ENABLE_IG_PUBLISH=false → no publico en IG.")
+            st["processed"][key] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            save_state(cfg, st)
 
-            processed_key = f"{cfg.processed_prefix}{filename}"
-            copy_then_delete(s3, cfg.bucket_name, inbox_key, processed_key)
-            print("[UGC] Original movido a processed:", processed_key)
-
-            state.setdefault("processed", {})[inbox_key] = {
-                "etag": etag,
-                "processed_at": int(time.time()),
-                "reel_key": reel_key,
-                "reel_url": reel_url,
-                "ig_media_id": ig_media_id,
-                "caption": caption,
-                "target_seconds": target,
-                "real_seconds": real_dur,
-                "forced_seconds": forced,
-            }
-            state.get("failed", {}).pop(inbox_key, None)
-
-            put_json(s3, cfg.bucket_name, cfg.state_key, state)
-            done_this_run += 1
+            processed_this_run += 1
 
         except Exception as e:
-            err = str(e)
-            print("[UGC] ERROR:", err)
+            print("[UGC] ERROR:", str(e))
+            # Move original to failed (best-effort)
             try:
-                failed_key = f"{cfg.failed_prefix}{filename}"
-                copy_then_delete(s3, cfg.bucket_name, inbox_key, failed_key)
-                print("[UGC] Original movido a failed:", failed_key)
-            except Exception as move_err:
-                print("[UGC] No pude mover a failed:", str(move_err))
+                dst = f"{cfg.failed_prefix.rstrip('/')}/{os.path.basename(key)}"
+                r2_copy(cfg, key, dst)
+                r2_delete(cfg, key)
+                print(f"[UGC] Original movido a failed: {dst}")
+            except Exception as e2:
+                print("[UGC] No se pudo mover a failed:", str(e2))
 
-            state.setdefault("failed", {})[inbox_key] = {
-                "etag": etag,
-                "failed_at": int(time.time()),
-                "error": err[:2000],
-            }
-            put_json(s3, cfg.bucket_name, cfg.state_key, state)
-
-        finally:
-            shutil.rmtree(tmpdir, ignore_errors=True)
-
-    state["last_run_at"] = int(time.time())
-    put_json(s3, cfg.bucket_name, cfg.state_key, state)
-    print("\n[UGC] Listo. Procesados en este run:", done_this_run)
-
-
-if __name__ == "__main__":
-    run_mode_b()
+    print(f"\n[UGC] Listo. Procesados en este run: {processed_this_run}")

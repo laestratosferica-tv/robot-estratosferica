@@ -316,11 +316,12 @@ def ig_wait_container(cfg: UGCConfig, creation_id: str, timeout_sec: int = 900) 
 
 def ig_publish_reel_wait_retry(cfg: UGCConfig, video_url: str, caption: str) -> Dict[str, Any]:
     j = ig_post(cfg, f"{cfg.ig_user_id}/media", {
-        "media_type": "REELS",
-        "video_url": video_url,
-        "caption": caption,
-        "access_token": cfg.ig_access_token
-    })
+    "media_type": "REELS",
+    "video_url": video_url,
+    "caption": caption,
+    "share_to_feed": "true",
+    "access_token": cfg.ig_access_token
+})
     creation_id = j.get("id")
     if not creation_id:
         raise RuntimeError(f"IG create reels container no devolvió id: {j}")

@@ -6,15 +6,6 @@ on:
     - cron: "0 20 * * *"
     - cron: "0 2 * * *"
   workflow_dispatch:
-    inputs:
-      run_mode:
-        description: "A = Editorial (RSS). B = UGC (videos en R2 ugc/inbox/)"
-        required: true
-        default: "A"
-        type: choice
-        options:
-          - "A"
-          - "B"
 
 jobs:
   run-robot:
@@ -42,7 +33,8 @@ jobs:
 
       - name: Run robot
         env:
-          RUN_MODE: ${{ github.event.inputs.run_mode || 'A' }}
+          # ✅ MODO (A editorial / B UGC)
+          RUN_MODE: "B"
 
           # 🔐 R2
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
@@ -54,10 +46,7 @@ jobs:
 
           # 🤖 OpenAI
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-          # 🧵 Threads
-          THREADS_USER_ACCESS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
-          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          OPENAI_MODEL: "gpt-4.1-mini"
 
           # 📸 Instagram Publishing
           ENABLE_IG_PUBLISH: "true"
@@ -65,26 +54,17 @@ jobs:
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           GRAPH_VERSION: "v25.0"
 
-          # 📰 MIX & BALANCE
-          RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
-          MAX_PER_FEED: ${{ secrets.MAX_PER_FEED }}
-          MAX_AI_ITEMS: ${{ secrets.MAX_AI_ITEMS }}
-          THREADS_STATE_KEY: ${{ secrets.THREADS_STATE_KEY }}
+          # 🎮 UGC PATHS
+          UGC_INBOX_PREFIX: "ugc/inbox/"
+          UGC_PROCESSED_PREFIX: "ugc/processed/"
+          UGC_FAILED_PREFIX: "ugc/failed/"
+          UGC_OUTPUT_REELS_PREFIX: "ugc/outputs/reels/"
+          UGC_STATE_KEY: "ugc/state/state.json"
 
-          # Opcionales
-          SHUFFLE_ARTICLES: "true"
-          REPOST_ENABLE: "true"
-          REPOST_MAX_TIMES: "3"
-          REPOST_WINDOW_DAYS: "7"
-
-          # 🎬 REELS (Modo A)
-          ENABLE_REELS: "true"
-          REEL_SECONDS: "5"
-          REEL_W: "1080"
-          REEL_H: "1920"
-          ASSET_BG: "assets/bg.jpg"
-          ASSET_LOGO: "assets/logo.png"
-          # ASSET_MUSIC: "assets/music.mp3"
+          # 🎬 Duración automática
+          UGC_CAP_SECONDS: "20"
+          UGC_MIN_SECONDS: "5"
+          UGC_FFMPEG_TIMEOUT: "600"
 
         run: |
           python -u main.py

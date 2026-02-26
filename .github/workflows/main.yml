@@ -1,11 +1,11 @@
-name: Robot Editorial Scheduler
+name: Robot UGC Runner
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 14 * * *"
     - cron: "0 20 * * *"
     - cron: "0 2 * * *"
-  workflow_dispatch:
 
 jobs:
   run-robot:
@@ -33,7 +33,7 @@ jobs:
 
       - name: Run robot
         env:
-          # ✅ MODO (A editorial / B UGC)
+          # 🔥 FORZAMOS MODO B (UGC)
           RUN_MODE: "B"
 
           # 🔐 R2
@@ -48,7 +48,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: "gpt-4.1-mini"
 
-          # 📸 Instagram Publishing
+          # 📸 Instagram
           ENABLE_IG_PUBLISH: "true"
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
@@ -61,7 +61,7 @@ jobs:
           UGC_OUTPUT_REELS_PREFIX: "ugc/outputs/reels/"
           UGC_STATE_KEY: "ugc/state/state.json"
 
-          # 🎬 Duración automática
+          # 🎬 Video config
           UGC_CAP_SECONDS: "20"
           UGC_MIN_SECONDS: "5"
           UGC_FFMPEG_TIMEOUT: "600"

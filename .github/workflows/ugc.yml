@@ -57,7 +57,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
           # 📸 Instagram Publishing
-          ENABLE_IG_PUBLISH: "true"
+          ENABLE_IG_PUBLISH: "false"
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           GRAPH_VERSION: "v25.0"

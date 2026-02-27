@@ -124,8 +124,6 @@ OPENAI_TTS_MODEL = env_nonempty("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")  # best-e
 
 # NCS (NoCopyrightSounds) – best-effort downloader
 NCS_TRACK_SLUGS = [
-    # Starter pack. You can add more slugs anytime without touching the pipeline.
-    # Slugs are the ncs.io/<slug> pages.
     "montagemindia",
     "favela",
     "numb",
@@ -159,6 +157,13 @@ def r2_client():
         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         region_name="auto",
     )
+
+def s3_exists(key: str) -> bool:
+    try:
+        r2_client().head_object(Bucket=BUCKET_NAME, Key=key)
+        return True
+    except Exception:
+        return False
 
 def s3_list_keys(prefix: str, max_keys: int = 200) -> List[str]:
     s3 = r2_client()
@@ -302,12 +307,10 @@ def openai_text(prompt: str) -> str:
         return (j2["choices"][0]["message"]["content"] or "").strip()
 
     j = r.json()
-    # responses API output_text if present
     out = j.get("output_text")
     if out:
         return str(out).strip()
 
-    # fallback parse
     try:
         chunks = j.get("output", [])
         texts = []
@@ -320,9 +323,6 @@ def openai_text(prompt: str) -> str:
         return ""
 
 def openai_tts_mp3(text: str, voice: str, instructions: str) -> bytes:
-    """
-    Best-effort TTS.
-    """
     if not OPENAI_API_KEY:
         raise RuntimeError("Falta OPENAI_API_KEY")
     url = "https://api.openai.com/v1/audio/speech"
@@ -332,7 +332,6 @@ def openai_tts_mp3(text: str, voice: str, instructions: str) -> bytes:
         "voice": voice,
         "format": "mp3",
         "input": text,
-        # Some models accept instructions; if not, it will still work ignoring it.
         "instructions": instructions,
     }
     r = requests.post(url, headers=headers, json=payload, timeout=120)
@@ -360,6 +359,20 @@ def ffprobe_duration_seconds(path: str) -> float:
     except Exception:
         return 0.0
 
+def ffprobe_has_audio(path: str) -> bool:
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-select_streams", "a",
+        "-show_entries", "stream=codec_type",
+        "-of", "default=nw=1:nk=1",
+        path,
+    ]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
+    if p.returncode != 0:
+        return False
+    return bool((p.stdout or "").strip())
+
 def make_reel_video(
     in_mp4: str,
     out_mp4: str,
@@ -367,48 +380,36 @@ def make_reel_video(
     music_mp3: Optional[str],
     voice_mp3: Optional[str],
 ) -> None:
-    """
-    Re-encode to "Reel-safe":
-    - 1080x1920
-    - H.264 yuv420p
-    - AAC audio
-    - duration capped
-    - optionally mixes music + voice + original audio
-    """
-    # video filter: scale+crop to 9:16
     vf = (
         f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
         f"crop={REEL_W}:{REEL_H},"
         f"fps=30"
     )
 
-    # Inputs
     cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", in_mp4]
 
-    # Optional audios
     audio_inputs = []
     if music_mp3 and os.path.exists(music_mp3):
         cmd += ["-i", music_mp3]
-        audio_inputs.append(("music", len(audio_inputs) + 1))  # index relative after video input
+        audio_inputs.append(("music", len(audio_inputs) + 1))
     if voice_mp3 and os.path.exists(voice_mp3):
         cmd += ["-i", voice_mp3]
         audio_inputs.append(("voice", len(audio_inputs) + 1))
 
     filter_complex_parts = [f"[0:v]{vf}[vout]"]
 
-    # Build audio mixing
-    # If no external audio chosen, keep original audio (but still normalize volumes)
-    # If external audio exists, mix with original (ducked)
     has_external = bool(audio_inputs)
 
     if has_external:
-        # Original audio (if exists) lowered
-        # We try to use [0:a], but if input has no audio ffmpeg will error unless we guard.
-        # Trick: use anullsrc and amix; simplest is to ignore original audio in those cases.
-        # We'll attempt original; if fails, user still publishes because pipeline catches exceptions.
+        has_audio = ffprobe_has_audio(in_mp4)
+
         parts = []
-        # original at low volume
-        parts.append(f"[0:a]volume={ORIG_VOLUME}[a0]")
+        if has_audio:
+            parts.append(f"[0:a]volume={ORIG_VOLUME}[a0]")
+            base_audio = "[a0]"
+        else:
+            parts.append("anullsrc=channel_layout=stereo:sample_rate=44100,volume=0.0[a0]")
+            base_audio = "[a0]"
 
         idx = 1
         for name, rel in audio_inputs:
@@ -419,7 +420,7 @@ def make_reel_video(
 
         filter_complex_parts += parts
 
-        mix_inputs = ["[a0]"]
+        mix_inputs = [base_audio]
         if any(n == "music" for n, _ in audio_inputs):
             mix_inputs.append("[am]")
         if any(n == "voice" for n, _ in audio_inputs):
@@ -430,7 +431,6 @@ def make_reel_video(
         map_audio = ["-map", "[aout]"]
         audio_codec = ["-c:a", "aac", "-b:a", "128k"]
     else:
-        # keep original audio if present
         map_audio = ["-map", "0:a?"]
         audio_codec = ["-c:a", "aac", "-b:a", "128k"]
 
@@ -462,12 +462,6 @@ def make_reel_video(
 NCS_MP3_RE = re.compile(r'https?://[^\s"\']+\.mp3', re.IGNORECASE)
 
 def try_download_ncs_mp3(slug: str) -> Optional[Tuple[bytes, str]]:
-    """
-    Best-effort:
-    - Fetch ncs.io/<slug>
-    - Try to find any .mp3 link in HTML and download it.
-    If fails: return None (we will publish without music).
-    """
     try:
         url = f"https://ncs.io/{slug}"
         r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
@@ -481,7 +475,6 @@ def try_download_ncs_mp3(slug: str) -> Optional[Tuple[bytes, str]]:
         rr = requests.get(mp3_url, timeout=60, headers={"User-Agent": "Mozilla/5.0"})
         if rr.status_code >= 400 or not rr.content:
             return None
-        # A simple credit line (best-effort). You can refine later.
         credit = f"Music: NCS (NoCopyrightSounds) – https://ncs.io/{slug}"
         return rr.content, credit
     except Exception:
@@ -502,9 +495,6 @@ def roulette_pick_mode() -> str:
     return random.choice(modes) if modes else "voice_music"
 
 def build_caption_and_narration(filename: str, mode: str) -> Tuple[str, str]:
-    """
-    Caption for IG + short narration text (if voice).
-    """
     prompt = f"""
 Eres editor viral de Reels esports/gaming en español LATAM.
 Contexto: El usuario subió un video (probablemente gameplay/clip) llamado: "{filename}".
@@ -538,7 +528,6 @@ NARRATION:
     else:
         caption = out.strip()
 
-    # safety trims
     caption = caption[:2200].strip()
     narration = narration[:220].strip()
     return caption, narration
@@ -557,7 +546,7 @@ def choose_ncs_slug() -> str:
 def load_state() -> Dict[str, Any]:
     st = s3_get_json(UGC_STATE_KEY) or {}
     st.setdefault("daily", {})
-    st.setdefault("enqueued", {})  # key -> ticket_key
+    st.setdefault("enqueued", {})  # inbox_key -> ticket_key
     return st
 
 def save_state(st: Dict[str, Any]) -> None:
@@ -587,14 +576,12 @@ def enqueue_new_inbox_videos(st: Dict[str, Any]) -> int:
         filename = k.split("/")[-1]
         mode = roulette_pick_mode()
 
-        # Decide voice/music now and freeze it in ticket
         voice = None
         voice_instr = None
-        voice_preset = None
         if mode in ("voice_only", "voice_music"):
-            voice_preset = choose_voice_preset()
-            voice = voice_preset["voice"]
-            voice_instr = voice_preset["instr"]
+            vp = choose_voice_preset()
+            voice = vp["voice"]
+            voice_instr = vp["instr"]
 
         music_slug = None
         if mode in ("music_only", "voice_music"):
@@ -632,11 +619,7 @@ def list_pending_tickets() -> List[str]:
     return sorted([k for k in keys if k.lower().endswith(".json")])
 
 def mark_ticket_move(ticket_key: str, dst_prefix: str, patch: Dict[str, Any]) -> str:
-    """
-    Download, patch, upload to dst, delete original.
-    """
     data = s3_get_json(ticket_key) or {}
-    # patch merge (shallow)
     for kk, vv in patch.items():
         data[kk] = vv
     data["updated_at"] = iso_now()
@@ -644,7 +627,6 @@ def mark_ticket_move(ticket_key: str, dst_prefix: str, patch: Dict[str, Any]) ->
     fname = ticket_key.split("/")[-1]
     new_key = f"{dst_prefix}{fname}"
     s3_put_json(new_key, data)
-    # delete old
     r2_client().delete_object(Bucket=BUCKET_NAME, Key=ticket_key)
     return new_key
 
@@ -673,128 +655,150 @@ def publish_one_from_queue_if_allowed(st: Dict[str, Any]) -> int:
         print("[UGC] No hay tickets en pending.")
         return 0
 
-    ticket_key = pending[0]
-    ticket = s3_get_json(ticket_key) or {}
-    src_key = (((ticket.get("source") or {}).get("inbox_key")) or "").strip()
-    filename = ((ticket.get("source") or {}).get("filename") or "ugc.mp4")
+    # Try multiple tickets until one publishes (max 1 publish per run/day)
+    max_attempts = min(5, len(pending))
+    for i in range(max_attempts):
+        ticket_key = pending[i]
+        ticket = s3_get_json(ticket_key) or {}
 
-    roulette = ticket.get("roulette") or {}
-    mode = roulette.get("mode") or "voice_music"
-    voice = roulette.get("voice")
-    voice_instr = roulette.get("voice_instructions") or ""
-    music_slug = roulette.get("music_ncs_slug")
+        src_key = (((ticket.get("source") or {}).get("inbox_key")) or "").strip()
+        filename = ((ticket.get("source") or {}).get("filename") or "ugc.mp4")
+        if not src_key:
+            err = "Ticket sin source.inbox_key (src_key vacío)"
+            print("[UGC] Ticket inválido:", ticket_key, "|", err)
+            try:
+                mark_ticket_move(ticket_key, UGC_QUEUE_FAILED, {"status": "failed", "error": err})
+            except Exception as ee:
+                print("[UGC] Además falló mover ticket inválido a failed:", str(ee))
+            continue
 
-    caption = ((ticket.get("ai") or {}).get("caption") or "").strip()
-    narration = ((ticket.get("ai") or {}).get("narration") or "").strip()
+        roulette = ticket.get("roulette") or {}
+        mode = roulette.get("mode") or "voice_music"
+        voice = roulette.get("voice")
+        voice_instr = roulette.get("voice_instructions") or ""
+        music_slug = roulette.get("music_ncs_slug")
 
-    print(f"[UGC] Publicando 1 ticket: {ticket_key}")
-    print(f"[UGC] Mode: {mode} | voice={voice} | music_slug={music_slug}")
+        caption = ((ticket.get("ai") or {}).get("caption") or "").strip()
+        narration = ((ticket.get("ai") or {}).get("narration") or "").strip()
 
-    try:
-        # Pull video bytes
-        video_bytes = s3_get_bytes(src_key)
-        with tempfile.TemporaryDirectory() as td:
-            in_mp4 = os.path.join(td, "in.mp4")
-            with open(in_mp4, "wb") as f:
-                f.write(video_bytes)
+        print(f"[UGC] Intento {i+1}/{max_attempts} | Ticket: {ticket_key}")
+        print(f"[UGC] Mode: {mode} | voice={voice} | music_slug={music_slug}")
 
-            dur = ffprobe_duration_seconds(in_mp4)
-            if dur <= 0:
-                dur = float(UGC_MIN_SECONDS)
-
-            target = int(min(max(dur, float(UGC_MIN_SECONDS)), float(UGC_CAP_SECONDS)))
-
-            # Optional music
-            music_path = None
-            music_credit = ""
-            if mode in ("music_only", "voice_music") and music_slug:
-                got = try_download_ncs_mp3(music_slug)
-                if got:
-                    music_bytes, music_credit = got
-                    music_path = os.path.join(td, "music.mp3")
-                    with open(music_path, "wb") as f:
-                        f.write(music_bytes)
-                else:
-                    print("[UGC] Música NCS no disponible (best-effort). Sigo sin música.")
-
-            # Optional voice
-            voice_path = None
-            if mode in ("voice_only", "voice_music") and narration and voice:
-                try:
-                    tts_bytes = openai_tts_mp3(narration, voice=voice, instructions=voice_instr)
-                    voice_path = os.path.join(td, "voice.mp3")
-                    with open(voice_path, "wb") as f:
-                        f.write(tts_bytes)
-                except Exception as e:
-                    print("[UGC] TTS falló (no rompe). Sigo sin voz. Error:", str(e))
-                    voice_path = None
-
-            out_mp4 = os.path.join(td, "reel.mp4")
-            make_reel_video(
-                in_mp4=in_mp4,
-                out_mp4=out_mp4,
-                target_seconds=target,
-                music_mp3=music_path if mode in ("music_only", "voice_music") else None,
-                voice_mp3=voice_path if mode in ("voice_only", "voice_music") else None,
-            )
-
-            # Upload reel mp4 to R2 public outputs
-            out_bytes = open(out_mp4, "rb").read()
-            reel_key = f"{UGC_OUTPUT_REELS_PREFIX}{today_key_local()}__{short_hash(src_key + iso_now())}__{filename}"
-            s3_put_bytes(reel_key, out_bytes, "video/mp4")
-            video_url = r2_public_url(reel_key)
-            print("[UGC] REEL subido a R2:", video_url)
-
-            # Add best-effort credit line if we used music
-            final_caption = caption
-            if music_credit:
-                final_caption = (final_caption + "\n\n" + music_credit).strip()
-
-            # Publish IG reel
-            res = ig_publish_reel(video_url=video_url, caption=final_caption)
-            print("[UGC] IG PUBLISH OK:", res)
-
-            # Move ticket to published
-            published_ticket_key = mark_ticket_move(
-                ticket_key,
-                UGC_QUEUE_PUBLISHED,
-                {
-                    "status": "published",
-                    "publish": {"ig": res, "video_url": video_url, "published_at": iso_now()},
-                    "render": {"reel_key": reel_key, "target_seconds": target},
-                },
-            )
-
-            # Move original out of inbox -> processed (keep a copy in library/raw too)
-            # 1) copy to library
-            lib_key = f"{UGC_LIBRARY_PREFIX}{filename}"
-            s3_copy_delete(src_key, lib_key)  # move inbox->library/raw
-            # 2) copy to processed for simple browsing
-            proc_key = f"{UGC_PROCESSED_PREFIX}{filename}"
-            s3_copy_delete(lib_key, proc_key)  # move library/raw->processed
-            # (net result: in processed; library/raw stays empty; if you prefer library keep, remove this second move)
-            # If you want to keep in library, comment out the second move.
-
-            print("[UGC] Original movido a processed:", proc_key)
-
-            # daily counter
-            daily_inc(st, day)
-            save_state(st)
-
-            return 1
-
-    except Exception as e:
-        print("[UGC] FALLÓ publicar ticket:", str(e))
         try:
-            failed_key = mark_ticket_move(
-                ticket_key,
-                UGC_QUEUE_FAILED,
-                {"status": "failed", "error": str(e)},
-            )
-            print("[UGC] Ticket movido a failed:", failed_key)
-        except Exception as ee:
-            print("[UGC] Además falló mover ticket a failed:", str(ee))
-        return 0
+            video_bytes = s3_get_bytes(src_key)
+            with tempfile.TemporaryDirectory() as td:
+                in_mp4 = os.path.join(td, "in.mp4")
+                with open(in_mp4, "wb") as f:
+                    f.write(video_bytes)
+
+                dur = ffprobe_duration_seconds(in_mp4)
+                if dur <= 0:
+                    dur = float(UGC_MIN_SECONDS)
+
+                target = int(min(max(dur, float(UGC_MIN_SECONDS)), float(UGC_CAP_SECONDS)))
+
+                # Optional music
+                music_path = None
+                music_credit = ""
+                if mode in ("music_only", "voice_music") and music_slug:
+                    got = try_download_ncs_mp3(music_slug)
+                    if got:
+                        music_bytes, music_credit = got
+                        music_path = os.path.join(td, "music.mp3")
+                        with open(music_path, "wb") as f:
+                            f.write(music_bytes)
+                    else:
+                        print("[UGC] Música NCS no disponible (best-effort). Sigo sin música.")
+
+                # Optional voice
+                voice_path = None
+                if mode in ("voice_only", "voice_music") and narration and voice:
+                    try:
+                        tts_bytes = openai_tts_mp3(narration, voice=voice, instructions=voice_instr)
+                        voice_path = os.path.join(td, "voice.mp3")
+                        with open(voice_path, "wb") as f:
+                            f.write(tts_bytes)
+                    except Exception as e:
+                        print("[UGC] TTS falló (no rompe). Sigo sin voz. Error:", str(e))
+                        voice_path = None
+
+                out_mp4 = os.path.join(td, "reel.mp4")
+                make_reel_video(
+                    in_mp4=in_mp4,
+                    out_mp4=out_mp4,
+                    target_seconds=target,
+                    music_mp3=music_path if mode in ("music_only", "voice_music") else None,
+                    voice_mp3=voice_path if mode in ("voice_only", "voice_music") else None,
+                )
+
+                out_bytes = open(out_mp4, "rb").read()
+                reel_key = f"{UGC_OUTPUT_REELS_PREFIX}{today_key_local()}__{short_hash(src_key + iso_now())}__{filename}"
+                s3_put_bytes(reel_key, out_bytes, "video/mp4")
+                video_url = r2_public_url(reel_key)
+                print("[UGC] REEL subido a R2:", video_url)
+
+                final_caption = caption
+                if music_credit:
+                    final_caption = (final_caption + "\n\n" + music_credit).strip()
+
+                res = ig_publish_reel(video_url=video_url, caption=final_caption)
+                print("[UGC] IG PUBLISH OK:", res)
+
+                # Move ticket to published
+                mark_ticket_move(
+                    ticket_key,
+                    UGC_QUEUE_PUBLISHED,
+                    {
+                        "status": "published",
+                        "publish": {"ig": res, "video_url": video_url, "published_at": iso_now()},
+                        "render": {"reel_key": reel_key, "target_seconds": target},
+                    },
+                )
+
+                # Move original out of inbox -> library/raw (master) and COPY to processed
+                lib_key = f"{UGC_LIBRARY_PREFIX}{filename}"
+                s3_copy_delete(src_key, lib_key)
+
+                proc_key = f"{UGC_PROCESSED_PREFIX}{filename}"
+                r2_client().copy_object(
+                    Bucket=BUCKET_NAME,
+                    CopySource={"Bucket": BUCKET_NAME, "Key": lib_key},
+                    Key=proc_key,
+                )
+                print("[UGC] Original guardado en library/raw y copiado a processed:", proc_key)
+
+                daily_inc(st, day)
+                save_state(st)
+                return 1
+
+        except Exception as e:
+            err = str(e)
+            print("[UGC] FALLÓ este ticket:", ticket_key, "| Error:", err)
+
+            # Move ticket to failed
+            try:
+                mark_ticket_move(ticket_key, UGC_QUEUE_FAILED, {"status": "failed", "error": err})
+                print("[UGC] Ticket movido a failed.")
+            except Exception as ee:
+                print("[UGC] Además falló mover ticket a failed:", str(ee))
+
+            # Best-effort: move original video from inbox -> ugc/failed/
+            try:
+                if src_key.startswith(UGC_INBOX_PREFIX) and s3_exists(src_key):
+                    fail_name = f"{today_key_local()}__{short_hash(src_key + iso_now())}__{filename}"
+                    failed_video_key = f"{UGC_FAILED_PREFIX}{fail_name}"
+                    s3_copy_delete(src_key, failed_video_key)
+                    print("[UGC] Video original movido a failed:", failed_video_key)
+                else:
+                    print("[UGC] Video original no movido (no está en inbox o no existe):", src_key)
+            except Exception as ee:
+                print("[UGC] Falló mover video original a failed (no rompe):", str(ee))
+
+            # Continue to next ticket
+            continue
+
+    print("[UGC] No se pudo publicar ningún ticket en este run (todos fallaron o eran inválidos).")
+    return 0
 
 
 # -------------------------
@@ -813,7 +817,6 @@ def run_mode_b() -> None:
     published = publish_one_from_queue_if_allowed(st)
     print(f"[UGC] Publicados en este run: {published}")
 
-    # Summary
     day = today_key_local()
     print(f"[UGC] Hoy llevas: {daily_count(st, day)}/{MAX_POSTS_PER_DAY} publicados (TZ America/Bogota)")
     print("[UGC] Listo.")

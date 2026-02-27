@@ -1,0 +1,60 @@
+name: Robot Editorial (Modo A) - Auto
+
+on:
+  schedule:
+    - cron: "0 14 * * *" # 9am Colombia
+    - cron: "0 20 * * *" # 3pm Colombia
+    - cron: "0 2 * * *"  # 9pm Colombia
+  workflow_dispatch:
+
+jobs:
+  run-editorial:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+
+      - name: Run robot (MODE A)
+        env:
+          RUN_MODE: "A"
+
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+          THREADS_USER_ACCESS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+
+          ENABLE_IG_PUBLISH: "true"
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          GRAPH_VERSION: "v25.0"
+
+          ENABLE_REELS: "true"
+          REEL_SECONDS: "15"
+          REEL_W: "1080"
+          REEL_H: "1920"
+          ASSET_BG: "assets/bg.jpg"
+          ASSET_LOGO: "assets/logo.png"
+        run: |
+          python -u main.py

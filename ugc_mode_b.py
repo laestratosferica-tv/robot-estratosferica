@@ -7,7 +7,6 @@ import random
 import hashlib
 import tempfile
 import subprocess
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -67,9 +66,7 @@ R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
 
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL") or "").rstrip("/")
-if not R2_PUBLIC_BASE_URL:
-    # allow main.py fallback; but UGC needs it for IG video_url
-    pass
+# (UGC needs it for IG video_url; if empty it will error when building public URL)
 
 # Instagram
 ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", True)
@@ -96,21 +93,38 @@ UGC_OUTPUT_AUDIO_PREFIX = (env_nonempty("UGC_OUTPUT_AUDIO_PREFIX", "ugc/outputs/
 UGC_STATE_KEY = (env_nonempty("UGC_STATE_KEY", "ugc/state/state.json") or "ugc/state/state.json").strip().lstrip("/")
 
 # Publish cadence
-MAX_POSTS_PER_DAY = env_int("MAX_POSTS_PER_DAY", 1)  # you chose 1/day
+MAX_POSTS_PER_DAY = env_int("MAX_POSTS_PER_DAY", 1)  # 1/day
 LOCAL_TZ = ZoneInfo("America/Bogota")
 
 # Video rules
 REEL_W = env_int("REEL_W", 1080)
 REEL_H = env_int("REEL_H", 1920)
-UGC_CAP_SECONDS = env_int("UGC_CAP_SECONDS", 30)    # max duration for IG
-UGC_MIN_SECONDS = env_int("UGC_MIN_SECONDS", 5)     # min reel duration
+UGC_CAP_SECONDS = env_int("UGC_CAP_SECONDS", 30)
+UGC_MIN_SECONDS = env_int("UGC_MIN_SECONDS", 5)
 UGC_FFMPEG_TIMEOUT = env_int("UGC_FFMPEG_TIMEOUT", 900)
 
-# Voice & music roulette
+# Voice & music roulette (normal modes)
 ROULETTE_TEXT_PCT = env_int("ROULETTE_TEXT_PCT", 20)
 ROULETTE_MUSIC_PCT = env_int("ROULETTE_MUSIC_PCT", 25)
 ROULETTE_VOICE_PCT = env_int("ROULETTE_VOICE_PCT", 25)
 ROULETTE_VOICE_MUSIC_PCT = env_int("ROULETTE_VOICE_MUSIC_PCT", 30)
+
+# Rare events
+RARE_EVENT_PCT = env_int("RARE_EVENT_PCT", 5)  # 5% default
+RARE_EVENT_LABEL = env_nonempty("RARE_EVENT_LABEL", "🛸 MODO RARO") or "🛸 MODO RARO"
+RARE_EVENT_VOICE = env_nonempty("RARE_EVENT_VOICE", "echo") or "echo"
+RARE_EVENT_VOICE_INSTR = env_nonempty(
+    "RARE_EVENT_VOICE_INSTR",
+    "Voz estilo alien/robot, metálica, misteriosa, con hype gamer. Clara y entendible."
+) or "Voz estilo alien/robot, metálica, misteriosa, con hype gamer. Clara y entendible."
+
+# Pool especial NCS para rare event
+NCS_RARE_SLUGS = [
+    "mortals",
+    "heroes-tonight",
+    "invisible",
+    "symbolism",
+]
 
 # Audio mix volumes
 MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.12)
@@ -120,9 +134,9 @@ ORIG_VOLUME = env_float("ORIG_VOLUME", 0.18)  # keep a little of original clip a
 # OpenAI (text + TTS)
 OPENAI_API_KEY = env_nonempty("OPENAI_API_KEY")
 OPENAI_MODEL_TEXT = env_nonempty("OPENAI_MODEL", "gpt-4.1-mini")
-OPENAI_TTS_MODEL = env_nonempty("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")  # best-effort; can change later
+OPENAI_TTS_MODEL = env_nonempty("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
 
-# NCS (NoCopyrightSounds) – best-effort downloader
+# NCS slugs (normal pool)
 NCS_TRACK_SLUGS = [
     "montagemindia",
     "favela",
@@ -134,7 +148,7 @@ NCS_TRACK_SLUGS = [
     "symbolism",
 ]
 
-# Voice personas (IA “actúa”)
+# Voice personas (IA “actúa”) (normal pool)
 VOICE_PRESETS = [
     {"voice": "nova", "instr": "Voz femenina LATAM, caster esports, rápida, hype, divertida."},
     {"voice": "onyx", "instr": "Voz masculina LATAM, narrador épico tipo tráiler, intensa y dramática."},
@@ -142,6 +156,7 @@ VOICE_PRESETS = [
     {"voice": "alloy", "instr": "Voz neutra, análisis competitivo, segura y clara."},
     {"voice": "echo", "instr": "Voz estilo 'alien/robot', metálica, misteriosa, pero entendible."},
 ]
+
 
 # -------------------------
 # R2 client helpers
@@ -215,6 +230,7 @@ def r2_public_url(key: str) -> str:
         raise RuntimeError("R2_PUBLIC_BASE_URL inválido o vacío (debe empezar por https://)")
     return f"{base}/{key}"
 
+
 # -------------------------
 # Instagram Graph API
 # -------------------------
@@ -286,7 +302,7 @@ def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
 
 
 # -------------------------
-# OpenAI (text) + TTS via HTTP (no SDK assumptions)
+# OpenAI (text) + TTS via HTTP
 # -------------------------
 
 def openai_text(prompt: str) -> str:
@@ -298,7 +314,6 @@ def openai_text(prompt: str) -> str:
     payload = {"model": model, "input": prompt}
     r = requests.post(url, headers=headers, json=payload, timeout=60)
     if r.status_code >= 400:
-        # fallback to chat.completions
         url2 = "https://api.openai.com/v1/chat/completions"
         payload2 = {"model": model, "messages": [{"role": "user", "content": prompt}]}
         r2 = requests.post(url2, headers=headers, json=payload2, timeout=60)
@@ -412,7 +427,7 @@ def make_reel_video(
             base_audio = "[a0]"
 
         idx = 1
-        for name, rel in audio_inputs:
+        for name, _rel in audio_inputs:
             label = "m" if name == "music" else "vo"
             vol = MUSIC_VOLUME if name == "music" else VOICE_VOLUME
             parts.append(f"[{idx}:a]volume={vol}[a{label}]")
@@ -462,6 +477,12 @@ def make_reel_video(
 NCS_MP3_RE = re.compile(r'https?://[^\s"\']+\.mp3', re.IGNORECASE)
 
 def try_download_ncs_mp3(slug: str) -> Optional[Tuple[bytes, str]]:
+    """
+    Best-effort:
+    - Fetch ncs.io/<slug>
+    - Find any .mp3 URL in HTML and download it.
+    If fails: return None.
+    """
     try:
         url = f"https://ncs.io/{slug}"
         r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
@@ -482,17 +503,35 @@ def try_download_ncs_mp3(slug: str) -> Optional[Tuple[bytes, str]]:
 
 
 # -------------------------
-# Roulette + caption + narration
+# Roulette (deterministic) + caption + narration
 # -------------------------
 
-def roulette_pick_mode() -> str:
+def _stable_seed_from_key(key: str) -> int:
+    h = hashlib.sha1((key or "").encode("utf-8")).hexdigest()[:8]
+    return int(h, 16)
+
+def roulette_pick_mode_rng(rng: random.Random) -> str:
+    # Rare event first
+    if RARE_EVENT_PCT > 0:
+        roll = rng.randint(1, 100)
+        if roll <= RARE_EVENT_PCT:
+            return "rare_event"
+
     modes = (
-        ["text_only"] * ROULETTE_TEXT_PCT +
-        ["music_only"] * ROULETTE_MUSIC_PCT +
-        ["voice_only"] * ROULETTE_VOICE_PCT +
-        ["voice_music"] * ROULETTE_VOICE_MUSIC_PCT
+        ["text_only"] * max(0, ROULETTE_TEXT_PCT) +
+        ["music_only"] * max(0, ROULETTE_MUSIC_PCT) +
+        ["voice_only"] * max(0, ROULETTE_VOICE_PCT) +
+        ["voice_music"] * max(0, ROULETTE_VOICE_MUSIC_PCT)
     )
-    return random.choice(modes) if modes else "voice_music"
+    return rng.choice(modes) if modes else "voice_music"
+
+def choose_voice_preset_rng(rng: random.Random) -> Dict[str, str]:
+    return rng.choice(VOICE_PRESETS)
+
+def choose_ncs_slug_rng(rng: random.Random, *, rare: bool = False) -> str:
+    if rare and NCS_RARE_SLUGS:
+        return rng.choice(NCS_RARE_SLUGS)
+    return rng.choice(NCS_TRACK_SLUGS)
 
 def build_caption_and_narration(filename: str, mode: str) -> Tuple[str, str]:
     prompt = f"""
@@ -507,6 +546,7 @@ Entrega 2 cosas:
 
 Modo elegido: {mode}
 Si modo = text_only o music_only, la narración puede ser vacía o mínima.
+Si modo = rare_event, la narración debe ser MUY corta pero MUY hype (y suena a alien/robot).
 
 Formato EXACTO:
 CAPTION:
@@ -531,12 +571,6 @@ NARRATION:
     caption = caption[:2200].strip()
     narration = narration[:220].strip()
     return caption, narration
-
-def choose_voice_preset() -> Dict[str, str]:
-    return random.choice(VOICE_PRESETS)
-
-def choose_ncs_slug() -> str:
-    return random.choice(NCS_TRACK_SLUGS)
 
 
 # -------------------------
@@ -574,20 +608,36 @@ def enqueue_new_inbox_videos(st: Dict[str, Any]) -> int:
             continue
 
         filename = k.split("/")[-1]
-        mode = roulette_pick_mode()
 
+        # ✅ RNG estable por video (misma personalidad siempre)
+        rng = random.Random(_stable_seed_from_key(k))
+
+        mode = roulette_pick_mode_rng(rng)
+        is_rare = (mode == "rare_event")
+
+        # Decide voice/music now and freeze it in ticket
         voice = None
         voice_instr = None
-        if mode in ("voice_only", "voice_music"):
-            vp = choose_voice_preset()
+
+        if is_rare:
+            voice = RARE_EVENT_VOICE
+            voice_instr = RARE_EVENT_VOICE_INSTR
+        elif mode in ("voice_only", "voice_music"):
+            vp = choose_voice_preset_rng(rng)
             voice = vp["voice"]
             voice_instr = vp["instr"]
 
         music_slug = None
-        if mode in ("music_only", "voice_music"):
-            music_slug = choose_ncs_slug()
+        if is_rare:
+            music_slug = choose_ncs_slug_rng(rng, rare=True)
+        elif mode in ("music_only", "voice_music"):
+            music_slug = choose_ncs_slug_rng(rng, rare=False)
 
         caption, narration = build_caption_and_narration(filename, mode)
+
+        if is_rare:
+            stamp = f"\n\n{RARE_EVENT_LABEL} (salió en ruleta)"
+            caption = (caption + stamp)[:2200].strip()
 
         ticket = {
             "created_at": iso_now(),
@@ -597,6 +647,7 @@ def enqueue_new_inbox_videos(st: Dict[str, Any]) -> int:
                 "voice": voice,
                 "voice_instructions": voice_instr,
                 "music_ncs_slug": music_slug,
+                "is_rare_event": is_rare,
             },
             "ai": {
                 "caption": caption,
@@ -700,7 +751,7 @@ def publish_one_from_queue_if_allowed(st: Dict[str, Any]) -> int:
                 # Optional music
                 music_path = None
                 music_credit = ""
-                if mode in ("music_only", "voice_music") and music_slug:
+                if mode in ("music_only", "voice_music", "rare_event") and music_slug:
                     got = try_download_ncs_mp3(music_slug)
                     if got:
                         music_bytes, music_credit = got
@@ -712,7 +763,7 @@ def publish_one_from_queue_if_allowed(st: Dict[str, Any]) -> int:
 
                 # Optional voice
                 voice_path = None
-                if mode in ("voice_only", "voice_music") and narration and voice:
+                if mode in ("voice_only", "voice_music", "rare_event") and narration and voice:
                     try:
                         tts_bytes = openai_tts_mp3(narration, voice=voice, instructions=voice_instr)
                         voice_path = os.path.join(td, "voice.mp3")
@@ -727,8 +778,8 @@ def publish_one_from_queue_if_allowed(st: Dict[str, Any]) -> int:
                     in_mp4=in_mp4,
                     out_mp4=out_mp4,
                     target_seconds=target,
-                    music_mp3=music_path if mode in ("music_only", "voice_music") else None,
-                    voice_mp3=voice_path if mode in ("voice_only", "voice_music") else None,
+                    music_mp3=music_path if mode in ("music_only", "voice_music", "rare_event") else None,
+                    voice_mp3=voice_path if mode in ("voice_only", "voice_music", "rare_event") else None,
                 )
 
                 out_bytes = open(out_mp4, "rb").read()
@@ -794,7 +845,6 @@ def publish_one_from_queue_if_allowed(st: Dict[str, Any]) -> int:
             except Exception as ee:
                 print("[UGC] Falló mover video original a failed (no rompe):", str(ee))
 
-            # Continue to next ticket
             continue
 
     print("[UGC] No se pudo publicar ningún ticket en este run (todos fallaron o eran inválidos).")

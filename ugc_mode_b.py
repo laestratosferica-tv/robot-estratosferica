@@ -66,7 +66,6 @@ R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
 
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL") or "").rstrip("/")
-# (UGC needs it for IG video_url; if empty it will error when building public URL)
 
 # Instagram
 ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", True)
@@ -74,6 +73,9 @@ IG_ACCESS_TOKEN = env_nonempty("IG_ACCESS_TOKEN")
 IG_USER_ID = env_nonempty("IG_USER_ID")
 GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
+
+# ✅ DRY RUN: simula todo, NO publica en IG
+UGC_DRY_RUN = env_bool("UGC_DRY_RUN", False)
 
 HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
 
@@ -93,7 +95,7 @@ UGC_OUTPUT_AUDIO_PREFIX = (env_nonempty("UGC_OUTPUT_AUDIO_PREFIX", "ugc/outputs/
 UGC_STATE_KEY = (env_nonempty("UGC_STATE_KEY", "ugc/state/state.json") or "ugc/state/state.json").strip().lstrip("/")
 
 # Publish cadence
-MAX_POSTS_PER_DAY = env_int("MAX_POSTS_PER_DAY", 1)  # 1/day
+MAX_POSTS_PER_DAY = env_int("MAX_POSTS_PER_DAY", 1)
 LOCAL_TZ = ZoneInfo("America/Bogota")
 
 # Video rules
@@ -110,7 +112,7 @@ ROULETTE_VOICE_PCT = env_int("ROULETTE_VOICE_PCT", 25)
 ROULETTE_VOICE_MUSIC_PCT = env_int("ROULETTE_VOICE_MUSIC_PCT", 30)
 
 # Rare events
-RARE_EVENT_PCT = env_int("RARE_EVENT_PCT", 5)  # 5% default
+RARE_EVENT_PCT = env_int("RARE_EVENT_PCT", 5)
 RARE_EVENT_LABEL = env_nonempty("RARE_EVENT_LABEL", "🛸 MODO RARO") or "🛸 MODO RARO"
 RARE_EVENT_VOICE = env_nonempty("RARE_EVENT_VOICE", "echo") or "echo"
 RARE_EVENT_VOICE_INSTR = env_nonempty(
@@ -118,7 +120,6 @@ RARE_EVENT_VOICE_INSTR = env_nonempty(
     "Voz estilo alien/robot, metálica, misteriosa, con hype gamer. Clara y entendible."
 ) or "Voz estilo alien/robot, metálica, misteriosa, con hype gamer. Clara y entendible."
 
-# Pool especial NCS para rare event
 NCS_RARE_SLUGS = [
     "mortals",
     "heroes-tonight",
@@ -129,9 +130,9 @@ NCS_RARE_SLUGS = [
 # Audio mix volumes
 MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.12)
 VOICE_VOLUME = env_float("VOICE_VOLUME", 1.0)
-ORIG_VOLUME = env_float("ORIG_VOLUME", 0.18)  # keep a little of original clip audio if present
+ORIG_VOLUME = env_float("ORIG_VOLUME", 0.18)
 
-# OpenAI (text + TTS)
+# OpenAI
 OPENAI_API_KEY = env_nonempty("OPENAI_API_KEY")
 OPENAI_MODEL_TEXT = env_nonempty("OPENAI_MODEL", "gpt-4.1-mini")
 OPENAI_TTS_MODEL = env_nonempty("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
@@ -148,7 +149,6 @@ NCS_TRACK_SLUGS = [
     "symbolism",
 ]
 
-# Voice personas (IA “actúa”) (normal pool)
 VOICE_PRESETS = [
     {"voice": "nova", "instr": "Voz femenina LATAM, caster esports, rápida, hype, divertida."},
     {"voice": "onyx", "instr": "Voz masculina LATAM, narrador épico tipo tráiler, intensa y dramática."},
@@ -156,7 +156,6 @@ VOICE_PRESETS = [
     {"voice": "alloy", "instr": "Voz neutra, análisis competitivo, segura y clara."},
     {"voice": "echo", "instr": "Voz estilo 'alien/robot', metálica, misteriosa, pero entendible."},
 ]
-
 
 # -------------------------
 # R2 client helpers
@@ -279,8 +278,16 @@ def ig_wait_container(creation_id: str, timeout_sec: int = 420) -> None:
     raise TimeoutError(f"IG container not ready after {timeout_sec}s")
 
 def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
+    # ✅ DRY RUN: no publica, solo imprime
+    if UGC_DRY_RUN:
+        print("[UGC][DRY_RUN] NO publico en IG.")
+        print("[UGC][DRY_RUN] video_url:", video_url)
+        print("[UGC][DRY_RUN] caption preview:", (caption or "")[:300])
+        return {"dry_run": True, "video_url": video_url, "caption_preview": (caption or "")[:300]}
+
     if not (IG_USER_ID and IG_ACCESS_TOKEN):
         raise RuntimeError("Faltan IG_USER_ID o IG_ACCESS_TOKEN")
+
     j = ig_api_post(
         f"{IG_USER_ID}/media",
         {
@@ -412,12 +419,10 @@ def make_reel_video(
         audio_inputs.append(("voice", len(audio_inputs) + 1))
 
     filter_complex_parts = [f"[0:v]{vf}[vout]"]
-
     has_external = bool(audio_inputs)
 
     if has_external:
         has_audio = ffprobe_has_audio(in_mp4)
-
         parts = []
         if has_audio:
             parts.append(f"[0:a]volume={ORIG_VOLUME}[a0]")
@@ -477,12 +482,6 @@ def make_reel_video(
 NCS_MP3_RE = re.compile(r'https?://[^\s"\']+\.mp3', re.IGNORECASE)
 
 def try_download_ncs_mp3(slug: str) -> Optional[Tuple[bytes, str]]:
-    """
-    Best-effort:
-    - Fetch ncs.io/<slug>
-    - Find any .mp3 URL in HTML and download it.
-    If fails: return None.
-    """
     try:
         url = f"https://ncs.io/{slug}"
         r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
@@ -503,7 +502,7 @@ def try_download_ncs_mp3(slug: str) -> Optional[Tuple[bytes, str]]:
 
 
 # -------------------------
-# Roulette (deterministic) + caption + narration
+# Roulette deterministic + caption/narration
 # -------------------------
 
 def _stable_seed_from_key(key: str) -> int:
@@ -511,7 +510,6 @@ def _stable_seed_from_key(key: str) -> int:
     return int(h, 16)
 
 def roulette_pick_mode_rng(rng: random.Random) -> str:
-    # Rare event first
     if RARE_EVENT_PCT > 0:
         roll = rng.randint(1, 100)
         if roll <= RARE_EVENT_PCT:
@@ -546,7 +544,7 @@ Entrega 2 cosas:
 
 Modo elegido: {mode}
 Si modo = text_only o music_only, la narración puede ser vacía o mínima.
-Si modo = rare_event, la narración debe ser MUY corta pero MUY hype (y suena a alien/robot).
+Si modo = rare_event, la narración debe ser MUY corta pero MUY hype (suena a alien/robot).
 
 Formato EXACTO:
 CAPTION:
@@ -580,15 +578,14 @@ NARRATION:
 def load_state() -> Dict[str, Any]:
     st = s3_get_json(UGC_STATE_KEY) or {}
     st.setdefault("daily", {})
-    st.setdefault("enqueued", {})  # inbox_key -> ticket_key
+    st.setdefault("enqueued", {})
     return st
 
 def save_state(st: Dict[str, Any]) -> None:
     s3_put_json(UGC_STATE_KEY, st)
 
 def today_key_local() -> str:
-    now_local = datetime.now(LOCAL_TZ)
-    return now_local.strftime("%Y-%m-%d")
+    return datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
 
 def daily_count(st: Dict[str, Any], day_key: str) -> int:
     return int((st.get("daily", {}).get(day_key) or {}).get("published", 0))
@@ -608,17 +605,13 @@ def enqueue_new_inbox_videos(st: Dict[str, Any]) -> int:
             continue
 
         filename = k.split("/")[-1]
-
-        # ✅ RNG estable por video (misma personalidad siempre)
         rng = random.Random(_stable_seed_from_key(k))
 
         mode = roulette_pick_mode_rng(rng)
         is_rare = (mode == "rare_event")
 
-        # Decide voice/music now and freeze it in ticket
         voice = None
         voice_instr = None
-
         if is_rare:
             voice = RARE_EVENT_VOICE
             voice_instr = RARE_EVENT_VOICE_INSTR
@@ -687,11 +680,12 @@ def mark_ticket_move(ticket_key: str, dst_prefix: str, patch: Dict[str, Any]) ->
 # -------------------------
 
 def publish_one_from_queue_if_allowed(st: Dict[str, Any]) -> int:
-    if not ENABLE_IG_PUBLISH:
+    # ✅ En DRY RUN seguimos aunque ENABLE_IG_PUBLISH sea false; pero tú lo dejarás true.
+    if not ENABLE_IG_PUBLISH and not UGC_DRY_RUN:
         print("[UGC] ENABLE_IG_PUBLISH=false, no publico.")
         return 0
 
-    if not (IG_USER_ID and IG_ACCESS_TOKEN):
+    if not (IG_USER_ID and IG_ACCESS_TOKEN) and not UGC_DRY_RUN:
         print("[UGC] Faltan IG_USER_ID / IG_ACCESS_TOKEN, no publico.")
         return 0
 
@@ -706,7 +700,6 @@ def publish_one_from_queue_if_allowed(st: Dict[str, Any]) -> int:
         print("[UGC] No hay tickets en pending.")
         return 0
 
-    # Try multiple tickets until one publishes (max 1 publish per run/day)
     max_attempts = min(5, len(pending))
     for i in range(max_attempts):
         ticket_key = pending[i]
@@ -714,6 +707,7 @@ def publish_one_from_queue_if_allowed(st: Dict[str, Any]) -> int:
 
         src_key = (((ticket.get("source") or {}).get("inbox_key")) or "").strip()
         filename = ((ticket.get("source") or {}).get("filename") or "ugc.mp4")
+
         if not src_key:
             err = "Ticket sin source.inbox_key (src_key vacío)"
             print("[UGC] Ticket inválido:", ticket_key, "|", err)
@@ -792,16 +786,21 @@ def publish_one_from_queue_if_allowed(st: Dict[str, Any]) -> int:
                 if music_credit:
                     final_caption = (final_caption + "\n\n" + music_credit).strip()
 
+                # ✅ Aquí se simula (no publica) si UGC_DRY_RUN=true
                 res = ig_publish_reel(video_url=video_url, caption=final_caption)
-                print("[UGC] IG PUBLISH OK:", res)
 
-                # Move ticket to published
+                # Move ticket to published (sí, incluso en dry run, para simular el flujo)
                 mark_ticket_move(
                     ticket_key,
                     UGC_QUEUE_PUBLISHED,
                     {
                         "status": "published",
-                        "publish": {"ig": res, "video_url": video_url, "published_at": iso_now()},
+                        "publish": {
+                            "ig": res,
+                            "video_url": video_url,
+                            "published_at": iso_now(),
+                            "dry_run": bool(UGC_DRY_RUN),
+                        },
                         "render": {"reel_key": reel_key, "target_seconds": target},
                     },
                 )
@@ -826,14 +825,12 @@ def publish_one_from_queue_if_allowed(st: Dict[str, Any]) -> int:
             err = str(e)
             print("[UGC] FALLÓ este ticket:", ticket_key, "| Error:", err)
 
-            # Move ticket to failed
             try:
                 mark_ticket_move(ticket_key, UGC_QUEUE_FAILED, {"status": "failed", "error": err})
                 print("[UGC] Ticket movido a failed.")
             except Exception as ee:
                 print("[UGC] Además falló mover ticket a failed:", str(ee))
 
-            # Best-effort: move original video from inbox -> ugc/failed/
             try:
                 if src_key.startswith(UGC_INBOX_PREFIX) and s3_exists(src_key):
                     fail_name = f"{today_key_local()}__{short_hash(src_key + iso_now())}__{filename}"

@@ -1,89 +1,126 @@
 import os
-import io
 import json
+import io
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import boto3
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
+
 # =============================
 # ENV
 # =============================
-GDRIVE_FOLDER_ID = os.environ["GDRIVE_FOLDER_ID"]
-GDRIVE_DONE_FOLDER_ID = os.environ.get("GDRIVE_DONE_FOLDER_ID")
 
-BUCKET_NAME = os.environ["BUCKET_NAME"]
-R2_ENDPOINT_URL = os.environ["R2_ENDPOINT_URL"]
-AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
-AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
+BUCKET_NAME = os.getenv("BUCKET_NAME")
+R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL")
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 
-SERVICE_ACCOUNT_INFO = json.loads(os.environ["GDRIVE_SERVICE_ACCOUNT_JSON"])
+GDRIVE_SERVICE_ACCOUNT_JSON = os.getenv("GDRIVE_SERVICE_ACCOUNT_JSON")
+GDRIVE_FOLDER_ID = os.getenv("GDRIVE_FOLDER_ID")
+GDRIVE_DONE_FOLDER_ID = os.getenv("GDRIVE_DONE_FOLDER_ID")
 
-# =============================
-# Drive auth
-# =============================
-SCOPES = ["https://www.googleapis.com/auth/drive"]
+LOCAL_TZ = ZoneInfo("America/Bogota")
 
-credentials = service_account.Credentials.from_service_account_info(
-    SERVICE_ACCOUNT_INFO, scopes=SCOPES
-)
-
-drive_service = build("drive", "v3", credentials=credentials)
 
 # =============================
-# R2 client
+# R2 CLIENT
 # =============================
-s3 = boto3.client(
-    "s3",
-    endpoint_url=R2_ENDPOINT_URL,
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-)
+
+def r2_client():
+    return boto3.client(
+        "s3",
+        endpoint_url=R2_ENDPOINT_URL,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name="auto",
+    )
+
+
+def upload_to_r2(key: str, data: bytes):
+    s3 = r2_client()
+    s3.put_object(
+        Bucket=BUCKET_NAME,
+        Key=key,
+        Body=data,
+        ContentType="video/mp4",
+    )
+
 
 # =============================
-# List files
+# GOOGLE DRIVE CLIENT
 # =============================
-results = drive_service.files().list(
-    q=f"'{GDRIVE_FOLDER_ID}' in parents and trashed = false",
-    fields="files(id, name)",
-).execute()
 
-files = results.get("files", [])
+def get_drive_service():
+    creds_info = json.loads(GDRIVE_SERVICE_ACCOUNT_JSON)
+    creds = service_account.Credentials.from_service_account_info(
+        creds_info,
+        scopes=["https://www.googleapis.com/auth/drive"],
+    )
+    return build("drive", "v3", credentials=creds)
 
-if not files:
-    print("No hay archivos nuevos en Drive.")
-    exit(0)
 
-for file in files:
-    file_id = file["id"]
-    file_name = file["name"]
+# =============================
+# MAIN SYNC
+# =============================
 
-    print(f"Descargando: {file_name}")
+def run_drive_sync():
+    print("===== DRIVE → R2 SYNC =====")
 
-    request = drive_service.files().get_media(fileId=file_id)
-    fh = io.BytesIO()
-    downloader = MediaIoBaseDownload(fh, request)
+    service = get_drive_service()
 
-    done = False
-    while not done:
-        status, done = downloader.next_chunk()
+    query = f"'{GDRIVE_FOLDER_ID}' in parents and mimeType='video/mp4' and trashed=false"
 
-    fh.seek(0)
+    results = service.files().list(
+        q=query,
+        fields="files(id, name)",
+    ).execute()
 
-    r2_key = f"ugc/inbox/{file_name}"
+    files = results.get("files", [])
 
-    print(f"Subiendo a R2: {r2_key}")
+    if not files:
+        print("No hay videos nuevos en Drive.")
+        return
 
-    s3.upload_fileobj(fh, BUCKET_NAME, r2_key)
+    print(f"Encontrados {len(files)} videos.")
 
-    if GDRIVE_DONE_FOLDER_ID:
-        print("Moviendo archivo a carpeta DONE")
+    for file in files:
+        file_id = file["id"]
+        filename = file["name"]
 
-        drive_service.files().update(
+        print(f"Descargando: {filename}")
+
+        request = service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+
+        fh.seek(0)
+        video_bytes = fh.read()
+
+        today = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
+        r2_key = f"ugc/inbox/{today}__{filename}"
+
+        print(f"Subiendo a R2: {r2_key}")
+        upload_to_r2(r2_key, video_bytes)
+
+        # mover a DONE
+        service.files().update(
             fileId=file_id,
             addParents=GDRIVE_DONE_FOLDER_ID,
             removeParents=GDRIVE_FOLDER_ID,
-            fields="id, parents",
         ).execute()
 
-print("Sync completado.")
+        print(f"Movido a UGC_DONE: {filename}")
+
+    print("SYNC terminado.")
+
+
+if __name__ == "__main__":
+    run_drive_sync()

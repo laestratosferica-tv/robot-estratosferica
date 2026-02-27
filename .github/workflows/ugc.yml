@@ -3,14 +3,17 @@ name: Robot UGC Runner (Modo B)
 on:
   workflow_dispatch:
   schedule:
-    # Corre 3 veces al día, pero publicará máximo 1/día por tu state.json
-    - cron: "0 14 * * *"  # 9am Colombia
-    - cron: "0 20 * * *"  # 3pm Colombia
-    - cron: "0 2 * * *"   # 9pm Colombia (02:00 UTC)
+    # 9:00 AM Colombia (UTC-5 → 14:00 UTC)
+    - cron: "0 14 * * *"
+    # 3:00 PM Colombia (UTC-5 → 20:00 UTC)
+    - cron: "0 20 * * *"
+    # 9:00 PM Colombia (UTC-5 → 02:00 UTC)
+    - cron: "0 2 * * *"
 
 jobs:
   run-ugc:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,6 +36,7 @@ jobs:
 
       - name: Run robot (Modo B)
         env:
+          # ✅ MODO B
           RUN_MODE: "B"
 
           # 🔐 R2
@@ -46,13 +50,16 @@ jobs:
           # 🤖 OpenAI
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-          # 📸 Instagram
+          # 📸 Instagram Publishing
           ENABLE_IG_PUBLISH: "true"
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           GRAPH_VERSION: "v25.0"
 
-          # 🧠 Cadencia
+          # 🎬 REELS (si tu modo B los usa)
+          ENABLE_REELS: "true"
+
+          # ⚙️ Control diario (si tu modo B lo usa)
           MAX_POSTS_PER_DAY: "1"
 
         run: |

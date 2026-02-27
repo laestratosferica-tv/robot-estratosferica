@@ -3,26 +3,23 @@ import os
 import re
 import json
 import time
+import random
+import hashlib
 import tempfile
 import subprocess
 from dataclasses import dataclass
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import boto3
 import requests
 
-# OpenAI
-try:
-    from openai import OpenAI
-except Exception:
-    OpenAI = None
-
-
 # -------------------------
-# Env helpers
+# Helpers env
 # -------------------------
 
-def env_nonempty(name: str, default: str = "") -> str:
+def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
     v = os.getenv(name)
     if v is None:
         return default
@@ -44,410 +41,779 @@ def env_int(name: str, default: int) -> int:
     except Exception:
         return default
 
-def now_ts() -> str:
-    return time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+def env_float(name: str, default: float) -> float:
+    v = os.getenv(name)
+    if not v or not v.strip():
+        return default
+    try:
+        return float(v.strip())
+    except Exception:
+        return default
+
+def iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+def short_hash(s: str) -> str:
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()[:12]
 
 
 # -------------------------
-# Config
+# Core env (R2/IG/OpenAI)
 # -------------------------
 
-@dataclass
-class UGCConfig:
-    # R2
-    r2_endpoint_url: str
-    aws_access_key_id: str
-    aws_secret_access_key: str
-    bucket_name: str
-    r2_public_base_url: str
+AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
+R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
+BUCKET_NAME = env_nonempty("BUCKET_NAME")
 
-    # OpenAI
-    openai_api_key: str
-    openai_model: str
+R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL") or "").rstrip("/")
+if not R2_PUBLIC_BASE_URL:
+    # allow main.py fallback; but UGC needs it for IG video_url
+    pass
 
-    # Instagram
-    enable_ig_publish: bool
-    ig_user_id: str
-    ig_access_token: str
-    graph_version: str  # "25.0"
+# Instagram
+ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", True)
+IG_ACCESS_TOKEN = env_nonempty("IG_ACCESS_TOKEN")
+IG_USER_ID = env_nonempty("IG_USER_ID")
+GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
+GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
 
-    # Prefixes
-    inbox_prefix: str
-    processed_prefix: str
-    failed_prefix: str
-    output_reels_prefix: str
-    state_key: str
+HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
 
-    # Video behavior
-    cap_seconds: int          # max duración si el video es muy largo
-    default_min_seconds: int  # si video dura 2s, igual lo dejamos 2s (no lo alargamos)
-    ffmpeg_timeout_sec: int
+# UGC folders in R2
+UGC_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox/") or "ugc/inbox/").strip().lstrip("/")
+UGC_LIBRARY_PREFIX = (env_nonempty("UGC_LIBRARY_PREFIX", "ugc/library/raw/") or "ugc/library/raw/").strip().lstrip("/")
+UGC_PROCESSED_PREFIX = (env_nonempty("UGC_PROCESSED_PREFIX", "ugc/processed/") or "ugc/processed/").strip().lstrip("/")
+UGC_FAILED_PREFIX = (env_nonempty("UGC_FAILED_PREFIX", "ugc/failed/") or "ugc/failed/").strip().lstrip("/")
 
+UGC_QUEUE_PENDING = (env_nonempty("UGC_QUEUE_PENDING", "ugc/queue/pending/") or "ugc/queue/pending/").strip().lstrip("/")
+UGC_QUEUE_PUBLISHED = (env_nonempty("UGC_QUEUE_PUBLISHED", "ugc/queue/published/") or "ugc/queue/published/").strip().lstrip("/")
+UGC_QUEUE_FAILED = (env_nonempty("UGC_QUEUE_FAILED", "ugc/queue/failed/") or "ugc/queue/failed/").strip().lstrip("/")
 
-def load_cfg() -> UGCConfig:
-    graph_version = env_nonempty("GRAPH_VERSION", "v25.0").lstrip("v")
+UGC_OUTPUT_REELS_PREFIX = (env_nonempty("UGC_OUTPUT_REELS_PREFIX", "ugc/outputs/reels/") or "ugc/outputs/reels/").strip().lstrip("/")
+UGC_OUTPUT_AUDIO_PREFIX = (env_nonempty("UGC_OUTPUT_AUDIO_PREFIX", "ugc/outputs/audio/") or "ugc/outputs/audio/").strip().lstrip("/")
 
-    return UGCConfig(
-        r2_endpoint_url=env_nonempty("R2_ENDPOINT_URL"),
-        aws_access_key_id=env_nonempty("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=env_nonempty("AWS_SECRET_ACCESS_KEY"),
-        bucket_name=env_nonempty("BUCKET_NAME"),
-        r2_public_base_url=env_nonempty("R2_PUBLIC_BASE_URL").rstrip("/"),
+UGC_STATE_KEY = (env_nonempty("UGC_STATE_KEY", "ugc/state/state.json") or "ugc/state/state.json").strip().lstrip("/")
 
-        openai_api_key=env_nonempty("OPENAI_API_KEY"),
-        openai_model=env_nonempty("OPENAI_MODEL", "gpt-4.1-mini"),
+# Publish cadence
+MAX_POSTS_PER_DAY = env_int("MAX_POSTS_PER_DAY", 1)  # you chose 1/day
+LOCAL_TZ = ZoneInfo("America/Bogota")
 
-        enable_ig_publish=env_bool("ENABLE_IG_PUBLISH", False),
-        ig_user_id=env_nonempty("IG_USER_ID"),
-        ig_access_token=env_nonempty("IG_ACCESS_TOKEN"),
-        graph_version=graph_version,
+# Video rules
+REEL_W = env_int("REEL_W", 1080)
+REEL_H = env_int("REEL_H", 1920)
+UGC_CAP_SECONDS = env_int("UGC_CAP_SECONDS", 30)    # max duration for IG
+UGC_MIN_SECONDS = env_int("UGC_MIN_SECONDS", 5)     # min reel duration
+UGC_FFMPEG_TIMEOUT = env_int("UGC_FFMPEG_TIMEOUT", 900)
 
-        inbox_prefix=env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox/").strip().lstrip("/"),
-        processed_prefix=env_nonempty("UGC_PROCESSED_PREFIX", "ugc/processed/").strip().lstrip("/"),
-        failed_prefix=env_nonempty("UGC_FAILED_PREFIX", "ugc/failed/").strip().lstrip("/"),
-        output_reels_prefix=env_nonempty("UGC_OUTPUT_REELS_PREFIX", "ugc/outputs/reels/").strip().lstrip("/"),
-        state_key=env_nonempty("UGC_STATE_KEY", "ugc/state/state.json").strip().lstrip("/"),
+# Voice & music roulette
+ROULETTE_TEXT_PCT = env_int("ROULETTE_TEXT_PCT", 20)
+ROULETTE_MUSIC_PCT = env_int("ROULETTE_MUSIC_PCT", 25)
+ROULETTE_VOICE_PCT = env_int("ROULETTE_VOICE_PCT", 25)
+ROULETTE_VOICE_MUSIC_PCT = env_int("ROULETTE_VOICE_MUSIC_PCT", 30)
 
-        cap_seconds=env_int("UGC_CAP_SECONDS", 20),
-        default_min_seconds=env_int("UGC_MIN_SECONDS", 5),
-        ffmpeg_timeout_sec=env_int("UGC_FFMPEG_TIMEOUT", 600),
-    )
+# Audio mix volumes
+MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.12)
+VOICE_VOLUME = env_float("VOICE_VOLUME", 1.0)
+ORIG_VOLUME = env_float("ORIG_VOLUME", 0.18)  # keep a little of original clip audio if present
 
+# OpenAI (text + TTS)
+OPENAI_API_KEY = env_nonempty("OPENAI_API_KEY")
+OPENAI_MODEL_TEXT = env_nonempty("OPENAI_MODEL", "gpt-4.1-mini")
+OPENAI_TTS_MODEL = env_nonempty("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")  # best-effort; can change later
+
+# NCS (NoCopyrightSounds) – best-effort downloader
+NCS_TRACK_SLUGS = [
+    # Starter pack. You can add more slugs anytime without touching the pipeline.
+    # Slugs are the ncs.io/<slug> pages.
+    "montagemindia",
+    "favela",
+    "numb",
+    "skyhigh",
+    "mortals",
+    "invisible",
+    "heroes-tonight",
+    "symbolism",
+]
+
+# Voice personas (IA “actúa”)
+VOICE_PRESETS = [
+    {"voice": "nova", "instr": "Voz femenina LATAM, caster esports, rápida, hype, divertida."},
+    {"voice": "onyx", "instr": "Voz masculina LATAM, narrador épico tipo tráiler, intensa y dramática."},
+    {"voice": "shimmer", "instr": "Voz femenina, meme/humor gamer, sarcástica pero amable."},
+    {"voice": "alloy", "instr": "Voz neutra, análisis competitivo, segura y clara."},
+    {"voice": "echo", "instr": "Voz estilo 'alien/robot', metálica, misteriosa, pero entendible."},
+]
 
 # -------------------------
-# R2 helpers
+# R2 client helpers
 # -------------------------
 
-def r2_client(cfg: UGCConfig):
-    if not (cfg.r2_endpoint_url and cfg.aws_access_key_id and cfg.aws_secret_access_key and cfg.bucket_name):
+def r2_client():
+    if not (R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and BUCKET_NAME):
         raise RuntimeError("Faltan credenciales R2/S3 (R2_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME)")
     return boto3.client(
         "s3",
-        endpoint_url=cfg.r2_endpoint_url,
-        aws_access_key_id=cfg.aws_access_key_id,
-        aws_secret_access_key=cfg.aws_secret_access_key,
+        endpoint_url=R2_ENDPOINT_URL,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         region_name="auto",
     )
 
-def r2_list_mp4(cfg: UGCConfig, prefix: str) -> List[str]:
-    s3 = r2_client(cfg)
+def s3_list_keys(prefix: str, max_keys: int = 200) -> List[str]:
+    s3 = r2_client()
     out: List[str] = []
     token = None
-    while True:
-        kwargs = {"Bucket": cfg.bucket_name, "Prefix": prefix}
+    for _ in range(10):
+        kwargs = {"Bucket": BUCKET_NAME, "Prefix": prefix, "MaxKeys": max_keys}
         if token:
             kwargs["ContinuationToken"] = token
         resp = s3.list_objects_v2(**kwargs)
-        for it in resp.get("Contents", []) or []:
-            key = it.get("Key") or ""
-            if key.lower().endswith(".mp4"):
-                out.append(key)
+        for obj in resp.get("Contents", []) or []:
+            k = obj.get("Key")
+            if k and not k.endswith("/"):
+                out.append(k)
         if resp.get("IsTruncated"):
             token = resp.get("NextContinuationToken")
         else:
             break
     return out
 
-def r2_get_bytes(cfg: UGCConfig, key: str) -> bytes:
-    s3 = r2_client(cfg)
-    obj = s3.get_object(Bucket=cfg.bucket_name, Key=key)
+def s3_get_bytes(key: str) -> bytes:
+    s3 = r2_client()
+    obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
     return obj["Body"].read()
 
-def r2_put_bytes(cfg: UGCConfig, key: str, data: bytes, content_type: str) -> str:
-    s3 = r2_client(cfg)
-    s3.put_object(Bucket=cfg.bucket_name, Key=key, Body=data, ContentType=content_type)
-    return f"{cfg.r2_public_base_url}/{key}"
+def s3_put_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+    s3 = r2_client()
+    s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=data, ContentType=content_type)
 
-def r2_copy_delete(cfg: UGCConfig, src_key: str, dst_key: str) -> None:
-    s3 = r2_client(cfg)
-    s3.copy_object(
-        Bucket=cfg.bucket_name,
-        CopySource={"Bucket": cfg.bucket_name, "Key": src_key},
-        Key=dst_key,
-    )
-    s3.delete_object(Bucket=cfg.bucket_name, Key=src_key)
+def s3_put_json(key: str, payload: Dict[str, Any]) -> None:
+    b = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    s3_put_bytes(key, b, "application/json")
 
-def load_state(cfg: UGCConfig) -> Dict[str, Any]:
-    s3 = r2_client(cfg)
+def s3_get_json(key: str) -> Optional[Dict[str, Any]]:
     try:
-        obj = s3.get_object(Bucket=cfg.bucket_name, Key=cfg.state_key)
-        data = obj["Body"].read().decode("utf-8")
-        j = json.loads(data)
-        if not isinstance(j, dict):
-            raise ValueError("state no es dict")
-    except Exception:
-        j = {}
-    j.setdefault("processed", {})
-    return j
-
-def save_state(cfg: UGCConfig, state: Dict[str, Any]) -> None:
-    s3 = r2_client(cfg)
-    body = json.dumps(state, ensure_ascii=False, indent=2).encode("utf-8")
-    s3.put_object(Bucket=cfg.bucket_name, Key=cfg.state_key, Body=body, ContentType="application/json")
-
-
-# -------------------------
-# OpenAI caption
-# -------------------------
-
-def openai_client(cfg: UGCConfig):
-    if not OpenAI:
-        raise RuntimeError("No se pudo importar OpenAI. Revisa requirements.txt (openai).")
-    if not cfg.openai_api_key:
-        raise RuntimeError("Falta OPENAI_API_KEY.")
-    return OpenAI(api_key=cfg.openai_api_key)
-
-def openai_text(cfg: UGCConfig, prompt: str) -> str:
-    model = cfg.openai_model or "gpt-4.1-mini"
-    client = openai_client(cfg)
-    try:
-        resp = client.responses.create(model=model, input=prompt)
-        out = getattr(resp, "output_text", None)
-        if out:
-            return out.strip()
-    except Exception:
-        pass
-    resp = client.chat.completions.create(model=model, messages=[{"role": "user", "content": prompt}])
-    return (resp.choices[0].message.content or "").strip()
-
-CAPTION_PROMPT = """Eres comentarista esports LATAM.
-Te doy el nombre del clip y su duración.
-Escribe un caption para Instagram REEL:
-- 2-3 líneas cortas
-- 5-10 hashtags
-- termina con una pregunta
-Nombre del clip: {name}
-Duración (segundos): {sec}
-"""
-
-
-# -------------------------
-# Video tools (ffprobe / ffmpeg)
-# -------------------------
-
-FORCE_SEC_RE = re.compile(r"__s(\d{1,3})", re.IGNORECASE)
-
-def parse_forced_seconds(filename: str) -> Optional[int]:
-    m = FORCE_SEC_RE.search(filename or "")
-    if not m:
-        return None
-    try:
-        v = int(m.group(1))
-        if 1 <= v <= 180:
-            return v
-    except Exception:
-        return None
-    return None
-
-def ffprobe_duration_seconds(path: str) -> Optional[float]:
-    try:
-        cmd = [
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=nw=1:nk=1",
-            path
-        ]
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
-        if p.returncode != 0:
-            return None
-        s = (p.stdout or "").strip()
-        return float(s)
+        b = s3_get_bytes(key)
+        return json.loads(b.decode("utf-8"))
     except Exception:
         return None
 
-def ffmpeg_make_vertical_reel(
-    in_path: str,
-    out_path: str,
-    seconds: int,
-    timeout_sec: int
-) -> None:
-    # filtro: rellena a 1080x1920, recorta centrado (sirve para landscape o cualquier aspect)
-    vf = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-    cmd = [
-        "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-        "-ss", "0",
-        "-t", str(int(seconds)),
-        "-i", in_path,
-        "-vf", vf,
-        "-r", "30",
-        "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        "-movflags", "+faststart",
-        out_path
-    ]
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, check=False)
-    if p.returncode != 0:
-        raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
+def s3_copy_delete(src_key: str, dst_key: str) -> None:
+    s3 = r2_client()
+    s3.copy_object(Bucket=BUCKET_NAME, CopySource={"Bucket": BUCKET_NAME, "Key": src_key}, Key=dst_key)
+    s3.delete_object(Bucket=BUCKET_NAME, Key=src_key)
 
+def r2_public_url(key: str) -> str:
+    base = (env_nonempty("R2_PUBLIC_BASE_URL", R2_PUBLIC_BASE_URL) or "").rstrip("/")
+    if not base.startswith("http"):
+        raise RuntimeError("R2_PUBLIC_BASE_URL inválido o vacío (debe empezar por https://)")
+    return f"{base}/{key}"
 
 # -------------------------
-# Instagram Graph API (REELS) - FIX
+# Instagram Graph API
 # -------------------------
 
-def graph_base(cfg: UGCConfig) -> str:
-    return f"https://graph.facebook.com/v{cfg.graph_version}"
+def _raise_meta_error(r: requests.Response, label: str) -> None:
+    if r.status_code < 400:
+        return
+    print(f"\n====== {label} ERROR ======")
+    print("URL:", r.request.url)
+    print("METHOD:", r.request.method)
+    if r.request.body:
+        body = r.request.body
+        if isinstance(body, bytes):
+            body = body.decode("utf-8", errors="replace")
+        print("REQUEST BODY:", body)
+    print("STATUS:", r.status_code)
+    print("RESPONSE TEXT:", r.text)
+    print("========================\n")
+    r.raise_for_status()
 
-def ig_post(cfg: UGCConfig, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
-    url = f"{graph_base(cfg)}/{path.lstrip('/')}"
-    r = requests.post(url, data=data, timeout=60)
-    if r.status_code >= 400:
-        raise RuntimeError(f"IG POST error {r.status_code} url={url} resp={r.text}")
+def ig_api_post(path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    url = f"{GRAPH_BASE}/{path.lstrip('/')}"
+    r = requests.post(url, data=data, timeout=HTTP_TIMEOUT)
+    _raise_meta_error(r, f"IG POST {path}")
     return r.json()
 
-def ig_get(cfg: UGCConfig, path: str, params: Dict[str, Any]) -> Dict[str, Any]:
-    url = f"{graph_base(cfg)}/{path.lstrip('/')}"
-    r = requests.get(url, params=params, timeout=60)
-    if r.status_code >= 400:
-        raise RuntimeError(f"IG GET error {r.status_code} url={url} resp={r.text}")
+def ig_api_get(path: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    url = f"{GRAPH_BASE}/{path.lstrip('/')}"
+    r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
+    _raise_meta_error(r, f"IG GET {path}")
     return r.json()
 
-def ig_wait_container(cfg: UGCConfig, creation_id: str, timeout_sec: int = 900) -> None:
+def ig_wait_container(creation_id: str, timeout_sec: int = 420) -> None:
     start = time.time()
-    last = None
     while time.time() - start < timeout_sec:
-        j = ig_get(cfg, creation_id, {"fields": "status_code", "access_token": cfg.ig_access_token})
-        last = j
+        j = ig_api_get(
+            f"{creation_id}",
+            {"fields": "status_code", "access_token": IG_ACCESS_TOKEN},
+        )
         status = (j.get("status_code") or "").upper()
         if status in ("FINISHED", "PUBLISHED"):
             return
         if status in ("ERROR", "FAILED"):
             raise RuntimeError(f"IG container failed: {j}")
-        time.sleep(5)
-    raise RuntimeError(f"IG container not ready after {timeout_sec}s. last={last}")
+        time.sleep(3)
+    raise TimeoutError(f"IG container not ready after {timeout_sec}s")
 
-def ig_publish_reel(cfg: UGCConfig, video_url: str, caption: str) -> Dict[str, Any]:
-    # 1) crear container REELS
-    create = ig_post(cfg, f"{cfg.ig_user_id}/media", {
-        "media_type": "REELS",
-        "video_url": video_url,
-        "caption": caption,
-        "share_to_feed": "true",
-        "access_token": cfg.ig_access_token,
-    })
-    creation_id = create.get("id")
+def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
+    if not (IG_USER_ID and IG_ACCESS_TOKEN):
+        raise RuntimeError("Faltan IG_USER_ID o IG_ACCESS_TOKEN")
+    j = ig_api_post(
+        f"{IG_USER_ID}/media",
+        {
+            "media_type": "REELS",
+            "video_url": video_url,
+            "caption": caption,
+            "access_token": IG_ACCESS_TOKEN,
+        },
+    )
+    creation_id = j.get("id")
     if not creation_id:
-        raise RuntimeError(f"IG reels create no devolvió id: {create}")
-
-    # 2) esperar a FINISHED
-    ig_wait_container(cfg, creation_id, timeout_sec=900)
-
-    # 3) publicar
-    pub = ig_post(cfg, f"{cfg.ig_user_id}/media_publish", {
-        "creation_id": creation_id,
-        "access_token": cfg.ig_access_token,
-    })
-    return {"create": create, "publish": pub, "creation_id": creation_id}
+        raise RuntimeError(f"IG reels create failed: {j}")
+    ig_wait_container(creation_id)
+    res = ig_api_post(
+        f"{IG_USER_ID}/media_publish",
+        {"creation_id": creation_id, "access_token": IG_ACCESS_TOKEN},
+    )
+    return res
 
 
 # -------------------------
-# Main mode B
+# OpenAI (text) + TTS via HTTP (no SDK assumptions)
+# -------------------------
+
+def openai_text(prompt: str) -> str:
+    if not OPENAI_API_KEY:
+        raise RuntimeError("Falta OPENAI_API_KEY")
+    model = OPENAI_MODEL_TEXT or "gpt-4.1-mini"
+    url = "https://api.openai.com/v1/responses"
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+    payload = {"model": model, "input": prompt}
+    r = requests.post(url, headers=headers, json=payload, timeout=60)
+    if r.status_code >= 400:
+        # fallback to chat.completions
+        url2 = "https://api.openai.com/v1/chat/completions"
+        payload2 = {"model": model, "messages": [{"role": "user", "content": prompt}]}
+        r2 = requests.post(url2, headers=headers, json=payload2, timeout=60)
+        r2.raise_for_status()
+        j2 = r2.json()
+        return (j2["choices"][0]["message"]["content"] or "").strip()
+
+    j = r.json()
+    # responses API output_text if present
+    out = j.get("output_text")
+    if out:
+        return str(out).strip()
+
+    # fallback parse
+    try:
+        chunks = j.get("output", [])
+        texts = []
+        for c in chunks:
+            for part in c.get("content", []) or []:
+                if part.get("type") == "output_text" and part.get("text"):
+                    texts.append(part["text"])
+        return ("\n".join(texts)).strip()
+    except Exception:
+        return ""
+
+def openai_tts_mp3(text: str, voice: str, instructions: str) -> bytes:
+    """
+    Best-effort TTS.
+    """
+    if not OPENAI_API_KEY:
+        raise RuntimeError("Falta OPENAI_API_KEY")
+    url = "https://api.openai.com/v1/audio/speech"
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+    payload = {
+        "model": OPENAI_TTS_MODEL,
+        "voice": voice,
+        "format": "mp3",
+        "input": text,
+        # Some models accept instructions; if not, it will still work ignoring it.
+        "instructions": instructions,
+    }
+    r = requests.post(url, headers=headers, json=payload, timeout=120)
+    r.raise_for_status()
+    return r.content
+
+
+# -------------------------
+# Video / audio processing
+# -------------------------
+
+def ffprobe_duration_seconds(path: str) -> float:
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=nw=1:nk=1",
+        path,
+    ]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
+    if p.returncode != 0:
+        return 0.0
+    try:
+        return float((p.stdout or "").strip())
+    except Exception:
+        return 0.0
+
+def make_reel_video(
+    in_mp4: str,
+    out_mp4: str,
+    target_seconds: int,
+    music_mp3: Optional[str],
+    voice_mp3: Optional[str],
+) -> None:
+    """
+    Re-encode to "Reel-safe":
+    - 1080x1920
+    - H.264 yuv420p
+    - AAC audio
+    - duration capped
+    - optionally mixes music + voice + original audio
+    """
+    # video filter: scale+crop to 9:16
+    vf = (
+        f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+        f"crop={REEL_W}:{REEL_H},"
+        f"fps=30"
+    )
+
+    # Inputs
+    cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", in_mp4]
+
+    # Optional audios
+    audio_inputs = []
+    if music_mp3 and os.path.exists(music_mp3):
+        cmd += ["-i", music_mp3]
+        audio_inputs.append(("music", len(audio_inputs) + 1))  # index relative after video input
+    if voice_mp3 and os.path.exists(voice_mp3):
+        cmd += ["-i", voice_mp3]
+        audio_inputs.append(("voice", len(audio_inputs) + 1))
+
+    filter_complex_parts = [f"[0:v]{vf}[vout]"]
+
+    # Build audio mixing
+    # If no external audio chosen, keep original audio (but still normalize volumes)
+    # If external audio exists, mix with original (ducked)
+    has_external = bool(audio_inputs)
+
+    if has_external:
+        # Original audio (if exists) lowered
+        # We try to use [0:a], but if input has no audio ffmpeg will error unless we guard.
+        # Trick: use anullsrc and amix; simplest is to ignore original audio in those cases.
+        # We'll attempt original; if fails, user still publishes because pipeline catches exceptions.
+        parts = []
+        # original at low volume
+        parts.append(f"[0:a]volume={ORIG_VOLUME}[a0]")
+
+        idx = 1
+        for name, rel in audio_inputs:
+            label = "m" if name == "music" else "vo"
+            vol = MUSIC_VOLUME if name == "music" else VOICE_VOLUME
+            parts.append(f"[{idx}:a]volume={vol}[a{label}]")
+            idx += 1
+
+        filter_complex_parts += parts
+
+        mix_inputs = ["[a0]"]
+        if any(n == "music" for n, _ in audio_inputs):
+            mix_inputs.append("[am]")
+        if any(n == "voice" for n, _ in audio_inputs):
+            mix_inputs.append("[avo]")
+
+        amix = "".join(mix_inputs) + f"amix=inputs={len(mix_inputs)}:duration=first:dropout_transition=2[aout]"
+        filter_complex_parts.append(amix)
+        map_audio = ["-map", "[aout]"]
+        audio_codec = ["-c:a", "aac", "-b:a", "128k"]
+    else:
+        # keep original audio if present
+        map_audio = ["-map", "0:a?"]
+        audio_codec = ["-c:a", "aac", "-b:a", "128k"]
+
+    filter_complex = ";".join(filter_complex_parts)
+
+    cmd += [
+        "-t", str(int(target_seconds)),
+        "-filter_complex", filter_complex,
+        "-map", "[vout]",
+        *map_audio,
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-preset", "veryfast",
+        "-movflags", "+faststart",
+        *audio_codec,
+        "-shortest",
+        out_mp4,
+    ]
+
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=UGC_FFMPEG_TIMEOUT, check=False)
+    if p.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed:\n{(p.stderr or '')[:4000]}")
+
+
+# -------------------------
+# NCS music downloader (best-effort)
+# -------------------------
+
+NCS_MP3_RE = re.compile(r'https?://[^\s"\']+\.mp3', re.IGNORECASE)
+
+def try_download_ncs_mp3(slug: str) -> Optional[Tuple[bytes, str]]:
+    """
+    Best-effort:
+    - Fetch ncs.io/<slug>
+    - Try to find any .mp3 link in HTML and download it.
+    If fails: return None (we will publish without music).
+    """
+    try:
+        url = f"https://ncs.io/{slug}"
+        r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code >= 400:
+            return None
+        html = r.text
+        m = NCS_MP3_RE.search(html)
+        if not m:
+            return None
+        mp3_url = m.group(0)
+        rr = requests.get(mp3_url, timeout=60, headers={"User-Agent": "Mozilla/5.0"})
+        if rr.status_code >= 400 or not rr.content:
+            return None
+        # A simple credit line (best-effort). You can refine later.
+        credit = f"Music: NCS (NoCopyrightSounds) – https://ncs.io/{slug}"
+        return rr.content, credit
+    except Exception:
+        return None
+
+
+# -------------------------
+# Roulette + caption + narration
+# -------------------------
+
+def roulette_pick_mode() -> str:
+    modes = (
+        ["text_only"] * ROULETTE_TEXT_PCT +
+        ["music_only"] * ROULETTE_MUSIC_PCT +
+        ["voice_only"] * ROULETTE_VOICE_PCT +
+        ["voice_music"] * ROULETTE_VOICE_MUSIC_PCT
+    )
+    return random.choice(modes) if modes else "voice_music"
+
+def build_caption_and_narration(filename: str, mode: str) -> Tuple[str, str]:
+    """
+    Caption for IG + short narration text (if voice).
+    """
+    prompt = f"""
+Eres editor viral de Reels esports/gaming en español LATAM.
+Contexto: El usuario subió un video (probablemente gameplay/clip) llamado: "{filename}".
+
+Objetivo: maximizar retención y comentarios. No inventes marcas ni derechos.
+
+Entrega 2 cosas:
+1) CAPTION: 1-2 párrafos cortos + 6-12 hashtags relevantes al final + termina con una pregunta.
+2) NARRATION (voz): 1 guion de 1 a 2 frases MUY cortas estilo caster/narrador. Hook fuerte en la primera frase.
+
+Modo elegido: {mode}
+Si modo = text_only o music_only, la narración puede ser vacía o mínima.
+
+Formato EXACTO:
+CAPTION:
+...
+NARRATION:
+...
+"""
+    out = openai_text(prompt)
+    caption = ""
+    narration = ""
+    if "CAPTION:" in out:
+        parts = out.split("CAPTION:", 1)[1]
+        if "NARRATION:" in parts:
+            cap, nar = parts.split("NARRATION:", 1)
+            caption = cap.strip()
+            narration = nar.strip()
+        else:
+            caption = parts.strip()
+    else:
+        caption = out.strip()
+
+    # safety trims
+    caption = caption[:2200].strip()
+    narration = narration[:220].strip()
+    return caption, narration
+
+def choose_voice_preset() -> Dict[str, str]:
+    return random.choice(VOICE_PRESETS)
+
+def choose_ncs_slug() -> str:
+    return random.choice(NCS_TRACK_SLUGS)
+
+
+# -------------------------
+# Queue/state
+# -------------------------
+
+def load_state() -> Dict[str, Any]:
+    st = s3_get_json(UGC_STATE_KEY) or {}
+    st.setdefault("daily", {})
+    st.setdefault("enqueued", {})  # key -> ticket_key
+    return st
+
+def save_state(st: Dict[str, Any]) -> None:
+    s3_put_json(UGC_STATE_KEY, st)
+
+def today_key_local() -> str:
+    now_local = datetime.now(LOCAL_TZ)
+    return now_local.strftime("%Y-%m-%d")
+
+def daily_count(st: Dict[str, Any], day_key: str) -> int:
+    return int((st.get("daily", {}).get(day_key) or {}).get("published", 0))
+
+def daily_inc(st: Dict[str, Any], day_key: str) -> None:
+    st.setdefault("daily", {}).setdefault(day_key, {})
+    st["daily"][day_key]["published"] = int(st["daily"][day_key].get("published", 0)) + 1
+    st["daily"][day_key]["last_published_at"] = iso_now()
+
+def enqueue_new_inbox_videos(st: Dict[str, Any]) -> int:
+    keys = s3_list_keys(UGC_INBOX_PREFIX)
+    mp4s = [k for k in keys if k.lower().endswith(".mp4")]
+    created = 0
+
+    for k in sorted(mp4s):
+        if k in st["enqueued"]:
+            continue
+
+        filename = k.split("/")[-1]
+        mode = roulette_pick_mode()
+
+        # Decide voice/music now and freeze it in ticket
+        voice = None
+        voice_instr = None
+        voice_preset = None
+        if mode in ("voice_only", "voice_music"):
+            voice_preset = choose_voice_preset()
+            voice = voice_preset["voice"]
+            voice_instr = voice_preset["instr"]
+
+        music_slug = None
+        if mode in ("music_only", "voice_music"):
+            music_slug = choose_ncs_slug()
+
+        caption, narration = build_caption_and_narration(filename, mode)
+
+        ticket = {
+            "created_at": iso_now(),
+            "source": {"inbox_key": k, "filename": filename},
+            "roulette": {
+                "mode": mode,
+                "voice": voice,
+                "voice_instructions": voice_instr,
+                "music_ncs_slug": music_slug,
+            },
+            "ai": {
+                "caption": caption,
+                "narration": narration,
+            },
+            "status": "pending",
+        }
+
+        ticket_key = f"{UGC_QUEUE_PENDING}{today_key_local()}__{short_hash(k + iso_now())}__{filename}.json"
+        s3_put_json(ticket_key, ticket)
+        st["enqueued"][k] = ticket_key
+        created += 1
+
+        print(f"[UGC] Encolado: {k} -> {ticket_key}")
+
+    return created
+
+def list_pending_tickets() -> List[str]:
+    keys = s3_list_keys(UGC_QUEUE_PENDING)
+    return sorted([k for k in keys if k.lower().endswith(".json")])
+
+def mark_ticket_move(ticket_key: str, dst_prefix: str, patch: Dict[str, Any]) -> str:
+    """
+    Download, patch, upload to dst, delete original.
+    """
+    data = s3_get_json(ticket_key) or {}
+    # patch merge (shallow)
+    for kk, vv in patch.items():
+        data[kk] = vv
+    data["updated_at"] = iso_now()
+
+    fname = ticket_key.split("/")[-1]
+    new_key = f"{dst_prefix}{fname}"
+    s3_put_json(new_key, data)
+    # delete old
+    r2_client().delete_object(Bucket=BUCKET_NAME, Key=ticket_key)
+    return new_key
+
+
+# -------------------------
+# Main publish worker
+# -------------------------
+
+def publish_one_from_queue_if_allowed(st: Dict[str, Any]) -> int:
+    if not ENABLE_IG_PUBLISH:
+        print("[UGC] ENABLE_IG_PUBLISH=false, no publico.")
+        return 0
+
+    if not (IG_USER_ID and IG_ACCESS_TOKEN):
+        print("[UGC] Faltan IG_USER_ID / IG_ACCESS_TOKEN, no publico.")
+        return 0
+
+    day = today_key_local()
+    used = daily_count(st, day)
+    if used >= MAX_POSTS_PER_DAY:
+        print(f"[UGC] Cupo diario alcanzado ({used}/{MAX_POSTS_PER_DAY}). No publico más hoy.")
+        return 0
+
+    pending = list_pending_tickets()
+    if not pending:
+        print("[UGC] No hay tickets en pending.")
+        return 0
+
+    ticket_key = pending[0]
+    ticket = s3_get_json(ticket_key) or {}
+    src_key = (((ticket.get("source") or {}).get("inbox_key")) or "").strip()
+    filename = ((ticket.get("source") or {}).get("filename") or "ugc.mp4")
+
+    roulette = ticket.get("roulette") or {}
+    mode = roulette.get("mode") or "voice_music"
+    voice = roulette.get("voice")
+    voice_instr = roulette.get("voice_instructions") or ""
+    music_slug = roulette.get("music_ncs_slug")
+
+    caption = ((ticket.get("ai") or {}).get("caption") or "").strip()
+    narration = ((ticket.get("ai") or {}).get("narration") or "").strip()
+
+    print(f"[UGC] Publicando 1 ticket: {ticket_key}")
+    print(f"[UGC] Mode: {mode} | voice={voice} | music_slug={music_slug}")
+
+    try:
+        # Pull video bytes
+        video_bytes = s3_get_bytes(src_key)
+        with tempfile.TemporaryDirectory() as td:
+            in_mp4 = os.path.join(td, "in.mp4")
+            with open(in_mp4, "wb") as f:
+                f.write(video_bytes)
+
+            dur = ffprobe_duration_seconds(in_mp4)
+            if dur <= 0:
+                dur = float(UGC_MIN_SECONDS)
+
+            target = int(min(max(dur, float(UGC_MIN_SECONDS)), float(UGC_CAP_SECONDS)))
+
+            # Optional music
+            music_path = None
+            music_credit = ""
+            if mode in ("music_only", "voice_music") and music_slug:
+                got = try_download_ncs_mp3(music_slug)
+                if got:
+                    music_bytes, music_credit = got
+                    music_path = os.path.join(td, "music.mp3")
+                    with open(music_path, "wb") as f:
+                        f.write(music_bytes)
+                else:
+                    print("[UGC] Música NCS no disponible (best-effort). Sigo sin música.")
+
+            # Optional voice
+            voice_path = None
+            if mode in ("voice_only", "voice_music") and narration and voice:
+                try:
+                    tts_bytes = openai_tts_mp3(narration, voice=voice, instructions=voice_instr)
+                    voice_path = os.path.join(td, "voice.mp3")
+                    with open(voice_path, "wb") as f:
+                        f.write(tts_bytes)
+                except Exception as e:
+                    print("[UGC] TTS falló (no rompe). Sigo sin voz. Error:", str(e))
+                    voice_path = None
+
+            out_mp4 = os.path.join(td, "reel.mp4")
+            make_reel_video(
+                in_mp4=in_mp4,
+                out_mp4=out_mp4,
+                target_seconds=target,
+                music_mp3=music_path if mode in ("music_only", "voice_music") else None,
+                voice_mp3=voice_path if mode in ("voice_only", "voice_music") else None,
+            )
+
+            # Upload reel mp4 to R2 public outputs
+            out_bytes = open(out_mp4, "rb").read()
+            reel_key = f"{UGC_OUTPUT_REELS_PREFIX}{today_key_local()}__{short_hash(src_key + iso_now())}__{filename}"
+            s3_put_bytes(reel_key, out_bytes, "video/mp4")
+            video_url = r2_public_url(reel_key)
+            print("[UGC] REEL subido a R2:", video_url)
+
+            # Add best-effort credit line if we used music
+            final_caption = caption
+            if music_credit:
+                final_caption = (final_caption + "\n\n" + music_credit).strip()
+
+            # Publish IG reel
+            res = ig_publish_reel(video_url=video_url, caption=final_caption)
+            print("[UGC] IG PUBLISH OK:", res)
+
+            # Move ticket to published
+            published_ticket_key = mark_ticket_move(
+                ticket_key,
+                UGC_QUEUE_PUBLISHED,
+                {
+                    "status": "published",
+                    "publish": {"ig": res, "video_url": video_url, "published_at": iso_now()},
+                    "render": {"reel_key": reel_key, "target_seconds": target},
+                },
+            )
+
+            # Move original out of inbox -> processed (keep a copy in library/raw too)
+            # 1) copy to library
+            lib_key = f"{UGC_LIBRARY_PREFIX}{filename}"
+            s3_copy_delete(src_key, lib_key)  # move inbox->library/raw
+            # 2) copy to processed for simple browsing
+            proc_key = f"{UGC_PROCESSED_PREFIX}{filename}"
+            s3_copy_delete(lib_key, proc_key)  # move library/raw->processed
+            # (net result: in processed; library/raw stays empty; if you prefer library keep, remove this second move)
+            # If you want to keep in library, comment out the second move.
+
+            print("[UGC] Original movido a processed:", proc_key)
+
+            # daily counter
+            daily_inc(st, day)
+            save_state(st)
+
+            return 1
+
+    except Exception as e:
+        print("[UGC] FALLÓ publicar ticket:", str(e))
+        try:
+            failed_key = mark_ticket_move(
+                ticket_key,
+                UGC_QUEUE_FAILED,
+                {"status": "failed", "error": str(e)},
+            )
+            print("[UGC] Ticket movido a failed:", failed_key)
+        except Exception as ee:
+            print("[UGC] Además falló mover ticket a failed:", str(ee))
+        return 0
+
+
+# -------------------------
+# Entrypoint
 # -------------------------
 
 def run_mode_b() -> None:
-    cfg = load_cfg()
+    print("===== MODO B (UGC QUEUE + 1/DÍA + RULETA + NCS best-effort) =====")
+    st = load_state()
 
-    print("===== MODO B (UGC) =====")
-    print("Inbox:", cfg.inbox_prefix)
-    print("Output reels:", cfg.output_reels_prefix)
-    print("State:", cfg.state_key)
+    created = enqueue_new_inbox_videos(st)
+    if created:
+        save_state(st)
+    print(f"[UGC] Tickets nuevos creados: {created}")
 
-    state = load_state(cfg)
-    processed_map: Dict[str, Any] = state.get("processed", {}) or {}
+    published = publish_one_from_queue_if_allowed(st)
+    print(f"[UGC] Publicados en este run: {published}")
 
-    keys = r2_list_mp4(cfg, cfg.inbox_prefix)
-    if not keys:
-        print("[UGC] No hay mp4 en inbox.")
-        return
-
-    did = 0
-    for key in sorted(keys):
-        if key in processed_map:
-            continue
-
-        fname = key.split("/")[-1]
-        print(f"\n[UGC] Procesando: {key}")
-
-        try:
-            # descargar
-            mp4_bytes = r2_get_bytes(cfg, key)
-
-            with tempfile.TemporaryDirectory() as td:
-                in_path = os.path.join(td, "in.mp4")
-                out_path = os.path.join(td, "out.mp4")
-                with open(in_path, "wb") as f:
-                    f.write(mp4_bytes)
-
-                # duración real
-                real = ffprobe_duration_seconds(in_path) or 0.0
-                forced = parse_forced_seconds(fname)
-
-                # target
-                if forced is not None:
-                    target = forced
-                else:
-                    if real <= 0.01:
-                        target = cfg.default_min_seconds
-                    else:
-                        target = int(max(1, min(real, cfg.cap_seconds)))
-
-                print(f"[UGC] Duración real={int(real)}s | forced={forced} | target={target}s | cap={cfg.cap_seconds}s")
-
-                # caption IA
-                cap_prompt = CAPTION_PROMPT.format(name=fname, sec=target)
-                caption = openai_text(cfg, cap_prompt).strip()
-                if not caption:
-                    caption = "🔥 Clip esports LATAM. ¿Qué opinas?"
-                print("[UGC] Caption:\n", caption)
-
-                # convertir a vertical reel mp4
-                ffmpeg_make_vertical_reel(in_path, out_path, target, timeout_sec=cfg.ffmpeg_timeout_sec)
-                with open(out_path, "rb") as f:
-                    out_bytes = f.read()
-
-            # subir reel a R2 outputs
-            out_key = f"{cfg.output_reels_prefix}{now_ts()}_{fname}".replace("//", "/")
-            reel_url = r2_put_bytes(cfg, out_key, out_bytes, "video/mp4")
-            print("[UGC] REEL subido a R2:", reel_url)
-
-            # publicar IG
-            ig_res = None
-            if cfg.enable_ig_publish:
-                if not (cfg.ig_user_id and cfg.ig_access_token):
-                    raise RuntimeError("ENABLE_IG_PUBLISH=true pero faltan IG_USER_ID o IG_ACCESS_TOKEN.")
-                ig_res = ig_publish_reel(cfg, reel_url, caption)
-                print("[UGC] IG PUBLISH OK:", ig_res.get("publish"))
-
-            # mover original a processed
-            dst = f"{cfg.processed_prefix}{fname}".replace("//", "/")
-            r2_copy_delete(cfg, key, dst)
-            print("[UGC] Original movido a processed:", dst)
-
-            # state
-            processed_map[key] = {
-                "processed_at": now_ts(),
-                "original_key": key,
-                "processed_key": dst,
-                "reel_key": out_key,
-                "reel_url": reel_url,
-                "duration_target": target,
-                "forced": forced,
-                "ig": ig_res,
-            }
-            state["processed"] = processed_map
-            save_state(cfg, state)
-            did += 1
-
-        except Exception as e:
-            print("[UGC] ERROR:", str(e))
-            try:
-                # mover a failed
-                dst = f"{cfg.failed_prefix}{fname}".replace("//", "/")
-                r2_copy_delete(cfg, key, dst)
-                print("[UGC] Original movido a failed:", dst)
-            except Exception as e2:
-                print("[UGC] ERROR moviendo a failed:", str(e2))
-
-    print(f"\n[UGC] Listo. Procesados en este run: {did}")
+    # Summary
+    day = today_key_local()
+    print(f"[UGC] Hoy llevas: {daily_count(st, day)}/{MAX_POSTS_PER_DAY} publicados (TZ America/Bogota)")
+    print("[UGC] Listo.")

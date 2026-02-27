@@ -10,9 +10,14 @@ on:
     # 9:00 PM Colombia (UTC-5 → 02:00 UTC)
     - cron: "0 2 * * *"
 
+concurrency:
+  group: robot-ugc-mode-b
+  cancel-in-progress: true
+
 jobs:
   run-ugc:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -22,6 +27,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -56,10 +62,7 @@ jobs:
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           GRAPH_VERSION: "v25.0"
 
-          # 🎬 REELS (si tu modo B los usa)
-          ENABLE_REELS: "true"
-
-          # ⚙️ Control diario (si tu modo B lo usa)
+          # ⚙️ Control diario
           MAX_POSTS_PER_DAY: "1"
 
         run: |

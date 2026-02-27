@@ -1,7 +1,12 @@
-name: Robot UGC Runner (Modo B) - Manual
+name: Robot UGC Runner (Modo B)
 
 on:
   workflow_dispatch:
+  schedule:
+    # Corre 3 veces al día, pero publicará máximo 1/día por tu state.json
+    - cron: "0 14 * * *"  # 9am Colombia
+    - cron: "0 20 * * *"  # 3pm Colombia
+    - cron: "0 2 * * *"   # 9pm Colombia (02:00 UTC)
 
 jobs:
   run-ugc:
@@ -26,10 +31,11 @@ jobs:
           ffmpeg -version
           ffprobe -version
 
-      - name: Run robot (MODE B)
+      - name: Run robot (Modo B)
         env:
           RUN_MODE: "B"
 
+          # 🔐 R2
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -37,18 +43,17 @@ jobs:
           AWS_DEFAULT_REGION: auto
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
+          # 🤖 OpenAI
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
+          # 📸 Instagram
           ENABLE_IG_PUBLISH: "true"
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           GRAPH_VERSION: "v25.0"
 
-          # si quieres forzar duración (opcional):
-          REEL_SECONDS: "5"
-          REEL_W: "1080"
-          REEL_H: "1920"
-          ASSET_BG: "assets/bg.jpg"
-          ASSET_LOGO: "assets/logo.png"
+          # 🧠 Cadencia
+          MAX_POSTS_PER_DAY: "1"
+
         run: |
           python -u main.py

@@ -57,7 +57,7 @@ jobs:
           GRAPH_VERSION: "v25.0"
 
           # ⚙️ Control diario
-          MAX_POSTS_PER_DAY: "1"
+          MAX_POSTS_PER_DAY: "99"
 
           # ✅ SIMULACIÓN TOTAL (NO PUBLICA)
           UGC_DRY_RUN: "true"

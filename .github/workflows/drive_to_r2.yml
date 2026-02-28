@@ -3,30 +3,43 @@ name: Drive to R2 Sync
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/10 * * * *"
+    # cada 3 horas (ajústalo)
+    - cron: "0 */3 * * *"
 
 jobs:
-  sync:
+  run-drive-sync:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
 
-      - name: Sync Drive to R2
+      - name: Run Drive Sync
         env:
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-          GDRIVE_DONE_FOLDER_ID: ${{ secrets.GDRIVE_DONE_FOLDER_ID }}
-          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
-
+          # R2
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
 
-        run: python sync_drive_to_r2.py
+          # Drive Service Account JSON (PEGADO COMPLETO EN SECRETS)
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+
+          # Folder IDs
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}               # UGC_UPLOADS
+          GDRIVE_DONE_FOLDER_ID: ${{ secrets.GDRIVE_DONE_FOLDER_ID }}     # UGC_DONE
+
+          # R2 destination prefix
+          UGC_INBOX_PREFIX: "ugc/inbox/"
+
+        run: |
+          python -u drive_sync.py

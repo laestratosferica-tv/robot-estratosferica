@@ -26,10 +26,10 @@ except Exception:
     OpenAI = None
 
 
-print("RUNNING MEDIA ENGINE (Threads REAL + IG Queue + REEL AUTO + IG PUBLISH + Multi-account via accounts.json)")
+print("RUNNING MEDIA ENGINE (Threads REAL + IG REEL AUTO + IG PUBLISH + Multi-account via accounts.json)")
 
 # =========================
-# Helpers: env safe (no empty)
+# Helpers: env safe
 # =========================
 
 def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
@@ -87,14 +87,14 @@ AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
 
-R2_PUBLIC_BASE_URL = env_nonempty(
-    "R2_PUBLIC_BASE_URL",
-    "https://pub-8937244ee725495691514507bb8f431e.r2.dev"
-).rstrip("/")
+R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL") or "").rstrip("/")
+if not R2_PUBLIC_BASE_URL:
+    # fallback to previous hardcoded base if user had one; better to set secret.
+    R2_PUBLIC_BASE_URL = "https://pub-8937244ee725495691514507bb8f431e.r2.dev"
 
 THREADS_GRAPH = env_nonempty("THREADS_GRAPH", "https://graph.threads.net").rstrip("/")
 THREADS_USER_ACCESS_TOKEN = env_nonempty("THREADS_USER_ACCESS_TOKEN")
-THREADS_USER_ID_ENV = env_nonempty("THREADS_USER_ID") or env_nonempty("THREADS_USER_ID_ENV")  # optional fallback name
+THREADS_USER_ID_ENV = env_nonempty("THREADS_USER_ID")  # optional; accounts.json uses user_id "me"
 
 HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
 POST_RETRY_MAX = env_int("POST_RETRY_MAX", 2)
@@ -102,8 +102,6 @@ POST_RETRY_SLEEP = env_float("POST_RETRY_SLEEP", 2.0)
 
 CONTAINER_WAIT_TIMEOUT = env_int("CONTAINER_WAIT_TIMEOUT", 120)
 CONTAINER_POLL_INTERVAL = env_float("CONTAINER_POLL_INTERVAL", 2.0)
-
-IG_CAROUSEL_MAX_IMAGES = env_int("IG_CAROUSEL_MAX_IMAGES", 5)
 
 VERIFY_NEWS = env_bool("VERIFY_NEWS", False)
 ENABLE_TRENDS = env_bool("ENABLE_TRENDS", False)
@@ -116,7 +114,7 @@ REEL_H = env_int("REEL_H", 1920)
 
 DEFAULT_ASSET_BG = env_nonempty("ASSET_BG", "assets/bg.jpg")
 DEFAULT_ASSET_LOGO = env_nonempty("ASSET_LOGO", "assets/logo.png")
-DEFAULT_ASSET_MUSIC = env_nonempty("ASSET_MUSIC", "assets/music.mp3")  # opcional
+DEFAULT_ASSET_MUSIC = env_nonempty("ASSET_MUSIC", "assets/music.mp3")  # optional
 
 FONT_BOLD = env_nonempty("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 
@@ -127,9 +125,9 @@ IG_USER_ID = env_nonempty("IG_USER_ID")
 GRAPH_VERSION = env_nonempty("GRAPH_VERSION", "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
 
-# Publish controls
+# Global "safety switches"
 DRY_RUN = env_bool("DRY_RUN", False)
-ENABLE_THREADS_PUBLISH = env_bool("ENABLE_THREADS_PUBLISH", True)  # can be overridden in workflow
+ENABLE_THREADS_PUBLISH = env_bool("ENABLE_THREADS_PUBLISH", True)
 
 
 # =========================
@@ -207,7 +205,7 @@ def _raise_meta_error(r: requests.Response, label: str = "HTTP") -> None:
             body = body.decode("utf-8", errors="replace")
         print("REQUEST BODY:", body)
     print("STATUS:", r.status_code)
-    print("RESPONSE TEXT:", r.text[:4000])
+    print("RESPONSE TEXT:", r.text)
     print("========================\n")
     r.raise_for_status()
 
@@ -269,7 +267,7 @@ def _guess_ext_from_content_type(ct: str) -> str:
     return ".bin"
 
 def upload_bytes_to_r2_public(file_bytes: bytes, ext: str, prefix: str, content_type: str, expect_kind: str = "any") -> str:
-    base = env_nonempty("R2_PUBLIC_BASE_URL", R2_PUBLIC_BASE_URL).rstrip("/")
+    base = (env_nonempty("R2_PUBLIC_BASE_URL", R2_PUBLIC_BASE_URL) or "").rstrip("/")
     if not base.startswith("http"):
         raise RuntimeError("R2_PUBLIC_BASE_URL inválido. Debe empezar por https://")
 
@@ -281,6 +279,7 @@ def upload_bytes_to_r2_public(file_bytes: bytes, ext: str, prefix: str, content_
     s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=file_bytes, ContentType=content_type)
     url = f"{base}/{key}"
 
+    # best-effort validation
     try:
         head = requests.head(url, timeout=10, allow_redirects=True)
         if head.status_code != 200:
@@ -312,7 +311,7 @@ def upload_video_mp4_to_r2_public(video_bytes: bytes, prefix: str) -> str:
 
 
 # =========================
-# RSS / Images extraction
+# RSS / Images extraction (patched: YouTube thumbs + HLTV hardening)
 # =========================
 
 META_IMAGE_RE = re.compile(
@@ -325,13 +324,66 @@ META_IMAGE_RE2 = re.compile(
 )
 IMG_SRC_RE = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
 
-def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
-    try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(page_url, headers=headers, timeout=20, allow_redirects=True)
-        r.raise_for_status()
-        html = r.text
+JSONLD_IMAGE_RE = re.compile(r'"image"\s*:\s*"([^"]+)"', re.IGNORECASE)
+YOUTUBE_ID_RE = re.compile(r'(?:v=|\/shorts\/|youtu\.be\/)([A-Za-z0-9_-]{6,})')
 
+def _youtube_video_id(url: str) -> Optional[str]:
+    try:
+        u = urlparse(url)
+        host = (u.netloc or "").lower()
+        if "youtu.be" in host:
+            vid = u.path.strip("/").split("/")[0]
+            return vid if vid else None
+        if "youtube.com" in host:
+            qs = {}
+            for p in (u.query or "").split("&"):
+                if "=" in p:
+                    k, v = p.split("=", 1)
+                    qs[k] = v
+            if qs.get("v"):
+                return qs["v"]
+            m = re.search(r"/shorts/([A-Za-z0-9_-]{6,})", u.path or "")
+            if m:
+                return m.group(1)
+        m2 = YOUTUBE_ID_RE.search(url)
+        if m2:
+            return m2.group(1)
+        return None
+    except Exception:
+        return None
+
+def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
+    """
+    Improved:
+    - YouTube: build thumbnails directly (maxres/hq)
+    - HLTV: better headers + JSON-LD fallback
+    - Generic: og:image + twitter:image + img src fallback
+    """
+    page_url = (page_url or "").strip()
+    if not page_url:
+        return []
+
+    host = (urlparse(page_url).netloc or "").lower()
+
+    # YouTube fast-path (NO scraping)
+    if "youtube.com" in host or "youtu.be" in host:
+        vid = _youtube_video_id(page_url)
+        if vid:
+            return [
+                f"https://i.ytimg.com/vi/{vid}/maxresdefault.jpg",
+                f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+            ][:max_images]
+
+    headers1 = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,es-CO;q=0.8,es;q=0.7",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    }
+    headers2 = {**headers1, "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"}
+
+    def _parse_html_for_images(html: str) -> List[str]:
         found: List[str] = []
         metas: List[Tuple[str, str]] = []
 
@@ -347,6 +399,15 @@ def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
                     if img2 and img2 not in found:
                         found.append(img2)
 
+        # JSON-LD fallback
+        if len(found) < max_images:
+            m = JSONLD_IMAGE_RE.search(html)
+            if m:
+                img2 = normalize_url(m.group(1).strip(), page_url)
+                if img2 and img2 not in found:
+                    found.append(img2)
+
+        # img src fallback
         if len(found) < max_images:
             for m in IMG_SRC_RE.finditer(html):
                 img = m.group(1).strip()
@@ -359,8 +420,19 @@ def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
                     break
 
         return found[:max_images]
-    except Exception:
-        return []
+
+    for headers in (headers1, headers2):
+        try:
+            r = requests.get(page_url, headers=headers, timeout=25, allow_redirects=True)
+            if r.status_code >= 400 or not (r.text or "").strip():
+                continue
+            imgs = _parse_html_for_images(r.text)
+            if imgs:
+                return imgs[:max_images]
+        except Exception:
+            continue
+
+    return []
 
 def download_image_bytes(image_url: str) -> Tuple[bytes, str]:
     parsed = urlparse(image_url)
@@ -435,6 +507,7 @@ def openai_text(prompt: str) -> str:
     model = env_nonempty("OPENAI_MODEL", OPENAI_MODEL) or "gpt-4.1-mini"
     client = openai_client()
 
+    # Prefer Responses API, fallback to chat.completions
     try:
         resp = client.responses.create(model=model, input=prompt)
         out = getattr(resp, "output_text", None)
@@ -562,83 +635,9 @@ def threads_publish(user_id: str, access_token: str, container_id: str) -> Dict[
     r = _post_with_retries(url, headers=_threads_headers(access_token), data={"creation_id": container_id}, label="THREADS PUBLISH")
     return r.json()
 
-def threads_publish_text_image(user_id: str, access_token: str, dry_run: bool, text: str, image_url_from_news: str, threads_media_prefix: str) -> Dict[str, Any]:
-    if dry_run:
-        print("[DRY_RUN] Threads post:", clip_threads_text(text, 500))
-        print("[DRY_RUN] Image source:", image_url_from_news)
-        return {"ok": True, "dry_run": True}
-
-    if not access_token:
-        raise RuntimeError("Falta THREADS_USER_ACCESS_TOKEN")
-
-    img_bytes, ext = download_image_bytes(image_url_from_news)
-    r2_url = upload_image_bytes_to_r2_public(img_bytes, ext, prefix=threads_media_prefix)
-    print("IMAGE re-hosted on R2:", r2_url)
-
-    container_id = threads_create_container_image(user_id, access_token, text, r2_url)
-    print("Container created:", container_id)
-
-    threads_wait_container(container_id, access_token)
-    res = threads_publish(user_id, access_token, container_id)
-    print("Threads publish response:", res)
-
-    return {"ok": True, "container": {"id": container_id}, "publish": res, "image_url": r2_url}
-
 
 # =========================
-# State
-# =========================
-
-def load_threads_state(state_key: str) -> Dict[str, Any]:
-    state = load_from_r2_json(state_key)
-    if not state:
-        state = {"posted_items": {}, "posted_links": [], "last_posted_at": None}
-    state.setdefault("posted_items", {})
-    state.setdefault("posted_links", [])
-    state.setdefault("last_posted_at", None)
-    return state
-
-def save_threads_state(state_key: str, state: Dict[str, Any]) -> None:
-    save_to_r2_json(state_key, state)
-
-def mark_posted(state: Dict[str, Any], link: str) -> None:
-    pi = state["posted_items"].get(link, {"times": 0, "last_posted_at": None})
-    pi["times"] = int(pi.get("times", 0)) + 1
-    pi["last_posted_at"] = iso_now()
-    state["posted_items"][link] = pi
-    if link not in state["posted_links"]:
-        state["posted_links"].append(link)
-    state["posted_links"] = state["posted_links"][-400:]
-    state["last_posted_at"] = iso_now()
-
-def is_new_allowed(state: Dict[str, Any], link: str) -> bool:
-    return link not in state["posted_items"]
-
-def repost_eligible(state: Dict[str, Any], link: str, repost_max_times: int, repost_window_days: int) -> bool:
-    pi = state["posted_items"].get(link)
-    if not pi:
-        return False
-    times = int(pi.get("times", 0))
-    if times >= repost_max_times:
-        return False
-    last = pi.get("last_posted_at")
-    if not last:
-        return True
-    return days_since(last) >= repost_window_days
-
-def pick_item(articles: List[Dict[str, Any]], state: Dict[str, Any], repost_enable: bool, repost_max_times: int, repost_window_days: int) -> Tuple[Optional[Dict[str, Any]], str]:
-    for a in articles:
-        if a.get("link") and is_new_allowed(state, a["link"]):
-            return a, "new"
-    if repost_enable:
-        for a in articles:
-            if a.get("link") and a["link"] in state["posted_items"] and repost_eligible(state, a["link"], repost_max_times, repost_window_days):
-                return a, "repost"
-    return None, "none"
-
-
-# =========================
-# REEL generator (stable lavfi base)
+# IG Reels generator (simple)
 # =========================
 
 def _require_file(path: str, label: str) -> None:
@@ -697,9 +696,22 @@ def generate_reel_mp4_bytes(headline: str, news_image_path: str, logo_path: str,
         else:
             cmd += ["-an"]
 
-        cmd += ["-t", str(seconds), "-r", "30", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-shortest", out_mp4]
+        cmd += [
+            "-t", str(seconds),
+            "-r", "30",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            "-shortest",
+            out_mp4
+        ]
 
-        p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=240, check=False)
+        try:
+            p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=240, check=False)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("ffmpeg se demoró demasiado y se cortó por timeout (240s).")
+
         if p.returncode != 0:
             raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
@@ -735,13 +747,6 @@ def ig_wait_container(creation_id: str, access_token: str, timeout_sec: int = 30
 def ig_publish_media(ig_user_id: str, access_token: str, creation_id: str) -> Dict[str, Any]:
     return ig_api_post(f"{ig_user_id}/media_publish", {"creation_id": creation_id, "access_token": access_token})
 
-def ig_publish_image(ig_user_id: str, access_token: str, image_url: str, caption: str) -> Dict[str, Any]:
-    j = ig_api_post(f"{ig_user_id}/media", {"image_url": image_url, "caption": caption, "access_token": access_token})
-    creation_id = j.get("id")
-    if not creation_id:
-        raise RuntimeError(f"IG media create no devolvió id: {j}")
-    return ig_publish_media(ig_user_id, access_token, creation_id)
-
 def ig_publish_reel(ig_user_id: str, access_token: str, video_url: str, caption: str) -> Dict[str, Any]:
     j = ig_api_post(
         f"{ig_user_id}/media",
@@ -772,7 +777,59 @@ def load_accounts() -> List[Dict[str, Any]]:
 
 
 # =========================
-# Main per account run (MODE A)
+# State
+# =========================
+
+def load_threads_state(state_key: str) -> Dict[str, Any]:
+    state = load_from_r2_json(state_key)
+    if not state:
+        state = {"posted_items": {}, "posted_links": [], "last_posted_at": None}
+    state.setdefault("posted_items", {})
+    state.setdefault("posted_links", [])
+    state.setdefault("last_posted_at", None)
+    return state
+
+def save_threads_state(state_key: str, state: Dict[str, Any]) -> None:
+    save_to_r2_json(state_key, state)
+
+def mark_posted(state: Dict[str, Any], link: str) -> None:
+    pi = state["posted_items"].get(link, {"times": 0, "last_posted_at": None})
+    pi["times"] = int(pi.get("times", 0)) + 1
+    pi["last_posted_at"] = iso_now()
+    state["posted_items"][link] = pi
+    if link not in state["posted_links"]:
+        state["posted_links"].append(link)
+    state["posted_links"] = state["posted_links"][-400:]
+    state["last_posted_at"] = iso_now()
+
+def is_new_allowed(state: Dict[str, Any], link: str) -> bool:
+    return link not in state["posted_items"]
+
+def repost_eligible(state: Dict[str, Any], link: str, repost_max_times: int, repost_window_days: int) -> bool:
+    pi = state["posted_items"].get(link)
+    if not pi:
+        return False
+    times = int(pi.get("times", 0))
+    if times >= repost_max_times:
+        return False
+    last = pi.get("last_posted_at")
+    if not last:
+        return True
+    return days_since(last) >= repost_window_days
+
+def pick_item(articles: List[Dict[str, Any]], state: Dict[str, Any], repost_enable: bool, repost_max_times: int, repost_window_days: int) -> Tuple[Optional[Dict[str, Any]], str]:
+    for a in articles:
+        if a.get("link") and is_new_allowed(state, a["link"]):
+            return a, "new"
+    if repost_enable:
+        for a in articles:
+            if a.get("link") and a["link"] in state["posted_items"] and repost_eligible(state, a["link"], repost_max_times, repost_window_days):
+                return a, "repost"
+    return None, "none"
+
+
+# =========================
+# Main per account run
 # =========================
 
 def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -791,20 +848,19 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     cta_text = assets_cfg.get("cta") or "Sigue para más"
 
     threads_cfg = cfg.get("threads", {}) or {}
-    threads_user_id = threads_cfg.get("user_id") or THREADS_USER_ID_ENV or "me"
+    threads_user_id = threads_cfg.get("user_id", "me") or "me"
     state_key = threads_cfg.get("state_key", f"accounts/{account_id}/threads_state.json")
     auto_post_limit = int(threads_cfg.get("auto_post_limit", 1))
-    dry_run = bool(threads_cfg.get("dry_run", False)) or DRY_RUN
-
+    dry_run_cfg = bool(threads_cfg.get("dry_run", False))
     repost_enable = bool(threads_cfg.get("repost_enable", True))
     repost_max_times = int(threads_cfg.get("repost_max_times", 3))
     repost_window_days = int(threads_cfg.get("repost_window_days", 7))
 
     r2_cfg = cfg.get("r2", {}) or {}
-    threads_media_prefix = r2_cfg.get("threads_media_prefix", f"threads_media/{account_id}").strip().strip("/")
-    ig_media_prefix = r2_cfg.get("ig_media_prefix", f"ig_media/{account_id}").strip().strip("/")
-    reels_prefix = r2_cfg.get("reels_prefix", f"reels/{account_id}").strip().strip("/")
+    threads_media_prefix = (r2_cfg.get("threads_media_prefix", f"threads_media/{account_id}") or "").strip().strip("/")
+    reels_prefix = (r2_cfg.get("reels_prefix", f"ugc/reels/{account_id}") or "").strip().strip("/")
 
+    # If disabled
     if auto_post_limit <= 0 or not rss_feeds:
         print(f"Cuenta {account_id} está apagada (auto_post_limit=0 o rss_feeds vacío). Saltando ✅")
         return {"generated_at": iso_now(), "account_id": account_id, "skipped": True, "reason": "disabled_or_no_feeds"}
@@ -816,13 +872,15 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     processed = []
     for a in articles[:max_ai_items]:
         processed.append(a)
-        time.sleep(0.03)
+        time.sleep(0.01)
 
     state = load_threads_state(state_key)
     print("STATE posted_items:", len(state.get("posted_items", {})))
 
     posted_count = 0
     results = []
+
+    effective_dry_run = DRY_RUN or dry_run_cfg
 
     while posted_count < auto_post_limit:
         item, mode = pick_item(processed, state, repost_enable, repost_max_times, repost_window_days)
@@ -834,7 +892,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         label = "NUEVO" if mode == "new" else "REPOST"
         print(f"Seleccionado ({label}): {link}")
 
-        # Texto Threads + caption IG
+        # Generate text
         try:
             threads_text = build_threads_text(item, mode=mode)
             ig_caption = build_instagram_caption(item, link=link)
@@ -843,7 +901,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             processed = [x for x in processed if x.get("link") != link]
             continue
 
-        # Imagen del artículo
+        # Find image
         img_candidates = extract_best_images(link, max_images=5)
         if not img_candidates:
             print("No se encontró imagen. Se omite.")
@@ -851,8 +909,9 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             continue
 
         chosen_img = None
+        chosen_ext = ".jpg"
         chosen_bytes = None
-        chosen_ext = None
+
         for u in img_candidates:
             try:
                 b, ext = download_image_bytes(u)
@@ -863,89 +922,92 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             except Exception:
                 continue
 
-        if not chosen_img or not chosen_bytes or not chosen_ext:
+        if not chosen_img or chosen_bytes is None:
             print("Todas las imágenes del artículo fallaron. Se omite.")
             processed = [x for x in processed if x.get("link") != link]
             continue
 
-        # Rehost imagen en R2
+        # Rehost image to R2 (for Threads)
         r2_img_url = upload_image_bytes_to_r2_public(chosen_bytes, chosen_ext, prefix=threads_media_prefix)
         print("Imagen rehost R2:", r2_img_url)
 
-        # Threads publish (si aplica)
+        # Threads publish (or simulate)
         threads_res = None
-        if ENABLE_THREADS_PUBLISH:
-            try:
-                threads_res = threads_publish_text_image(
-                    user_id=threads_user_id,
-                    access_token=THREADS_USER_ACCESS_TOKEN or "",
-                    dry_run=dry_run,
-                    text=threads_text,
-                    image_url_from_news=r2_img_url,  # ya rehosted
-                    threads_media_prefix=threads_media_prefix,
-                )
-            except Exception as e:
-                print("ERROR Threads publish:", str(e))
+        if effective_dry_run or not ENABLE_THREADS_PUBLISH:
+            print("[DRY_RUN] Threads text:", clip_threads_text(threads_text, 500))
+            print("[DRY_RUN] Threads image:", r2_img_url)
+            threads_res = {"ok": True, "dry_run": True}
         else:
-            print("[SKIP] ENABLE_THREADS_PUBLISH=false")
+            if not THREADS_USER_ACCESS_TOKEN:
+                raise RuntimeError("Falta THREADS_USER_ACCESS_TOKEN")
+            container_id = threads_create_container_image(threads_user_id, THREADS_USER_ACCESS_TOKEN, threads_text, r2_img_url)
+            print("Container created:", container_id)
+            threads_wait_container(container_id, THREADS_USER_ACCESS_TOKEN)
+            pub = threads_publish(threads_user_id, THREADS_USER_ACCESS_TOKEN, container_id)
+            print("Threads publish response:", pub)
+            threads_res = {"ok": True, "container": {"id": container_id}, "publish": pub, "image_url": r2_img_url}
 
-        # IG publish (image o reel)
-        ig_res = None
-        ig_kind = "image"
-        try:
-            if ENABLE_REELS:
-                # Generar reel usando la imagen del artículo + tu fondo/logo
+        # Reel generation (optional) -> upload to R2
+        reel_url = None
+        if ENABLE_REELS:
+            try:
                 with tempfile.TemporaryDirectory() as td:
-                    img_path = os.path.join(td, "news.jpg")
-                    with open(img_path, "wb") as f:
+                    news_img_path = os.path.join(td, "news.jpg")
+                    with open(news_img_path, "wb") as f:
                         f.write(chosen_bytes)
 
                     reel_bytes = generate_reel_mp4_bytes(
                         headline=item.get("title", "")[:140],
-                        news_image_path=img_path,
+                        news_image_path=news_img_path,
                         logo_path=asset_logo,
                         bg_path=asset_bg,
                         seconds=REEL_SECONDS,
-                        music_path=asset_music if os.path.exists(asset_music) else None,
+                        music_path=asset_music if (asset_music and os.path.exists(asset_music)) else None,
                         cta_text=cta_text,
                     )
 
-                reel_url = upload_video_mp4_to_r2_public(reel_bytes, prefix=reels_prefix)
+                # Upload mp4
+                reel_key = f"{reels_prefix}/{hashlib.sha1(reel_bytes).hexdigest()[:16]}.mp4"
+                s3 = r2_client()
+                s3.put_object(Bucket=BUCKET_NAME, Key=reel_key, Body=reel_bytes, ContentType="video/mp4")
+                reel_url = f"{R2_PUBLIC_BASE_URL}/{reel_key}"
                 print("Reel URL R2:", reel_url)
-                ig_kind = "reel"
+            except Exception as e:
+                print("AVISO: Reel falló (no rompe):", str(e))
+                reel_url = None
 
-                if dry_run or not ENABLE_IG_PUBLISH:
-                    print("[DRY_RUN/NO_PUBLISH] IG reel caption:\n", ig_caption[:800])
-                    ig_res = {"ok": True, "dry_run": True, "video_url": reel_url}
-                else:
-                    ig_res = ig_publish_reel(IG_USER_ID or "", IG_ACCESS_TOKEN or "", reel_url, ig_caption)
+        # IG publish reel (or simulate)
+        ig_res = None
+        ig_kind = "reel" if reel_url else "none"
+        if reel_url and ENABLE_IG_PUBLISH and not effective_dry_run:
+            try:
+                ig_res = ig_publish_reel(IG_USER_ID, IG_ACCESS_TOKEN, reel_url, ig_caption)
+            except Exception as e:
+                print("AVISO: IG publish falló (no rompe):", str(e))
+                ig_res = {"error": str(e)}
+        else:
+            print("[DRY_RUN] IG caption:", ig_caption[:600])
+            if reel_url:
+                print("[DRY_RUN] IG reel_url:", reel_url)
+            ig_res = {"ok": True, "dry_run": True}
 
-            else:
-                # Publicar solo imagen
-                if dry_run or not ENABLE_IG_PUBLISH:
-                    print("[DRY_RUN/NO_PUBLISH] IG image caption:\n", ig_caption[:800])
-                    ig_res = {"ok": True, "dry_run": True, "image_url": r2_img_url}
-                else:
-                    ig_res = ig_publish_image(IG_USER_ID or "", IG_ACCESS_TOKEN or "", r2_img_url, ig_caption)
+        # Mark posted + save state only if not dry run
+        if not effective_dry_run:
+            mark_posted(state, link)
+            save_threads_state(state_key, state)
+            posted_count += 1
 
-        except Exception as e:
-            print("ERROR IG publish:", str(e))
-
-        # Mark posted if at least Threads publish happened OR IG publish happened
-        mark_posted(state, link)
-        save_threads_state(state_key, state)
-
-        posted_count += 1
         results.append({
             "link": link,
             "mode": mode,
             "threads": threads_res,
             "ig": ig_res,
             "ig_kind": ig_kind,
-            "dry_run": dry_run,
+            "dry_run": effective_dry_run,
         })
 
-        break  # 1 por run normalmente
+        # Only 1 per run for safety (since schedule runs multiple times)
+        break
 
     run_payload = {
         "generated_at": iso_now(),
@@ -961,7 +1023,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "dry_run": DRY_RUN,
             "graph_version": f"v{GRAPH_VERSION}",
         },
-        "result": {"posted_count": posted_count, "results": results},
+        "result": {"posted_count": posted_count, "results": results}
     }
     return run_payload
 
@@ -988,7 +1050,7 @@ if __name__ == "__main__":
     print(" - ENABLE_THREADS_PUBLISH:", ENABLE_THREADS_PUBLISH)
     print(" - ENABLE_IG_PUBLISH:", ENABLE_IG_PUBLISH)
     print(" - ENABLE_REELS:", ENABLE_REELS)
-    print(" - R2_PUBLIC_BASE_URL:", (env_nonempty("R2_PUBLIC_BASE_URL", R2_PUBLIC_BASE_URL) or "")[:80])
+    print(" - R2_PUBLIC_BASE_URL:", (env_nonempty("R2_PUBLIC_BASE_URL", R2_PUBLIC_BASE_URL) or "")[:60])
     print(" - OPENAI_MODEL:", env_nonempty("OPENAI_MODEL", OPENAI_MODEL))
     print(" - GRAPH_BASE:", GRAPH_BASE)
     print(" - IG_USER_ID set:", bool(IG_USER_ID))

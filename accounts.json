@@ -29,11 +29,6 @@
         "music": "assets/music.mp3",
         "cta": "Sigue para más hype esports 🚀"
       },
-      "copy": {
-        "threads_prompt": "",
-        "ig_prompt": "",
-        "disclaimer": ""
-      },
       "threads": {
         "user_id": "me",
         "state_key": "accounts/estratosferica/threads_state.json",
@@ -46,6 +41,7 @@
       },
       "r2": {
         "threads_media_prefix": "threads_media/estratosferica",
+        "ig_media_prefix": "ig_media/estratosferica",
         "ig_queue_prefix": "ugc/ig_queue/estratosferica",
         "reels_prefix": "ugc/reels/estratosferica"
       }
@@ -63,11 +59,6 @@
         "music": "assets/music.mp3",
         "cta": "Link en bio 🔗"
       },
-      "copy": {
-        "threads_prompt": "",
-        "ig_prompt": "",
-        "disclaimer": "#ad #afiliado"
-      },
       "threads": {
         "user_id": "me",
         "state_key": "accounts/cliente2/threads_state.json",
@@ -80,6 +71,7 @@
       },
       "r2": {
         "threads_media_prefix": "threads_media/cliente2",
+        "ig_media_prefix": "ig_media/cliente2",
         "ig_queue_prefix": "ugc/ig_queue/cliente2",
         "reels_prefix": "ugc/reels/cliente2"
       }

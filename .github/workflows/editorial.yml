@@ -1,7 +1,6 @@
 name: Robot Editorial (Modo A) - Auto
 
 on:
-  workflow_dispatch:
   schedule:
     # 9:00 AM Colombia (UTC-5 -> 14:00 UTC)
     - cron: "0 14 * * *"
@@ -9,6 +8,7 @@ on:
     - cron: "0 20 * * *"
     # 9:00 PM Colombia (UTC-5 -> 02:00 UTC)
     - cron: "0 2 * * *"
+  workflow_dispatch:
 
 jobs:
   run-editorial:
@@ -48,48 +48,40 @@ jobs:
           # OpenAI
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: "gpt-4.1-mini"
+          OPENAI_TTS_MODEL: "gpt-4o-mini-tts"
 
-          # Threads (si estás publicando en Threads)
-          ENABLE_THREADS_PUBLISH: "true"
+          # Threads
           THREADS_USER_ACCESS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
 
-          # Instagram Publishing
+          # Instagram
           ENABLE_IG_PUBLISH: "true"
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           GRAPH_VERSION: "v25.0"
 
-          # Reels
+          # Reels engine
           ENABLE_REELS: "true"
           REEL_SECONDS: "15"
           REEL_W: "1080"
           REEL_H: "1920"
-          REEL_FPS: "30"
 
-          # Assets
+          # Assets fallback (si runway está apagado)
           ASSET_BG: "assets/bg.jpg"
           ASSET_LOGO: "assets/logo.png"
           ASSET_MUSIC: "assets/music.mp3"
 
-          # Reel “gamer dynamic” tuning
-          LOGO_NONE_PCT: "60"
-          LOGO_SMALL_PCT: "30"
-          LOGO_BIG_PCT: "10"
+          # Runway (si no está, cae a modo template)
+          RUNWAY_API_KEY: ${{ secrets.RUNWAY_API_KEY }}
+          RUNWAY_MODEL: "gen4_turbo"   # si cambias de modelo, solo cambias aquí
+          RUNWAY_SECONDS: "5"          # animación base de runway (luego la loop-eamos a 15)
+          RUNWAY_RATIO: "9:16"         # vertical reels
 
-          REEL_MUSIC_ALWAYS: "true"
-          REEL_MUSIC_VOLUME: "0.15"
-
-          REEL_VOICE_PCT: "0"           # (por ahora 0, luego lo activamos)
-          REEL_VOICE_VOLUME: "1.0"
-
-          REEL_GLITCH_PCT: "60"
-          REEL_SCANLINES_PCT: "70"
-
-          # HTTP
-          HTTP_TIMEOUT: "30"
-
-          # Debug
-          DRY_RUN: "false"
-
+          # Estilo y “ruleta” visual para Modo A
+          MODEA_STYLE_ENABLE: "true"
+          MODEA_LOGO_PCT: "40"         # 40% con logo (pequeño)
+          MODEA_NOLOGO_PCT: "60"       # 60% sin logo
+          MODEA_VOICE_PCT: "25"        # 25% de reels con voz IA
+          MODEA_MUSIC_PCT: "70"        # 70% con música
         run: |
           python -u main.py

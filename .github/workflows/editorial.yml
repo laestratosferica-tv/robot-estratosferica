@@ -10,7 +10,7 @@ on:
       dry_run:
         description: "Simular (no publica Threads ni IG). Igual genera y sube assets."
         required: false
-        default: "false"
+        default: "true"
       publish_ig:
         description: "Publicar en Instagram"
         required: false
@@ -22,7 +22,7 @@ on:
       runway_enabled:
         description: "Usar Runway (animación image->video) si hay API key"
         required: false
-        default: "false"
+        default: "true"
 
 jobs:
   run-editorial:
@@ -84,7 +84,7 @@ jobs:
 
           # Reels base
           ENABLE_REELS: "true"
-          REEL_SECONDS: "5"
+          REEL_SECONDS: "15"
           REEL_W: "1080"
           REEL_H: "1920"
           ASSET_BG: "assets/bg.jpg"

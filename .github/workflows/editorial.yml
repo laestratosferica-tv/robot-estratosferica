@@ -1,6 +1,7 @@
 name: Robot Editorial (Modo A) - Auto
 
 on:
+  workflow_dispatch:
   schedule:
     # 9:00 AM Colombia (UTC-5 -> 14:00 UTC)
     - cron: "0 14 * * *"
@@ -8,7 +9,6 @@ on:
     - cron: "0 20 * * *"
     # 9:00 PM Colombia (UTC-5 -> 02:00 UTC)
     - cron: "0 2 * * *"
-  workflow_dispatch:
 
 jobs:
   run-editorial:
@@ -37,7 +37,7 @@ jobs:
         env:
           RUN_MODE: "A"
 
-          # R2
+          # Infra R2
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -48,40 +48,34 @@ jobs:
           # OpenAI
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: "gpt-4.1-mini"
-          OPENAI_TTS_MODEL: "gpt-4o-mini-tts"
 
           # Threads
+          ENABLE_THREADS_PUBLISH: "true"
           THREADS_USER_ACCESS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
 
-          # Instagram
+          # Instagram publish
           ENABLE_IG_PUBLISH: "true"
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           GRAPH_VERSION: "v25.0"
 
-          # Reels engine
+          # Reels visuals
           ENABLE_REELS: "true"
           REEL_SECONDS: "15"
           REEL_W: "1080"
           REEL_H: "1920"
 
-          # Assets fallback (si runway está apagado)
-          ASSET_BG: "assets/bg.jpg"
+          # Assets (puedes añadir más fondos en assets/bgs/)
+          ASSET_BG_DIR: "assets/bgs"
           ASSET_LOGO: "assets/logo.png"
-          ASSET_MUSIC: "assets/music.mp3"
+          ASSET_MUSIC_DIR: "assets/music"
 
-          # Runway (si no está, cae a modo template)
-          RUNWAY_API_KEY: ${{ secrets.RUNWAY_API_KEY }}
-          RUNWAY_MODEL: "gen4_turbo"   # si cambias de modelo, solo cambias aquí
-          RUNWAY_SECONDS: "5"          # animación base de runway (luego la loop-eamos a 15)
-          RUNWAY_RATIO: "9:16"         # vertical reels
+          # Tipografías
+          FONT_BOLD: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-          # Estilo y “ruleta” visual para Modo A
-          MODEA_STYLE_ENABLE: "true"
-          MODEA_LOGO_PCT: "40"         # 40% con logo (pequeño)
-          MODEA_NOLOGO_PCT: "60"       # 60% sin logo
-          MODEA_VOICE_PCT: "25"        # 25% de reels con voz IA
-          MODEA_MUSIC_PCT: "70"        # 70% con música
+          # Debug / simular
+          DRY_RUN: "false"   # true = NO publica, solo genera y sube a R2 para que lo veas
+
         run: |
           python -u main.py

@@ -269,10 +269,6 @@ def _post_with_retries(
     label: str = "HTTP POST",
     no_retry_if_text_contains: Optional[List[str]] = None,
 ) -> requests.Response:
-    """
-    POST with retries. If response body contains any of no_retry_if_text_contains (case-insensitive),
-    it prints the error ONCE and raises NoRetryError (so it won't retry).
-    """
     no_retry_if_text_contains = [s.lower() for s in (no_retry_if_text_contains or [])]
 
     last_err = None
@@ -367,7 +363,6 @@ def upload_bytes_to_r2_public(file_bytes: bytes, ext: str, prefix: str, content_
     s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=file_bytes, ContentType=content_type)
     url = f"{base}/{key}"
 
-    # best-effort check
     try:
         head = requests.head(url, timeout=10, allow_redirects=True)
         if head.status_code != 200:
@@ -677,7 +672,8 @@ def threads_publish_text_image(user_id: str, access_token: str, dry_run: bool, t
 # Runway (image->video) optional
 # =========================
 
-MP4_URL_RE = re.compile(r"https?://[^\s\"']+\.mp4", re.IGNORECASE)
+# Fallback regex: match full URL including query (important for _jwt=...)
+URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
 
 def runway_headers() -> Dict[str, str]:
     if not RUNWAY_API_KEY:
@@ -728,6 +724,24 @@ def runway_get_task(task_id: str) -> Dict[str, Any]:
     _raise_meta_error(r, "RUNWAY TASK GET")
     return r.json()
 
+def _extract_runway_mp4_url(task_json: Dict[str, Any]) -> Optional[str]:
+    """
+    Preferred: Runway docs say task.output is a list of URLs (often with ?_jwt=...).
+    We must return the URL AS-IS (including query params).
+    """
+    out = task_json.get("output")
+    if isinstance(out, list) and out:
+        u = out[0]
+        if isinstance(u, str) and ".mp4" in u.lower() and u.lower().startswith("http"):
+            return u  # IMPORTANT: keep querystring
+
+    # Some variants might nest in outputs/result etc. (best-effort)
+    s = json.dumps(task_json, ensure_ascii=False)
+    for m in URL_RE.findall(s):
+        if ".mp4" in m.lower():
+            return m
+    return None
+
 def runway_wait_for_mp4(task_id: str, timeout_sec: int = 420) -> str:
     start = time.time()
     last = None
@@ -735,15 +749,18 @@ def runway_wait_for_mp4(task_id: str, timeout_sec: int = 420) -> str:
         j = runway_get_task(task_id)
         last = j
         status = (j.get("status") or "").upper()
+
         if status in ("SUCCEEDED", "SUCCESS", "COMPLETED", "FINISHED"):
-            s = json.dumps(j)
-            m = MP4_URL_RE.search(s)
-            if m:
-                return m.group(0)
+            mp4 = _extract_runway_mp4_url(j)
+            if mp4:
+                return mp4
             raise RuntimeError(f"Task succeeded but no mp4 found in response: {j}")
+
         if status in ("FAILED", "ERROR", "CANCELED", "CANCELLED"):
             raise RuntimeError(f"Runway task failed: {j}")
+
         time.sleep(RUNWAY_POLL_SEC)
+
     raise TimeoutError(f"Runway task timeout. Last={last}")
 
 # =========================
@@ -1144,8 +1161,9 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             mp4_url = runway_wait_for_mp4(task_id, timeout_sec=RUNWAY_TIMEOUT)
                             print("Runway mp4 URL:", mp4_url)
 
-                            rr = requests.get(mp4_url, timeout=60)
+                            rr = requests.get(mp4_url, timeout=90, allow_redirects=True)
                             rr.raise_for_status()
+
                             bg_vid = os.path.join(td, "bg.mp4")
                             with open(bg_vid, "wb") as f:
                                 f.write(rr.content)

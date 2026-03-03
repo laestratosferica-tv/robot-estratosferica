@@ -3,7 +3,7 @@ name: Robot Editorial (Modo A) - Auto
 on:
   schedule:
     - cron: "0 14 * * *" # 9am Colombia (UTC-5 -> 14:00 UTC)
-    - cron: "0 20 * * *" # 3pm Colombia
+    - cron: "0 20 * * *" # 3pm Colombia  ✅ RUNWAY
     - cron: "0 2 * * *"  # 9pm Colombia
   workflow_dispatch:
     inputs:
@@ -12,15 +12,15 @@ on:
         required: false
         default: "true"
       publish_ig:
-        description: "Publicar en Instagram (si dry_run=false)"
+        description: "Publicar en Instagram"
         required: false
         default: "true"
       publish_threads:
-        description: "Publicar en Threads (si dry_run=false)"
+        description: "Publicar en Threads"
         required: false
         default: "true"
       runway_enabled:
-        description: "Usar Runway (animación image->video) si hay API key"
+        description: "Forzar Runway manualmente"
         required: false
         default: "true"
 
@@ -51,24 +51,22 @@ jobs:
         env:
           RUN_MODE: "A"
 
-          # DRY_RUN:
-          # - En schedule: false
-          # - En workflow_dispatch: usa input dry_run
+          # Toggles
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
+          ENABLE_IG_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ig || 'false' }}
+          ENABLE_THREADS_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_threads || 'false' }}
 
-          # IMPORTANTE:
-          # Si DRY_RUN=true, FORZAMOS publish en false aunque inputs digan true
-          ENABLE_IG_PUBLISH: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') && 'false' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ig || 'true') }}
-          ENABLE_THREADS_PUBLISH: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') && 'false' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_threads || 'true') }}
-
-          # Runway (opcional)
-          # - En schedule: true (si tienes créditos, si no, hará fallback sin romper)
-          # - En workflow_dispatch: usa input runway_enabled
-          RUNWAY_ENABLED: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.runway_enabled || 'true' }}
+          # ✅ RUNWAY solo en schedule de 3pm Colombia (20:00 UTC).
+          # En manual, usa el input runway_enabled.
+          RUNWAY_ENABLED: ${{ (github.event_name == 'schedule' && github.event.schedule == '0 20 * * *') && 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.runway_enabled) || 'false' }}
           RUNWAY_API_KEY: ${{ secrets.RUNWAY_API_KEY }}
           RUNWAY_BASE: "https://api.dev.runwayml.com"
           RUNWAY_I2V_MODEL: "gen4.5"
-          RUNWAY_I2V_SECONDS: "5"
+
+          # Autonomía (random)
+          MUSIC_PROBABILITY: "0.75"
+          LOGO_PROBABILITY: "0.85"
+          MUSIC_SEARCH_DIR: "assets"
 
           # R2
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
@@ -94,7 +92,7 @@ jobs:
 
           # Reels base
           ENABLE_REELS: "true"
-          REEL_SECONDS: "15"
+          REEL_SECONDS: "5"
           REEL_W: "1080"
           REEL_H: "1920"
           ASSET_BG: "assets/bg.jpg"

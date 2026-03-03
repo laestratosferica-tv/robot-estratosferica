@@ -662,7 +662,7 @@ def runway_create_image_to_video(image_https_url: str, prompt_text: str, seconds
         "promptText": prompt_text[:1000],
         "ratio": "720:1280",   # vertical
         "duration": int(max(2, min(10, seconds))),
-        "references": [{"type": "image", "uri": image_https_url}],
+        "promptImage": image_https_url,
     }
     r = _post_with_retries(url, headers=runway_headers(), json_body=payload, label="RUNWAY I2V CREATE")
     j = r.json()

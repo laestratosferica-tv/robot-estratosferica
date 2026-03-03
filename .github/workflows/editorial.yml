@@ -10,7 +10,7 @@ on:
       dry_run:
         description: "Simular (no publica Threads ni IG). Igual genera y sube assets."
         required: false
-        default: "true"
+        default: "false"
       publish_ig:
         description: "Publicar en Instagram"
         required: false

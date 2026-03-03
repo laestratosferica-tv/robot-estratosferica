@@ -130,7 +130,7 @@ RUNWAY_ENABLED = env_bool("RUNWAY_ENABLED", False)
 RUNWAY_API_KEY = env_nonempty("RUNWAY_API_KEY")
 RUNWAY_VERSION = env_nonempty("RUNWAY_VERSION", "2024-11-06")
 RUNWAY_BASE = env_nonempty("RUNWAY_BASE", "https://api.dev.runwayml.com").rstrip("/")
-RUNWAY_I2V_MODEL = env_nonempty("RUNWAY_I2V_MODEL", "gen4.5")  # keep configurable
+RUNWAY_I2V_MODEL = env_nonempty("RUNWAY_I2V_MODEL", "gen4.5")
 RUNWAY_I2V_SECONDS = env_int("RUNWAY_I2V_SECONDS", 5)          # 2..10 typical
 RUNWAY_TIMEOUT = env_int("RUNWAY_TIMEOUT", 420)
 RUNWAY_POLL_SEC = env_int("RUNWAY_POLL_SEC", 6)
@@ -229,7 +229,6 @@ def extract_youtube_video_id(u: str) -> Optional[str]:
         return None
 
 def youtube_thumbnail_candidates(video_id: str) -> List[str]:
-    # maxres no siempre existe; hq casi siempre
     return [
         f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg",
         f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
@@ -256,7 +255,10 @@ def _raise_meta_error(r: requests.Response, label: str = "HTTP") -> None:
     print("========================\n")
     r.raise_for_status()
 
-# UPDATED: retries with "no retry" keyword matching (e.g., Runway no credits)
+class NoRetryError(Exception):
+    """Error que NO debe disparar reintentos."""
+    pass
+
 def _post_with_retries(
     url: str,
     *,
@@ -267,6 +269,10 @@ def _post_with_retries(
     label: str = "HTTP POST",
     no_retry_if_text_contains: Optional[List[str]] = None,
 ) -> requests.Response:
+    """
+    POST with retries. If response body contains any of no_retry_if_text_contains (case-insensitive),
+    it prints the error ONCE and raises NoRetryError (so it won't retry).
+    """
     no_retry_if_text_contains = [s.lower() for s in (no_retry_if_text_contains or [])]
 
     last_err = None
@@ -274,22 +280,37 @@ def _post_with_retries(
         try:
             r = requests.post(url, headers=headers, data=data, params=params, json=json_body, timeout=HTTP_TIMEOUT)
 
-            # If error looks like a hard-fail, don't retry
             if r.status_code >= 400:
                 txt = (r.text or "").lower()
+
                 for needle in no_retry_if_text_contains:
                     if needle and needle in txt:
-                        _raise_meta_error(r, label)  # raises immediately
+                        print(f"\n====== {label} ERROR (NO RETRY) ======")
+                        print("URL:", r.request.url)
+                        print("METHOD:", r.request.method)
+                        if r.request.body:
+                            body = r.request.body
+                            if isinstance(body, bytes):
+                                body = body.decode("utf-8", errors="replace")
+                            print("REQUEST BODY:", body)
+                        print("STATUS:", r.status_code)
+                        print("RESPONSE TEXT:", r.text)
+                        print("========================\n")
+                        raise NoRetryError(f"{label}: hard-fail matched '{needle}'")
 
-            _raise_meta_error(r, label)
+                _raise_meta_error(r, label)
+
             return r
 
+        except NoRetryError:
+            raise
         except Exception as e:
             last_err = e
             if attempt < POST_RETRY_MAX:
                 time.sleep(POST_RETRY_SLEEP)
             else:
                 raise
+
     raise last_err  # type: ignore[misc]
 
 # =========================
@@ -388,7 +409,6 @@ META_IMAGE_RE2 = re.compile(
 IMG_SRC_RE = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
 
 def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
-    # Special case: YouTube thumbnail
     if is_youtube_url(page_url):
         vid = extract_youtube_video_id(page_url)
         if vid:
@@ -428,7 +448,6 @@ def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
 
         return found[:max_images]
     except Exception:
-        # fallback youtube if weird redirect
         if is_youtube_url(page_url):
             vid = extract_youtube_video_id(page_url)
             if vid:
@@ -469,7 +488,6 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
         except Exception:
             continue
 
-    # dedupe by link
     seen = set()
     deduped: List[Dict[str, Any]] = []
     for a in raw:
@@ -477,7 +495,6 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
             seen.add(a["link"])
             deduped.append(a)
 
-    # balance per feed
     if max_per_feed > 0:
         counts: Dict[str, int] = {}
         balanced: List[Dict[str, Any]] = []
@@ -509,7 +526,6 @@ def openai_text(prompt: str) -> str:
     model = env_nonempty("OPENAI_MODEL", OPENAI_MODEL) or "gpt-4.1-mini"
     client = openai_client()
 
-    # Prefer Responses API, fallback to chat.completions
     try:
         resp = client.responses.create(model=model, input=prompt)
         out = getattr(resp, "output_text", None)
@@ -672,7 +688,6 @@ def runway_headers() -> Dict[str, str]:
         "Content-Type": "application/json",
     }
 
-# UPDATED: validate https + no-retry on "no credits"
 def runway_create_image_to_video(image_https_url: str, prompt_text: str, seconds: int = 5) -> str:
     """
     POST /v1/image_to_video -> returns task {id}
@@ -684,7 +699,7 @@ def runway_create_image_to_video(image_https_url: str, prompt_text: str, seconds
     payload = {
         "model": RUNWAY_I2V_MODEL,
         "promptText": (prompt_text or "")[:1000],
-        "ratio": "720:1280",   # vertical
+        "ratio": "720:1280",
         "duration": int(max(2, min(10, seconds))),
         "promptImage": image_https_url,
     }
@@ -700,6 +715,7 @@ def runway_create_image_to_video(image_https_url: str, prompt_text: str, seconds
             "insufficient credits",
         ],
     )
+
     j = r.json()
     task_id = j.get("id")
     if not task_id:
@@ -713,9 +729,6 @@ def runway_get_task(task_id: str) -> Dict[str, Any]:
     return r.json()
 
 def runway_wait_for_mp4(task_id: str, timeout_sec: int = 420) -> str:
-    """
-    Poll task until success/fail. Parse mp4 URL from any output field best-effort.
-    """
     start = time.time()
     last = None
     while time.time() - start < timeout_sec:
@@ -750,9 +763,6 @@ def generate_reel_from_image(
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
 ) -> bytes:
-    """
-    Stable template (image + bg + logo + text).
-    """
     _require_file(bg_path, "ASSET_BG")
     _require_file(logo_path, "ASSET_LOGO")
     if not os.path.exists(news_image_path):
@@ -830,9 +840,6 @@ def generate_reel_from_video_bg(
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
 ) -> bytes:
-    """
-    Use a vertical bg video (e.g. Runway i2v output) as reel background + overlay logo + text.
-    """
     _require_file(logo_path, "ASSET_LOGO")
     if not os.path.exists(bg_video_path):
         raise RuntimeError(f"Falta bg video local: {bg_video_path}")
@@ -1069,7 +1076,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         label = "NUEVO" if mode == "new" else "REPOST"
         print(f"Seleccionado ({label}): {link}")
 
-        # text
         try:
             threads_text = build_threads_text(item, mode=mode)
         except Exception as e:
@@ -1077,7 +1083,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             processed = [x for x in processed if x.get("link") != link]
             continue
 
-        # image candidates
         img_candidates = extract_best_images(link, max_images=5)
         if not img_candidates:
             print("No se encontró imagen. Se omite.")
@@ -1098,7 +1103,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             processed = [x for x in processed if x.get("link") != link]
             continue
 
-        # Threads publish (or dry-run)
         threads_res = None
         try:
             threads_res = threads_publish_text_image(
@@ -1113,13 +1117,10 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             print("Threads falló (no rompe todo):", str(e))
             threads_res = {"ok": False, "error": str(e)}
 
-        # Reel generation (always generate if ENABLE_REELS)
         reel_url = None
         if ENABLE_REELS:
             try:
-                # download chosen image locally for template OR to pass to runway as HTTPS later
                 img_bytes, img_ext = download_image_bytes(chosen_img)
-                # rehost to r2 for runway references and also keep
                 img_r2_url = upload_image_bytes_to_r2_public(img_bytes, img_ext, prefix=threads_media_prefix)
                 print("Imagen rehost R2:", img_r2_url)
 
@@ -1128,7 +1129,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     with open(local_img, "wb") as f:
                         f.write(img_bytes)
 
-                    # If Runway enabled, create animated BG video from image
                     use_runway = RUNWAY_ENABLED and bool(RUNWAY_API_KEY)
 
                     if use_runway:
@@ -1144,7 +1144,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             mp4_url = runway_wait_for_mp4(task_id, timeout_sec=RUNWAY_TIMEOUT)
                             print("Runway mp4 URL:", mp4_url)
 
-                            # download that mp4 and render final reel on top
                             rr = requests.get(mp4_url, timeout=60)
                             rr.raise_for_status()
                             bg_vid = os.path.join(td, "bg.mp4")
@@ -1160,7 +1159,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                                 cta_text=cta_text,
                             )
                         except Exception as e:
-                            # Fallback to image template if Runway fails (including "no credits")
                             print("Runway falló (fallback a reel normal):", str(e))
                             reel_bytes = generate_reel_from_image(
                                 headline=item.get("title", "")[:140],
@@ -1187,7 +1185,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as e:
                 print("Reel generation falló (no rompe):", str(e))
 
-        # IG publish (optional)
         ig_res = None
         ig_kind = None
         if reel_url:
@@ -1204,13 +1201,11 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 print("[DRY_RUN] IG disabled or dry_run, no publico.")
                 ig_res = {"video_url": reel_url, "published": False}
 
-        # mark posted in state if Threads actually published
         if threads_res and threads_res.get("ok") and not threads_res.get("dry_run"):
             mark_posted(state, link)
             save_threads_state(state_key, state)
             posted_count += 1
         elif threads_res and threads_res.get("dry_run"):
-            # in dry-run, do not mark as posted (so you can retest)
             posted_count += 1
 
         results.append(

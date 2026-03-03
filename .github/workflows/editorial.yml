@@ -12,11 +12,11 @@ on:
         required: false
         default: "true"
       publish_ig:
-        description: "Publicar en Instagram"
+        description: "Publicar en Instagram (si dry_run=false)"
         required: false
         default: "true"
       publish_threads:
-        description: "Publicar en Threads"
+        description: "Publicar en Threads (si dry_run=false)"
         required: false
         default: "true"
       runway_enabled:
@@ -51,14 +51,24 @@ jobs:
         env:
           RUN_MODE: "A"
 
-          # Toggles: en schedule se van "true/false" por defecto
+          # DRY_RUN:
+          # - En schedule: false
+          # - En workflow_dispatch: usa input dry_run
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
-          ENABLE_IG_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ig || 'true' }}
-          ENABLE_THREADS_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_threads || 'true' }}
+
+          # IMPORTANTE:
+          # Si DRY_RUN=true, FORZAMOS publish en false aunque inputs digan true
+          ENABLE_IG_PUBLISH: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') && 'false' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ig || 'true') }}
+          ENABLE_THREADS_PUBLISH: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') && 'false' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_threads || 'true') }}
 
           # Runway (opcional)
-          RUNWAY_ENABLED: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.runway_enabled || 'false' }}
+          # - En schedule: true (si tienes créditos, si no, hará fallback sin romper)
+          # - En workflow_dispatch: usa input runway_enabled
+          RUNWAY_ENABLED: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.runway_enabled || 'true' }}
           RUNWAY_API_KEY: ${{ secrets.RUNWAY_API_KEY }}
+          RUNWAY_BASE: "https://api.dev.runwayml.com"
+          RUNWAY_I2V_MODEL: "gen4.5"
+          RUNWAY_I2V_SECONDS: "5"
 
           # R2
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
@@ -84,7 +94,7 @@ jobs:
 
           # Reels base
           ENABLE_REELS: "true"
-          REEL_SECONDS: "15"
+          REEL_SECONDS: "5"
           REEL_W: "1080"
           REEL_H: "1920"
           ASSET_BG: "assets/bg.jpg"

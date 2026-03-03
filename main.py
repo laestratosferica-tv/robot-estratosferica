@@ -130,7 +130,7 @@ RUNWAY_ENABLED = env_bool("RUNWAY_ENABLED", False)
 RUNWAY_API_KEY = env_nonempty("RUNWAY_API_KEY")
 RUNWAY_VERSION = env_nonempty("RUNWAY_VERSION", "2024-11-06")
 RUNWAY_BASE = env_nonempty("RUNWAY_BASE", "https://api.dev.runwayml.com").rstrip("/")
-RUNWAY_I2V_MODEL = env_nonempty("RUNWAY_I2V_MODEL", "gen4.5")  # docs list changes; keep configurable
+RUNWAY_I2V_MODEL = env_nonempty("RUNWAY_I2V_MODEL", "gen4.5")  # keep configurable
 RUNWAY_I2V_SECONDS = env_int("RUNWAY_I2V_SECONDS", 5)          # 2..10 typical
 RUNWAY_TIMEOUT = env_int("RUNWAY_TIMEOUT", 420)
 RUNWAY_POLL_SEC = env_int("RUNWAY_POLL_SEC", 6)
@@ -229,7 +229,7 @@ def extract_youtube_video_id(u: str) -> Optional[str]:
         return None
 
 def youtube_thumbnail_candidates(video_id: str) -> List[str]:
-    # maxres no siempre existe; hq siempre casi
+    # maxres no siempre existe; hq casi siempre
     return [
         f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg",
         f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
@@ -256,13 +256,34 @@ def _raise_meta_error(r: requests.Response, label: str = "HTTP") -> None:
     print("========================\n")
     r.raise_for_status()
 
-def _post_with_retries(url: str, *, headers=None, data=None, params=None, json_body=None, label: str = "HTTP POST") -> requests.Response:
+# UPDATED: retries with "no retry" keyword matching (e.g., Runway no credits)
+def _post_with_retries(
+    url: str,
+    *,
+    headers=None,
+    data=None,
+    params=None,
+    json_body=None,
+    label: str = "HTTP POST",
+    no_retry_if_text_contains: Optional[List[str]] = None,
+) -> requests.Response:
+    no_retry_if_text_contains = [s.lower() for s in (no_retry_if_text_contains or [])]
+
     last_err = None
     for attempt in range(POST_RETRY_MAX + 1):
         try:
             r = requests.post(url, headers=headers, data=data, params=params, json=json_body, timeout=HTTP_TIMEOUT)
+
+            # If error looks like a hard-fail, don't retry
+            if r.status_code >= 400:
+                txt = (r.text or "").lower()
+                for needle in no_retry_if_text_contains:
+                    if needle and needle in txt:
+                        _raise_meta_error(r, label)  # raises immediately
+
             _raise_meta_error(r, label)
             return r
+
         except Exception as e:
             last_err = e
             if attempt < POST_RETRY_MAX:
@@ -651,20 +672,34 @@ def runway_headers() -> Dict[str, str]:
         "Content-Type": "application/json",
     }
 
+# UPDATED: validate https + no-retry on "no credits"
 def runway_create_image_to_video(image_https_url: str, prompt_text: str, seconds: int = 5) -> str:
     """
     POST /v1/image_to_video -> returns task {id}
-    Docs: Runway API reference.
     """
+    if not (image_https_url or "").startswith("https://"):
+        raise RuntimeError(f"Runway requiere promptImage como URL https pública. Got: {image_https_url}")
+
     url = f"{RUNWAY_BASE}/v1/image_to_video"
     payload = {
         "model": RUNWAY_I2V_MODEL,
-        "promptText": prompt_text[:1000],
+        "promptText": (prompt_text or "")[:1000],
         "ratio": "720:1280",   # vertical
         "duration": int(max(2, min(10, seconds))),
         "promptImage": image_https_url,
     }
-    r = _post_with_retries(url, headers=runway_headers(), json_body=payload, label="RUNWAY I2V CREATE")
+
+    r = _post_with_retries(
+        url,
+        headers=runway_headers(),
+        json_body=payload,
+        label="RUNWAY I2V CREATE",
+        no_retry_if_text_contains=[
+            "not enough credits",
+            "do not have enough credits",
+            "insufficient credits",
+        ],
+    )
     j = r.json()
     task_id = j.get("id")
     if not task_id:
@@ -688,13 +723,6 @@ def runway_wait_for_mp4(task_id: str, timeout_sec: int = 420) -> str:
         last = j
         status = (j.get("status") or "").upper()
         if status in ("SUCCEEDED", "SUCCESS", "COMPLETED", "FINISHED"):
-            # Try common fields
-            candidates = []
-            for k in ["output", "outputs", "result", "results", "artifacts", "artifact"]:
-                v = j.get(k)
-                if v:
-                    candidates.append(v)
-            # stringify search for .mp4
             s = json.dumps(j)
             m = MP4_URL_RE.search(s)
             if m:
@@ -723,7 +751,7 @@ def generate_reel_from_image(
     cta_text: Optional[str] = None,
 ) -> bytes:
     """
-    Your existing stable template (image + bg + logo + text).
+    Stable template (image + bg + logo + text).
     """
     _require_file(bg_path, "ASSET_BG")
     _require_file(logo_path, "ASSET_LOGO")
@@ -803,7 +831,7 @@ def generate_reel_from_video_bg(
     cta_text: Optional[str] = None,
 ) -> bytes:
     """
-    New: use a vertical bg video (e.g. Runway i2v output) as the reel background + overlay logo + text.
+    Use a vertical bg video (e.g. Runway i2v output) as reel background + overlay logo + text.
     """
     _require_file(logo_path, "ASSET_LOGO")
     if not os.path.exists(bg_video_path):
@@ -1102,32 +1130,47 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
                     # If Runway enabled, create animated BG video from image
                     use_runway = RUNWAY_ENABLED and bool(RUNWAY_API_KEY)
+
                     if use_runway:
-                        runway_prompt = (
-                            "Cinematic esports/gaming animation, neon, glitch, HUD overlays, "
-                            "dynamic camera movement, high energy, viral reel background. "
-                            f"Based on this news image and headline: {item.get('title','')}"
-                        )
-                        task_id = runway_create_image_to_video(img_r2_url, runway_prompt, seconds=RUNWAY_I2V_SECONDS)
-                        print("Runway task created:", task_id)
-                        mp4_url = runway_wait_for_mp4(task_id, timeout_sec=RUNWAY_TIMEOUT)
-                        print("Runway mp4 URL:", mp4_url)
+                        try:
+                            runway_prompt = (
+                                "Cinematic esports/gaming animation, neon, glitch, HUD overlays, "
+                                "dynamic camera movement, high energy, viral reel background. "
+                                f"Based on this news image and headline: {item.get('title','')}"
+                            )
+                            task_id = runway_create_image_to_video(img_r2_url, runway_prompt, seconds=RUNWAY_I2V_SECONDS)
+                            print("Runway task created:", task_id)
 
-                        # download that mp4 and render final reel on top
-                        rr = requests.get(mp4_url, timeout=60)
-                        rr.raise_for_status()
-                        bg_vid = os.path.join(td, "bg.mp4")
-                        with open(bg_vid, "wb") as f:
-                            f.write(rr.content)
+                            mp4_url = runway_wait_for_mp4(task_id, timeout_sec=RUNWAY_TIMEOUT)
+                            print("Runway mp4 URL:", mp4_url)
 
-                        reel_bytes = generate_reel_from_video_bg(
-                            headline=item.get("title", "")[:140],
-                            bg_video_path=bg_vid,
-                            logo_path=asset_logo,
-                            seconds=REEL_SECONDS,
-                            music_path=asset_music if os.path.exists(asset_music) else None,
-                            cta_text=cta_text,
-                        )
+                            # download that mp4 and render final reel on top
+                            rr = requests.get(mp4_url, timeout=60)
+                            rr.raise_for_status()
+                            bg_vid = os.path.join(td, "bg.mp4")
+                            with open(bg_vid, "wb") as f:
+                                f.write(rr.content)
+
+                            reel_bytes = generate_reel_from_video_bg(
+                                headline=item.get("title", "")[:140],
+                                bg_video_path=bg_vid,
+                                logo_path=asset_logo,
+                                seconds=REEL_SECONDS,
+                                music_path=asset_music if os.path.exists(asset_music) else None,
+                                cta_text=cta_text,
+                            )
+                        except Exception as e:
+                            # Fallback to image template if Runway fails (including "no credits")
+                            print("Runway falló (fallback a reel normal):", str(e))
+                            reel_bytes = generate_reel_from_image(
+                                headline=item.get("title", "")[:140],
+                                news_image_path=local_img,
+                                logo_path=asset_logo,
+                                bg_path=asset_bg,
+                                seconds=REEL_SECONDS,
+                                music_path=asset_music if os.path.exists(asset_music) else None,
+                                cta_text=cta_text,
+                            )
                     else:
                         reel_bytes = generate_reel_from_image(
                             headline=item.get("title", "")[:140],

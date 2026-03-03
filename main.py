@@ -6,7 +6,6 @@ import hashlib
 import random
 import subprocess
 import tempfile
-import textwrap
 from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse, parse_qs
 from typing import Optional, Tuple, Dict, Any, List
@@ -112,8 +111,13 @@ REEL_H = env_int("REEL_H", 1920)
 
 DEFAULT_ASSET_BG = env_nonempty("ASSET_BG", "assets/bg.jpg")
 DEFAULT_ASSET_LOGO = env_nonempty("ASSET_LOGO", "assets/logo.png")
-DEFAULT_ASSET_MUSIC = env_nonempty("ASSET_MUSIC", "assets/music.mp3")  # opcional
+DEFAULT_ASSET_MUSIC = env_nonempty("ASSET_MUSIC", "assets/music.mp3")  # puede no existir; hacemos fallback
 FONT_BOLD = env_nonempty("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+
+# Autonomía / Random
+MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.75)     # 75% con música, 25% mudo
+LOGO_PROBABILITY = env_float("LOGO_PROBABILITY", 0.85)       # 85% con logo, 15% sin logo
+MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets")  # donde buscar mp3 si no hay assets/music.mp3
 
 # Publish toggles
 DRY_RUN = env_bool("DRY_RUN", False)
@@ -132,7 +136,7 @@ RUNWAY_API_KEY = env_nonempty("RUNWAY_API_KEY")
 RUNWAY_VERSION = env_nonempty("RUNWAY_VERSION", "2024-11-06")
 RUNWAY_BASE = env_nonempty("RUNWAY_BASE", "https://api.dev.runwayml.com").rstrip("/")
 RUNWAY_I2V_MODEL = env_nonempty("RUNWAY_I2V_MODEL", "gen4.5")
-RUNWAY_I2V_SECONDS = env_int("RUNWAY_I2V_SECONDS", 5)          # 2..10 typical
+RUNWAY_I2V_SECONDS = env_int("RUNWAY_I2V_SECONDS", 5)
 RUNWAY_TIMEOUT = env_int("RUNWAY_TIMEOUT", 420)
 RUNWAY_POLL_SEC = env_int("RUNWAY_POLL_SEC", 6)
 
@@ -168,68 +172,6 @@ def days_since(dt_iso: str) -> int:
         return int((now_utc() - dt).total_seconds() // 86400)
     except Exception:
         return 999999
-
-# =========================
-# Text layout helpers (PREVENT CUT OFF)
-# =========================
-
-def wrap_for_reel(text: str, *, max_chars_per_line: int = 30, max_lines: int = 3) -> str:
-    """
-    Simple wrapping for ffmpeg drawtext (textfile). Ensures:
-    - no super long single line
-    - max lines limited
-    """
-    t = (text or "").strip().replace("\n", " ")
-    if not t:
-        return ""
-
-    lines = textwrap.wrap(t, width=max_chars_per_line, break_long_words=False, break_on_hyphens=False)
-    if not lines:
-        return t
-
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        # add ellipsis to last line (safe)
-        last = lines[-1].rstrip()
-        if len(last) >= 3:
-            last = last[:-1] + "…"
-        else:
-            last = last + "…"
-        lines[-1] = last
-
-    return "\n".join(lines)
-
-def pick_title_font_size(wrapped_title: str) -> int:
-    """
-    Heuristic: choose a font size that fits reliably.
-    """
-    lines = (wrapped_title or "").splitlines()
-    n = max(1, len(lines))
-    longest = max((len(x) for x in lines), default=0)
-
-    # base by lines
-    if n == 1:
-        base = 58
-    elif n == 2:
-        base = 52
-    else:
-        base = 46
-
-    # shrink if very long
-    if longest > 32:
-        base -= 8
-    elif longest > 28:
-        base -= 4
-
-    return int(max(36, min(60, base)))
-
-def audio_filter(seconds: int) -> str:
-    """
-    Gentle volume + fade in/out to avoid harsh cuts.
-    """
-    s = int(max(1, seconds))
-    out_start = max(0, s - 1)
-    return f"volume=0.18,afade=t=in:st=0:d=1,afade=t=out:st={out_start}:d=1"
 
 # =========================
 # URL helpers
@@ -318,58 +260,19 @@ def _raise_meta_error(r: requests.Response, label: str = "HTTP") -> None:
     print("========================\n")
     r.raise_for_status()
 
-class NoRetryError(Exception):
-    """Error que NO debe disparar reintentos."""
-    pass
-
-def _post_with_retries(
-    url: str,
-    *,
-    headers=None,
-    data=None,
-    params=None,
-    json_body=None,
-    label: str = "HTTP POST",
-    no_retry_if_text_contains: Optional[List[str]] = None,
-) -> requests.Response:
-    no_retry_if_text_contains = [s.lower() for s in (no_retry_if_text_contains or [])]
-
+def _post_with_retries(url: str, *, headers=None, data=None, params=None, json_body=None, label: str = "HTTP POST") -> requests.Response:
     last_err = None
     for attempt in range(POST_RETRY_MAX + 1):
         try:
             r = requests.post(url, headers=headers, data=data, params=params, json=json_body, timeout=HTTP_TIMEOUT)
-
-            if r.status_code >= 400:
-                txt = (r.text or "").lower()
-
-                for needle in no_retry_if_text_contains:
-                    if needle and needle in txt:
-                        print(f"\n====== {label} ERROR (NO RETRY) ======")
-                        print("URL:", r.request.url)
-                        print("METHOD:", r.request.method)
-                        if r.request.body:
-                            body = r.request.body
-                            if isinstance(body, bytes):
-                                body = body.decode("utf-8", errors="replace")
-                            print("REQUEST BODY:", body)
-                        print("STATUS:", r.status_code)
-                        print("RESPONSE TEXT:", r.text)
-                        print("========================\n")
-                        raise NoRetryError(f"{label}: hard-fail matched '{needle}'")
-
-                _raise_meta_error(r, label)
-
+            _raise_meta_error(r, label)
             return r
-
-        except NoRetryError:
-            raise
         except Exception as e:
             last_err = e
             if attempt < POST_RETRY_MAX:
                 time.sleep(POST_RETRY_SLEEP)
             else:
                 raise
-
     raise last_err  # type: ignore[misc]
 
 # =========================
@@ -411,6 +314,8 @@ def _guess_ext_from_content_type(ct: str) -> str:
         return ".jpg"
     if "mp4" in ct:
         return ".mp4"
+    if "mpeg" in ct or "mp3" in ct:
+        return ".mp3"
     return ".bin"
 
 def upload_bytes_to_r2_public(file_bytes: bytes, ext: str, prefix: str, content_type: str, expect_kind: str = "any") -> str:
@@ -454,6 +359,78 @@ def upload_video_mp4_to_r2_public(video_bytes: bytes, prefix: str) -> str:
     return upload_bytes_to_r2_public(video_bytes, ".mp4", prefix, "video/mp4", expect_kind="video")
 
 # =========================
+# Text wrap to avoid cut-off
+# =========================
+
+def wrap_text(text: str, max_chars: int = 28, max_lines: int = 3) -> str:
+    t = (text or "").strip().replace("\n", " ")
+    if not t:
+        return ""
+    words = t.split()
+    lines = []
+    cur = ""
+    for w in words:
+        if not cur:
+            cur = w
+            continue
+        if len(cur) + 1 + len(w) <= max_chars:
+            cur = cur + " " + w
+        else:
+            lines.append(cur)
+            cur = w
+            if len(lines) >= max_lines:
+                break
+    if len(lines) < max_lines and cur:
+        lines.append(cur)
+    # If we cut early, add ellipsis
+    joined = "\n".join(lines[:max_lines]).strip()
+    if len(" ".join(words)) > len(joined.replace("\n", " ")):
+        if not joined.endswith("…"):
+            joined = (joined.rstrip(".") + "…")
+    return joined
+
+# =========================
+# Music picker (NO renames needed)
+# =========================
+
+def _list_mp3_in_dir(dir_path: str) -> List[str]:
+    out = []
+    try:
+        for name in os.listdir(dir_path):
+            if name.lower().endswith(".mp3"):
+                p = os.path.join(dir_path, name)
+                if os.path.isfile(p):
+                    out.append(p)
+    except Exception:
+        pass
+    return out
+
+def pick_music_path(preferred_path: Optional[str]) -> Optional[str]:
+    """
+    Autonomía:
+    - Aplica probabilidad (MUSIC_PROBABILITY): a veces devuelve None (mudo)
+    - Si preferred_path existe y es archivo -> úsalo
+    - Si preferred_path es carpeta -> elige mp3 random
+    - Si no existe -> busca mp3 en MUSIC_SEARCH_DIR (por defecto assets/) y elige random
+    """
+    # random mute
+    if random.random() > float(max(0.0, min(1.0, MUSIC_PROBABILITY))):
+        return None
+
+    p = (preferred_path or "").strip()
+    if p:
+        if os.path.isdir(p):
+            candidates = _list_mp3_in_dir(p)
+            return random.choice(candidates) if candidates else None
+        if os.path.isfile(p):
+            return p
+
+    # fallback: search in assets/
+    d = (MUSIC_SEARCH_DIR or "assets").strip()
+    candidates = _list_mp3_in_dir(d)
+    return random.choice(candidates) if candidates else None
+
+# =========================
 # RSS / Images extraction (+ YouTube thumbnail fix)
 # =========================
 
@@ -468,7 +445,6 @@ META_IMAGE_RE2 = re.compile(
 IMG_SRC_RE = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
 
 def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
-    # Special case: YouTube thumbnail
     if is_youtube_url(page_url):
         vid = extract_youtube_video_id(page_url)
         if vid:
@@ -508,7 +484,6 @@ def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
 
         return found[:max_images]
     except Exception:
-        # fallback youtube if weird redirect
         if is_youtube_url(page_url):
             vid = extract_youtube_video_id(page_url)
             if vid:
@@ -549,7 +524,6 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
         except Exception:
             continue
 
-    # dedupe by link
     seen = set()
     deduped: List[Dict[str, Any]] = []
     for a in raw:
@@ -557,7 +531,6 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
             seen.add(a["link"])
             deduped.append(a)
 
-    # balance per feed
     if max_per_feed > 0:
         counts: Dict[str, int] = {}
         balanced: List[Dict[str, Any]] = []
@@ -589,7 +562,6 @@ def openai_text(prompt: str) -> str:
     model = env_nonempty("OPENAI_MODEL", OPENAI_MODEL) or "gpt-4.1-mini"
     client = openai_client()
 
-    # Prefer Responses API, fallback to chat.completions
     try:
         resp = client.responses.create(model=model, input=prompt)
         out = getattr(resp, "output_text", None)
@@ -741,8 +713,7 @@ def threads_publish_text_image(user_id: str, access_token: str, dry_run: bool, t
 # Runway (image->video) optional
 # =========================
 
-# Full URL match including querystring (important for _jwt=...)
-URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
+MP4_URL_RE = re.compile(r"https?://[^\s\"']+\.mp4", re.IGNORECASE)
 
 def runway_headers() -> Dict[str, str]:
     if not RUNWAY_API_KEY:
@@ -754,32 +725,15 @@ def runway_headers() -> Dict[str, str]:
     }
 
 def runway_create_image_to_video(image_https_url: str, prompt_text: str, seconds: int = 5) -> str:
-    """
-    POST /v1/image_to_video -> returns task {id}
-    """
-    if not (image_https_url or "").startswith("https://"):
-        raise RuntimeError(f"Runway requiere promptImage como URL https pública. Got: {image_https_url}")
-
     url = f"{RUNWAY_BASE}/v1/image_to_video"
     payload = {
         "model": RUNWAY_I2V_MODEL,
-        "promptText": (prompt_text or "")[:1000],
-        "ratio": "720:1280",   # vertical
+        "promptText": prompt_text[:1000],
+        "ratio": "720:1280",
         "duration": int(max(2, min(10, seconds))),
         "promptImage": image_https_url,
     }
-
-    r = _post_with_retries(
-        url,
-        headers=runway_headers(),
-        json_body=payload,
-        label="RUNWAY I2V CREATE",
-        no_retry_if_text_contains=[
-            "not enough credits",
-            "do not have enough credits",
-            "insufficient credits",
-        ],
-    )
+    r = _post_with_retries(url, headers=runway_headers(), json_body=payload, label="RUNWAY I2V CREATE")
     j = r.json()
     task_id = j.get("id")
     if not task_id:
@@ -792,25 +746,7 @@ def runway_get_task(task_id: str) -> Dict[str, Any]:
     _raise_meta_error(r, "RUNWAY TASK GET")
     return r.json()
 
-def _extract_runway_mp4_url(task_json: Dict[str, Any]) -> Optional[str]:
-    # Preferred: task.output is usually a list of URLs (often with ?_jwt=...)
-    out = task_json.get("output")
-    if isinstance(out, list) and out:
-        u = out[0]
-        if isinstance(u, str) and ".mp4" in u.lower() and u.lower().startswith("http"):
-            return u
-
-    # Best-effort: search any URL containing .mp4 in full JSON
-    s = json.dumps(task_json, ensure_ascii=False)
-    for m in URL_RE.findall(s):
-        if ".mp4" in m.lower():
-            return m
-    return None
-
 def runway_wait_for_mp4(task_id: str, timeout_sec: int = 420) -> str:
-    """
-    Poll task until success/fail, return mp4 URL (KEEP querystring).
-    """
     start = time.time()
     last = None
     while time.time() - start < timeout_sec:
@@ -818,9 +754,10 @@ def runway_wait_for_mp4(task_id: str, timeout_sec: int = 420) -> str:
         last = j
         status = (j.get("status") or "").upper()
         if status in ("SUCCEEDED", "SUCCESS", "COMPLETED", "FINISHED"):
-            mp4 = _extract_runway_mp4_url(j)
-            if mp4:
-                return mp4
+            s = json.dumps(j)
+            m = MP4_URL_RE.search(s)
+            if m:
+                return m.group(0)
             raise RuntimeError(f"Task succeeded but no mp4 found in response: {j}")
         if status in ("FAILED", "ERROR", "CANCELED", "CANCELLED"):
             raise RuntimeError(f"Runway task failed: {j}")
@@ -838,30 +775,21 @@ def _require_file(path: str, label: str) -> None:
 def generate_reel_from_image(
     headline: str,
     news_image_path: str,
-    logo_path: str,
+    logo_path: Optional[str],
     bg_path: str,
     seconds: int,
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
 ) -> bytes:
-    """
-    Stable template (image + bg + logo + text) with:
-    - auto wrap title
-    - safer positioning
-    - optional music w/ fade
-    """
     _require_file(bg_path, "ASSET_BG")
-    _require_file(logo_path, "ASSET_LOGO")
     if not os.path.exists(news_image_path):
         raise RuntimeError(f"Falta news image local: {news_image_path}")
     if not os.path.exists(FONT_BOLD):
         raise RuntimeError(f"Falta FONT_BOLD en runner: {FONT_BOLD}")
 
-    headline_clean = (headline or "").strip().replace("\n", " ")
-    title_wrapped = wrap_for_reel(headline_clean, max_chars_per_line=30, max_lines=3)
-    font_size = pick_title_font_size(title_wrapped)
-
-    cta = (cta_text or "Sigue para más hype esports").strip()
+    use_logo = bool(logo_path) and os.path.exists(logo_path)
+    headline_wrapped = wrap_text((headline or "")[:200], max_chars=28, max_lines=3)
+    cta = (cta_text or "Sigue para más").strip()
     music_ok = bool(music_path) and os.path.exists(music_path)
 
     with tempfile.TemporaryDirectory() as td:
@@ -870,7 +798,7 @@ def generate_reel_from_image(
         cta_txt = os.path.join(td, "cta.txt")
 
         with open(title_txt, "w", encoding="utf-8") as f:
-            f.write(title_wrapped)
+            f.write(headline_wrapped)
         with open(cta_txt, "w", encoding="utf-8") as f:
             f.write(cta)
 
@@ -879,41 +807,67 @@ def generate_reel_from_image(
             "-f", "lavfi", "-i", f"color=c=black:s={REEL_W}x{REEL_H}:r=30:d={int(seconds)}",
             "-i", bg_path,
             "-i", news_image_path,
-            "-i", logo_path,
         ]
+
+        if use_logo:
+            cmd += ["-i", logo_path]  # index 3 if logo
         if music_ok:
-            cmd += ["-i", music_path]  # index 4
+            cmd += ["-i", music_path]  # last audio
 
-        # Safer y positions to avoid IG UI and bottom controls
-        title_y = 1180
-        cta_y = 1520
+        # Video filters
+        # overlay bg + news + optional logo
+        if use_logo:
+            vf = (
+                f"[1:v]scale={REEL_W}:{REEL_H},format=rgba[bg];"
+                f"[0:v][bg]overlay=0:0:format=auto[v1];"
+                f"[2:v]scale={REEL_W-120}:-1,format=rgba[news];"
+                f"[v1][news]overlay=(W-w)/2:520:format=auto[v2];"
+                f"[3:v]scale=700:-1,format=rgba[logo];"
+                f"[v2][logo]overlay=(W-w)/2:170:format=auto[v3];"
+                f"[v3]"
+                f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:x=60:y=1290:fontsize=44:line_spacing=8:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=24,"
+                f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:x=60:y=1560:fontsize=40:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18"
+                f"[vout]"
+            )
+            cmd += ["-filter_complex", vf, "-map", "[vout]"]
+        else:
+            vf = (
+                f"[1:v]scale={REEL_W}:{REEL_H},format=rgba[bg];"
+                f"[0:v][bg]overlay=0:0:format=auto[v1];"
+                f"[2:v]scale={REEL_W-120}:-1,format=rgba[news];"
+                f"[v1][news]overlay=(W-w)/2:420:format=auto[v2];"
+                f"[v2]"
+                f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:x=60:y=1290:fontsize=46:line_spacing=10:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=24,"
+                f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:x=60:y=1560:fontsize=40:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18"
+                f"[vout]"
+            )
+            cmd += ["-filter_complex", vf, "-map", "[vout]"]
 
-        vf = (
-            f"[1:v]scale={REEL_W}:{REEL_H},format=rgba[bg];"
-            f"[0:v][bg]overlay=0:0:format=auto[v1];"
-            f"[2:v]scale={REEL_W-120}:-1,format=rgba[news];"
-            f"[v1][news]overlay=(W-w)/2:520:format=auto[v2];"
-            f"[3:v]scale=700:-1,format=rgba[logo];"
-            f"[v2][logo]overlay=(W-w)/2:170:format=auto[v3];"
-            f"[v3]"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
-            f"x=(w-text_w)/2:y={title_y}:fontsize={font_size}:fontcolor=white:"
-            f"line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=30,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
-            f"x=(w-text_w)/2:y={cta_y}:fontsize=44:fontcolor=white:"
-            f"box=1:boxcolor=black@0.40:boxborderw=20"
-            f"[vout]"
-        )
-
-        cmd += ["-filter_complex", vf, "-map", "[vout]"]
-
+        # Audio mapping
         if music_ok:
-            cmd += ["-map", "4:a", "-filter:a", audio_filter(int(seconds)), "-c:a", "aac", "-b:a", "128k"]
+            audio_index = -1  # last input
+            # fade-in/out suave y volumen control
+            cmd += ["-map", f"{len(cmd)}"]  # dummy, replaced below (we don't know exact); skip
+
+        # We can't do dynamic map like above; so build properly:
+        # Rebuild audio mapping based on number of inputs
+        # Inputs:
+        # 0 lavfi, 1 bg, 2 news, 3 logo(optional), last music(optional)
+        # If music exists, its index is: 3 if no logo else 4
+        music_input_index = None
+        if music_ok:
+            if use_logo:
+                music_input_index = 4
+            else:
+                music_input_index = 3
+
+        if music_input_index is not None:
+            cmd += ["-map", f"{music_input_index}:a", "-filter:a", "volume=0.25,afade=t=in:st=0:d=0.4,afade=t=out:st=14:d=0.6", "-c:a", "aac", "-b:a", "128k"]
         else:
             cmd += ["-an"]
 
         cmd += [
-            "-t", str(int(seconds)),
+            "-t", str(seconds),
             "-r", "30",
             "-c:v", "libx264",
             "-preset", "ultrafast",
@@ -923,7 +877,7 @@ def generate_reel_from_image(
             out_mp4
         ]
 
-        p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=240, check=False)
+        p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=420, check=False)
         if p.returncode != 0:
             raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
@@ -933,25 +887,19 @@ def generate_reel_from_image(
 def generate_reel_from_video_bg(
     headline: str,
     bg_video_path: str,
-    logo_path: str,
+    logo_path: Optional[str],
     seconds: int,
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
 ) -> bytes:
-    """
-    Use a vertical bg video (Runway output) + overlay logo + wrapped title + CTA + optional music.
-    """
-    _require_file(logo_path, "ASSET_LOGO")
     if not os.path.exists(bg_video_path):
         raise RuntimeError(f"Falta bg video local: {bg_video_path}")
     if not os.path.exists(FONT_BOLD):
         raise RuntimeError(f"Falta FONT_BOLD en runner: {FONT_BOLD}")
 
-    headline_clean = (headline or "").strip().replace("\n", " ")
-    title_wrapped = wrap_for_reel(headline_clean, max_chars_per_line=30, max_lines=3)
-    font_size = pick_title_font_size(title_wrapped)
-
-    cta = (cta_text or "Sigue para más hype esports").strip()
+    use_logo = bool(logo_path) and os.path.exists(logo_path)
+    headline_wrapped = wrap_text((headline or "")[:200], max_chars=28, max_lines=3)
+    cta = (cta_text or "Sigue para más").strip()
     music_ok = bool(music_path) and os.path.exists(music_path)
 
     with tempfile.TemporaryDirectory() as td:
@@ -960,41 +908,50 @@ def generate_reel_from_video_bg(
         cta_txt = os.path.join(td, "cta.txt")
 
         with open(title_txt, "w", encoding="utf-8") as f:
-            f.write(title_wrapped)
+            f.write(headline_wrapped)
         with open(cta_txt, "w", encoding="utf-8") as f:
             f.write(cta)
 
         cmd = [
             "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
             "-i", bg_video_path,
-            "-i", logo_path,
         ]
+        if use_logo:
+            cmd += ["-i", logo_path]
         if music_ok:
             cmd += ["-i", music_path]
 
-        # Safer y positions to avoid IG UI and bottom controls
-        title_y = 1180
-        cta_y = 1520
+        if use_logo:
+            vf = (
+                f"[0:v]scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+                f"crop={REEL_W}:{REEL_H},fps=30,format=rgba[v0];"
+                f"[1:v]scale=520:-1,format=rgba[logo];"
+                f"[v0][logo]overlay=40:60:format=auto[v1];"
+                f"[v1]"
+                f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:x=60:y=1290:fontsize=46:line_spacing=10:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=24,"
+                f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:x=60:y=1560:fontsize=40:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18"
+                f"[vout]"
+            )
+            cmd += ["-filter_complex", vf, "-map", "[vout]"]
+        else:
+            vf = (
+                f"[0:v]scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+                f"crop={REEL_W}:{REEL_H},fps=30,format=rgba[v0];"
+                f"[v0]"
+                f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:x=60:y=1290:fontsize=48:line_spacing=10:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=24,"
+                f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:x=60:y=1560:fontsize=40:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18"
+                f"[vout]"
+            )
+            cmd += ["-filter_complex", vf, "-map", "[vout]"]
 
-        vf = (
-            f"[0:v]scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
-            f"crop={REEL_W}:{REEL_H},fps=30,format=rgba[v0];"
-            f"[1:v]scale=520:-1,format=rgba[logo];"
-            f"[v0][logo]overlay=40:60:format=auto[v1];"
-            f"[v1]"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
-            f"x=(w-text_w)/2:y={title_y}:fontsize={font_size}:fontcolor=white:"
-            f"line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=30,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
-            f"x=(w-text_w)/2:y={cta_y}:fontsize=44:fontcolor=white:"
-            f"box=1:boxcolor=black@0.40:boxborderw=20"
-            f"[vout]"
-        )
-
-        cmd += ["-filter_complex", vf, "-map", "[vout]"]
-
+        # Audio index depends on inputs
+        # inputs: 0 bg video, 1 logo(optional), 2 music(optional) OR 1 music(if no logo)
+        music_input_index = None
         if music_ok:
-            cmd += ["-map", "2:a", "-filter:a", audio_filter(int(seconds)), "-c:a", "aac", "-b:a", "128k"]
+            music_input_index = 2 if use_logo else 1
+
+        if music_input_index is not None:
+            cmd += ["-map", f"{music_input_index}:a", "-filter:a", "volume=0.25,afade=t=in:st=0:d=0.4,afade=t=out:st=14:d=0.6", "-c:a", "aac", "-b:a", "128k"]
         else:
             cmd += ["-an"]
 
@@ -1009,7 +966,7 @@ def generate_reel_from_video_bg(
             out_mp4
         ]
 
-        p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=420, check=False)
+        p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=600, check=False)
         if p.returncode != 0:
             raise RuntimeError(f"ffmpeg (video bg) falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
@@ -1148,7 +1105,12 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     asset_bg = assets_cfg.get("bg") or DEFAULT_ASSET_BG
     asset_logo = assets_cfg.get("logo") or DEFAULT_ASSET_LOGO
     asset_music = assets_cfg.get("music") or DEFAULT_ASSET_MUSIC
-    cta_text = assets_cfg.get("cta") or "Sigue para más hype esports"
+    cta_text = assets_cfg.get("cta") or "Sigue para más"
+
+    # Random logo toggle (autónomo)
+    logo_path_effective: Optional[str] = asset_logo
+    if random.random() > float(max(0.0, min(1.0, LOGO_PROBABILITY))):
+        logo_path_effective = None
 
     threads_cfg = cfg.get("threads", {})
     threads_user_id = threads_cfg.get("user_id", THREADS_USER_ID or "me")
@@ -1240,60 +1202,52 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 img_r2_url = upload_image_bytes_to_r2_public(img_bytes, img_ext, prefix=threads_media_prefix)
                 print("Imagen rehost R2:", img_r2_url)
 
+                # pick random music (no rename needed)
+                music_path = pick_music_path(asset_music)
+                if music_path:
+                    print("Music selected:", music_path)
+                else:
+                    print("Music selected: NONE (mudo)")
+
                 with tempfile.TemporaryDirectory() as td:
                     local_img = os.path.join(td, f"news{img_ext}")
                     with open(local_img, "wb") as f:
                         f.write(img_bytes)
 
                     use_runway = RUNWAY_ENABLED and bool(RUNWAY_API_KEY)
-
                     if use_runway:
-                        try:
-                            runway_prompt = (
-                                "Cinematic esports/gaming animation, neon, glitch, HUD overlays, "
-                                "dynamic camera movement, high energy, viral reel background. "
-                                f"Based on this news image and headline: {item.get('title','')}"
-                            )
-                            task_id = runway_create_image_to_video(img_r2_url, runway_prompt, seconds=RUNWAY_I2V_SECONDS)
-                            print("Runway task created:", task_id)
+                        runway_prompt = (
+                            "Cinematic esports/gaming animation, neon, glitch, HUD overlays, "
+                            "dynamic camera movement, high energy, viral reel background. "
+                            f"Based on this news image and headline: {item.get('title','')}"
+                        )
+                        task_id = runway_create_image_to_video(img_r2_url, runway_prompt, seconds=RUNWAY_I2V_SECONDS)
+                        print("Runway task created:", task_id)
+                        mp4_url = runway_wait_for_mp4(task_id, timeout_sec=RUNWAY_TIMEOUT)
+                        print("Runway mp4 URL:", mp4_url)
 
-                            mp4_url = runway_wait_for_mp4(task_id, timeout_sec=RUNWAY_TIMEOUT)
-                            print("Runway mp4 URL:", mp4_url)
+                        rr = requests.get(mp4_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=120, allow_redirects=True)
+                        rr.raise_for_status()
+                        bg_vid = os.path.join(td, "bg.mp4")
+                        with open(bg_vid, "wb") as f:
+                            f.write(rr.content)
 
-                            rr = requests.get(mp4_url, timeout=90, allow_redirects=True)
-                            rr.raise_for_status()
-
-                            bg_vid = os.path.join(td, "bg.mp4")
-                            with open(bg_vid, "wb") as f:
-                                f.write(rr.content)
-
-                            reel_bytes = generate_reel_from_video_bg(
-                                headline=item.get("title", "")[:180],
-                                bg_video_path=bg_vid,
-                                logo_path=asset_logo,
-                                seconds=REEL_SECONDS,
-                                music_path=asset_music if os.path.exists(asset_music) else None,
-                                cta_text=cta_text,
-                            )
-                        except Exception as e:
-                            print("Runway falló (fallback a reel normal):", str(e))
-                            reel_bytes = generate_reel_from_image(
-                                headline=item.get("title", "")[:180],
-                                news_image_path=local_img,
-                                logo_path=asset_logo,
-                                bg_path=asset_bg,
-                                seconds=REEL_SECONDS,
-                                music_path=asset_music if os.path.exists(asset_music) else None,
-                                cta_text=cta_text,
-                            )
+                        reel_bytes = generate_reel_from_video_bg(
+                            headline=item.get("title", "")[:200],
+                            bg_video_path=bg_vid,
+                            logo_path=logo_path_effective,
+                            seconds=REEL_SECONDS,
+                            music_path=music_path,
+                            cta_text=cta_text,
+                        )
                     else:
                         reel_bytes = generate_reel_from_image(
-                            headline=item.get("title", "")[:180],
+                            headline=item.get("title", "")[:200],
                             news_image_path=local_img,
-                            logo_path=asset_logo,
+                            logo_path=logo_path_effective,
                             bg_path=asset_bg,
                             seconds=REEL_SECONDS,
-                            music_path=asset_music if os.path.exists(asset_music) else None,
+                            music_path=music_path,
                             cta_text=cta_text,
                         )
 
@@ -1319,7 +1273,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 print("[DRY_RUN] IG disabled or dry_run, no publico.")
                 ig_res = {"video_url": reel_url, "published": False}
 
-        # mark posted in state if Threads actually published
         if threads_res and threads_res.get("ok") and not threads_res.get("dry_run"):
             mark_posted(state, link)
             save_threads_state(state_key, state)
@@ -1350,6 +1303,8 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "dry_run": DRY_RUN,
             "graph_version": f"v{GRAPH_VERSION}",
             "runway_enabled": RUNWAY_ENABLED and bool(RUNWAY_API_KEY),
+            "music_probability": MUSIC_PROBABILITY,
+            "logo_probability": LOGO_PROBABILITY,
         },
         "result": {"posted_count": posted_count, "results": results},
     }

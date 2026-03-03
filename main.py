@@ -6,6 +6,7 @@ import hashlib
 import random
 import subprocess
 import tempfile
+import textwrap
 from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse, parse_qs
 from typing import Optional, Tuple, Dict, Any, List
@@ -167,6 +168,68 @@ def days_since(dt_iso: str) -> int:
         return int((now_utc() - dt).total_seconds() // 86400)
     except Exception:
         return 999999
+
+# =========================
+# Text layout helpers (PREVENT CUT OFF)
+# =========================
+
+def wrap_for_reel(text: str, *, max_chars_per_line: int = 30, max_lines: int = 3) -> str:
+    """
+    Simple wrapping for ffmpeg drawtext (textfile). Ensures:
+    - no super long single line
+    - max lines limited
+    """
+    t = (text or "").strip().replace("\n", " ")
+    if not t:
+        return ""
+
+    lines = textwrap.wrap(t, width=max_chars_per_line, break_long_words=False, break_on_hyphens=False)
+    if not lines:
+        return t
+
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        # add ellipsis to last line (safe)
+        last = lines[-1].rstrip()
+        if len(last) >= 3:
+            last = last[:-1] + "…"
+        else:
+            last = last + "…"
+        lines[-1] = last
+
+    return "\n".join(lines)
+
+def pick_title_font_size(wrapped_title: str) -> int:
+    """
+    Heuristic: choose a font size that fits reliably.
+    """
+    lines = (wrapped_title or "").splitlines()
+    n = max(1, len(lines))
+    longest = max((len(x) for x in lines), default=0)
+
+    # base by lines
+    if n == 1:
+        base = 58
+    elif n == 2:
+        base = 52
+    else:
+        base = 46
+
+    # shrink if very long
+    if longest > 32:
+        base -= 8
+    elif longest > 28:
+        base -= 4
+
+    return int(max(36, min(60, base)))
+
+def audio_filter(seconds: int) -> str:
+    """
+    Gentle volume + fade in/out to avoid harsh cuts.
+    """
+    s = int(max(1, seconds))
+    out_start = max(0, s - 1)
+    return f"volume=0.18,afade=t=in:st=0:d=1,afade=t=out:st={out_start}:d=1"
 
 # =========================
 # URL helpers
@@ -363,6 +426,7 @@ def upload_bytes_to_r2_public(file_bytes: bytes, ext: str, prefix: str, content_
     s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=file_bytes, ContentType=content_type)
     url = f"{base}/{key}"
 
+    # best-effort check
     try:
         head = requests.head(url, timeout=10, allow_redirects=True)
         if head.status_code != 200:
@@ -404,6 +468,7 @@ META_IMAGE_RE2 = re.compile(
 IMG_SRC_RE = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
 
 def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
+    # Special case: YouTube thumbnail
     if is_youtube_url(page_url):
         vid = extract_youtube_video_id(page_url)
         if vid:
@@ -443,6 +508,7 @@ def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
 
         return found[:max_images]
     except Exception:
+        # fallback youtube if weird redirect
         if is_youtube_url(page_url):
             vid = extract_youtube_video_id(page_url)
             if vid:
@@ -483,6 +549,7 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
         except Exception:
             continue
 
+    # dedupe by link
     seen = set()
     deduped: List[Dict[str, Any]] = []
     for a in raw:
@@ -490,6 +557,7 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
             seen.add(a["link"])
             deduped.append(a)
 
+    # balance per feed
     if max_per_feed > 0:
         counts: Dict[str, int] = {}
         balanced: List[Dict[str, Any]] = []
@@ -521,6 +589,7 @@ def openai_text(prompt: str) -> str:
     model = env_nonempty("OPENAI_MODEL", OPENAI_MODEL) or "gpt-4.1-mini"
     client = openai_client()
 
+    # Prefer Responses API, fallback to chat.completions
     try:
         resp = client.responses.create(model=model, input=prompt)
         out = getattr(resp, "output_text", None)
@@ -672,7 +741,7 @@ def threads_publish_text_image(user_id: str, access_token: str, dry_run: bool, t
 # Runway (image->video) optional
 # =========================
 
-# Fallback regex: match full URL including query (important for _jwt=...)
+# Full URL match including querystring (important for _jwt=...)
 URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
 
 def runway_headers() -> Dict[str, str]:
@@ -695,7 +764,7 @@ def runway_create_image_to_video(image_https_url: str, prompt_text: str, seconds
     payload = {
         "model": RUNWAY_I2V_MODEL,
         "promptText": (prompt_text or "")[:1000],
-        "ratio": "720:1280",
+        "ratio": "720:1280",   # vertical
         "duration": int(max(2, min(10, seconds))),
         "promptImage": image_https_url,
     }
@@ -711,7 +780,6 @@ def runway_create_image_to_video(image_https_url: str, prompt_text: str, seconds
             "insufficient credits",
         ],
     )
-
     j = r.json()
     task_id = j.get("id")
     if not task_id:
@@ -725,17 +793,14 @@ def runway_get_task(task_id: str) -> Dict[str, Any]:
     return r.json()
 
 def _extract_runway_mp4_url(task_json: Dict[str, Any]) -> Optional[str]:
-    """
-    Preferred: Runway docs say task.output is a list of URLs (often with ?_jwt=...).
-    We must return the URL AS-IS (including query params).
-    """
+    # Preferred: task.output is usually a list of URLs (often with ?_jwt=...)
     out = task_json.get("output")
     if isinstance(out, list) and out:
         u = out[0]
         if isinstance(u, str) and ".mp4" in u.lower() and u.lower().startswith("http"):
-            return u  # IMPORTANT: keep querystring
+            return u
 
-    # Some variants might nest in outputs/result etc. (best-effort)
+    # Best-effort: search any URL containing .mp4 in full JSON
     s = json.dumps(task_json, ensure_ascii=False)
     for m in URL_RE.findall(s):
         if ".mp4" in m.lower():
@@ -743,24 +808,23 @@ def _extract_runway_mp4_url(task_json: Dict[str, Any]) -> Optional[str]:
     return None
 
 def runway_wait_for_mp4(task_id: str, timeout_sec: int = 420) -> str:
+    """
+    Poll task until success/fail, return mp4 URL (KEEP querystring).
+    """
     start = time.time()
     last = None
     while time.time() - start < timeout_sec:
         j = runway_get_task(task_id)
         last = j
         status = (j.get("status") or "").upper()
-
         if status in ("SUCCEEDED", "SUCCESS", "COMPLETED", "FINISHED"):
             mp4 = _extract_runway_mp4_url(j)
             if mp4:
                 return mp4
             raise RuntimeError(f"Task succeeded but no mp4 found in response: {j}")
-
         if status in ("FAILED", "ERROR", "CANCELED", "CANCELLED"):
             raise RuntimeError(f"Runway task failed: {j}")
-
         time.sleep(RUNWAY_POLL_SEC)
-
     raise TimeoutError(f"Runway task timeout. Last={last}")
 
 # =========================
@@ -780,6 +844,12 @@ def generate_reel_from_image(
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
 ) -> bytes:
+    """
+    Stable template (image + bg + logo + text) with:
+    - auto wrap title
+    - safer positioning
+    - optional music w/ fade
+    """
     _require_file(bg_path, "ASSET_BG")
     _require_file(logo_path, "ASSET_LOGO")
     if not os.path.exists(news_image_path):
@@ -787,8 +857,11 @@ def generate_reel_from_image(
     if not os.path.exists(FONT_BOLD):
         raise RuntimeError(f"Falta FONT_BOLD en runner: {FONT_BOLD}")
 
-    headline_clean = (headline or "").strip().replace("\n", " ")[:140]
-    cta = (cta_text or "Sigue para más").strip()
+    headline_clean = (headline or "").strip().replace("\n", " ")
+    title_wrapped = wrap_for_reel(headline_clean, max_chars_per_line=30, max_lines=3)
+    font_size = pick_title_font_size(title_wrapped)
+
+    cta = (cta_text or "Sigue para más hype esports").strip()
     music_ok = bool(music_path) and os.path.exists(music_path)
 
     with tempfile.TemporaryDirectory() as td:
@@ -797,7 +870,7 @@ def generate_reel_from_image(
         cta_txt = os.path.join(td, "cta.txt")
 
         with open(title_txt, "w", encoding="utf-8") as f:
-            f.write(headline_clean)
+            f.write(title_wrapped)
         with open(cta_txt, "w", encoding="utf-8") as f:
             f.write(cta)
 
@@ -811,6 +884,10 @@ def generate_reel_from_image(
         if music_ok:
             cmd += ["-i", music_path]  # index 4
 
+        # Safer y positions to avoid IG UI and bottom controls
+        title_y = 1180
+        cta_y = 1520
+
         vf = (
             f"[1:v]scale={REEL_W}:{REEL_H},format=rgba[bg];"
             f"[0:v][bg]overlay=0:0:format=auto[v1];"
@@ -819,20 +896,24 @@ def generate_reel_from_image(
             f"[3:v]scale=700:-1,format=rgba[logo];"
             f"[v2][logo]overlay=(W-w)/2:170:format=auto[v3];"
             f"[v3]"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:x=60:y=1320:fontsize=48:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=24,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:x=60:y=1540:fontsize=42:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
+            f"x=(w-text_w)/2:y={title_y}:fontsize={font_size}:fontcolor=white:"
+            f"line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=30,"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
+            f"x=(w-text_w)/2:y={cta_y}:fontsize=44:fontcolor=white:"
+            f"box=1:boxcolor=black@0.40:boxborderw=20"
             f"[vout]"
         )
 
         cmd += ["-filter_complex", vf, "-map", "[vout]"]
 
         if music_ok:
-            cmd += ["-map", "4:a", "-filter:a", "volume=0.15", "-c:a", "aac", "-b:a", "128k"]
+            cmd += ["-map", "4:a", "-filter:a", audio_filter(int(seconds)), "-c:a", "aac", "-b:a", "128k"]
         else:
             cmd += ["-an"]
 
         cmd += [
-            "-t", str(seconds),
+            "-t", str(int(seconds)),
             "-r", "30",
             "-c:v", "libx264",
             "-preset", "ultrafast",
@@ -857,14 +938,20 @@ def generate_reel_from_video_bg(
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
 ) -> bytes:
+    """
+    Use a vertical bg video (Runway output) + overlay logo + wrapped title + CTA + optional music.
+    """
     _require_file(logo_path, "ASSET_LOGO")
     if not os.path.exists(bg_video_path):
         raise RuntimeError(f"Falta bg video local: {bg_video_path}")
     if not os.path.exists(FONT_BOLD):
         raise RuntimeError(f"Falta FONT_BOLD en runner: {FONT_BOLD}")
 
-    headline_clean = (headline or "").strip().replace("\n", " ")[:140]
-    cta = (cta_text or "Sigue para más").strip()
+    headline_clean = (headline or "").strip().replace("\n", " ")
+    title_wrapped = wrap_for_reel(headline_clean, max_chars_per_line=30, max_lines=3)
+    font_size = pick_title_font_size(title_wrapped)
+
+    cta = (cta_text or "Sigue para más hype esports").strip()
     music_ok = bool(music_path) and os.path.exists(music_path)
 
     with tempfile.TemporaryDirectory() as td:
@@ -873,7 +960,7 @@ def generate_reel_from_video_bg(
         cta_txt = os.path.join(td, "cta.txt")
 
         with open(title_txt, "w", encoding="utf-8") as f:
-            f.write(headline_clean)
+            f.write(title_wrapped)
         with open(cta_txt, "w", encoding="utf-8") as f:
             f.write(cta)
 
@@ -885,21 +972,29 @@ def generate_reel_from_video_bg(
         if music_ok:
             cmd += ["-i", music_path]
 
+        # Safer y positions to avoid IG UI and bottom controls
+        title_y = 1180
+        cta_y = 1520
+
         vf = (
             f"[0:v]scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
             f"crop={REEL_W}:{REEL_H},fps=30,format=rgba[v0];"
             f"[1:v]scale=520:-1,format=rgba[logo];"
             f"[v0][logo]overlay=40:60:format=auto[v1];"
             f"[v1]"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:x=60:y=1320:fontsize=52:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=24,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:x=60:y=1540:fontsize=44:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
+            f"x=(w-text_w)/2:y={title_y}:fontsize={font_size}:fontcolor=white:"
+            f"line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=30,"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
+            f"x=(w-text_w)/2:y={cta_y}:fontsize=44:fontcolor=white:"
+            f"box=1:boxcolor=black@0.40:boxborderw=20"
             f"[vout]"
         )
 
         cmd += ["-filter_complex", vf, "-map", "[vout]"]
 
         if music_ok:
-            cmd += ["-map", "2:a", "-filter:a", "volume=0.15", "-c:a", "aac", "-b:a", "128k"]
+            cmd += ["-map", "2:a", "-filter:a", audio_filter(int(seconds)), "-c:a", "aac", "-b:a", "128k"]
         else:
             cmd += ["-an"]
 
@@ -1053,7 +1148,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     asset_bg = assets_cfg.get("bg") or DEFAULT_ASSET_BG
     asset_logo = assets_cfg.get("logo") or DEFAULT_ASSET_LOGO
     asset_music = assets_cfg.get("music") or DEFAULT_ASSET_MUSIC
-    cta_text = assets_cfg.get("cta") or "Sigue para más"
+    cta_text = assets_cfg.get("cta") or "Sigue para más hype esports"
 
     threads_cfg = cfg.get("threads", {})
     threads_user_id = threads_cfg.get("user_id", THREADS_USER_ID or "me")
@@ -1093,6 +1188,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         label = "NUEVO" if mode == "new" else "REPOST"
         print(f"Seleccionado ({label}): {link}")
 
+        # text
         try:
             threads_text = build_threads_text(item, mode=mode)
         except Exception as e:
@@ -1100,6 +1196,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             processed = [x for x in processed if x.get("link") != link]
             continue
 
+        # image candidates
         img_candidates = extract_best_images(link, max_images=5)
         if not img_candidates:
             print("No se encontró imagen. Se omite.")
@@ -1120,6 +1217,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             processed = [x for x in processed if x.get("link") != link]
             continue
 
+        # Threads publish (or dry-run)
         threads_res = None
         try:
             threads_res = threads_publish_text_image(
@@ -1134,6 +1232,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             print("Threads falló (no rompe todo):", str(e))
             threads_res = {"ok": False, "error": str(e)}
 
+        # Reel generation
         reel_url = None
         if ENABLE_REELS:
             try:
@@ -1169,7 +1268,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                                 f.write(rr.content)
 
                             reel_bytes = generate_reel_from_video_bg(
-                                headline=item.get("title", "")[:140],
+                                headline=item.get("title", "")[:180],
                                 bg_video_path=bg_vid,
                                 logo_path=asset_logo,
                                 seconds=REEL_SECONDS,
@@ -1179,7 +1278,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         except Exception as e:
                             print("Runway falló (fallback a reel normal):", str(e))
                             reel_bytes = generate_reel_from_image(
-                                headline=item.get("title", "")[:140],
+                                headline=item.get("title", "")[:180],
                                 news_image_path=local_img,
                                 logo_path=asset_logo,
                                 bg_path=asset_bg,
@@ -1189,7 +1288,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             )
                     else:
                         reel_bytes = generate_reel_from_image(
-                            headline=item.get("title", "")[:140],
+                            headline=item.get("title", "")[:180],
                             news_image_path=local_img,
                             logo_path=asset_logo,
                             bg_path=asset_bg,
@@ -1203,6 +1302,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as e:
                 print("Reel generation falló (no rompe):", str(e))
 
+        # IG publish (optional)
         ig_res = None
         ig_kind = None
         if reel_url:
@@ -1219,6 +1319,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 print("[DRY_RUN] IG disabled or dry_run, no publico.")
                 ig_res = {"video_url": reel_url, "published": False}
 
+        # mark posted in state if Threads actually published
         if threads_res and threads_res.get("ok") and not threads_res.get("dry_run"):
             mark_posted(state, link)
             save_threads_state(state_key, state)

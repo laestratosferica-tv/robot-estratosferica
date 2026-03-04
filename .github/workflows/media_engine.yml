@@ -1,0 +1,116 @@
+name: MEDIA ENGINE
+
+on:
+  schedule:
+
+    # Trend hunter
+    - cron: "0 9 * * *"
+
+    # Noticias RSS
+    - cron: "0 11 * * *"
+
+    # Twitch clip hunter
+    - cron: "0 15 * * *"
+
+    # UGC reels
+    - cron: "0 18 * * *"
+
+    # Viral engine
+    - cron: "0 21 * * *"
+
+    # Analytics
+    - cron: "0 23 * * *"
+
+  workflow_dispatch:
+
+jobs:
+
+  run-engine:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt update
+          sudo apt install ffmpeg -y
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Decide RUN_MODE
+        id: mode
+        run: |
+
+          HOUR=$(date -u +%H)
+
+          if [ "$HOUR" = "09" ]; then
+            echo "RUN_MODE=G" >> $GITHUB_ENV
+          elif [ "$HOUR" = "11" ]; then
+            echo "RUN_MODE=A" >> $GITHUB_ENV
+          elif [ "$HOUR" = "15" ]; then
+            echo "RUN_MODE=E" >> $GITHUB_ENV
+          elif [ "$HOUR" = "18" ]; then
+            echo "RUN_MODE=B" >> $GITHUB_ENV
+          elif [ "$HOUR" = "21" ]; then
+            echo "RUN_MODE=D" >> $GITHUB_ENV
+          elif [ "$HOUR" = "23" ]; then
+            echo "RUN_MODE=F" >> $GITHUB_ENV
+          else
+            echo "RUN_MODE=A" >> $GITHUB_ENV
+          fi
+
+      - name: Run Media Engine
+        run: python main.py
+
+        env:
+
+          RUN_MODE: ${{ env.RUN_MODE }}
+
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+
+          THREADS_USER_ACCESS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+
+          TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+          TIKTOK_OPEN_ID: ${{ secrets.TIKTOK_OPEN_ID }}
+
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+
+          RUNWAY_API_KEY: ${{ secrets.RUNWAY_API_KEY }}
+
+          ENABLE_THREADS_PUBLISH: "true"
+          ENABLE_IG_PUBLISH: "true"
+          ENABLE_FB_PUBLISH: "true"
+          ENABLE_YT_PUBLISH: "true"
+          ENABLE_TIKTOK_PUBLISH: "true"
+
+          ENABLE_REELS: "true"
+          RUNWAY_ENABLED: "true"
+
+          DRY_RUN: "false"

@@ -25,7 +25,7 @@ try:
 except Exception:
     OpenAI = None
 
-print("RUNNING MEDIA ENGINE (Threads REAL + IG REEL AUTO + IG PUBLISH + Multi-account via accounts.json)")
+print("RUNNING MEDIA ENGINE (Threads + Reels + IG + FB + YT + TikTok + Multi-account via accounts.json)")
 
 # =========================
 # Helpers: env safe (no empty)
@@ -84,7 +84,6 @@ AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
 
-# NOTE: some repos use R2_PUBLIC_BASE_URL, others use R2_PUBLIC_BASE_URL / R2_PUBLIC_BASE_URL
 R2_PUBLIC_BASE_URL = env_nonempty(
     "R2_PUBLIC_BASE_URL",
     env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev")
@@ -101,9 +100,6 @@ POST_RETRY_SLEEP = env_float("POST_RETRY_SLEEP", 2.0)
 CONTAINER_WAIT_TIMEOUT = env_int("CONTAINER_WAIT_TIMEOUT", 120)
 CONTAINER_POLL_INTERVAL = env_float("CONTAINER_POLL_INTERVAL", 2.0)
 
-VERIFY_NEWS = env_bool("VERIFY_NEWS", False)
-ENABLE_TRENDS = env_bool("ENABLE_TRENDS", False)
-
 # Reels generation
 ENABLE_REELS = env_bool("ENABLE_REELS", True)
 REEL_SECONDS = env_int("REEL_SECONDS", 15)
@@ -112,7 +108,7 @@ REEL_H = env_int("REEL_H", 1920)
 
 DEFAULT_ASSET_BG = env_nonempty("ASSET_BG", "assets/bg.jpg")
 DEFAULT_ASSET_LOGO = env_nonempty("ASSET_LOGO", "assets/logo.png")
-DEFAULT_ASSET_MUSIC = env_nonempty("ASSET_MUSIC", "assets/music.mp3")  # optional single file
+DEFAULT_ASSET_MUSIC = env_nonempty("ASSET_MUSIC", "assets/music.mp3")
 FONT_BOLD = env_nonempty("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 
 # Publish toggles
@@ -126,6 +122,22 @@ IG_USER_ID = env_nonempty("IG_USER_ID")
 GRAPH_VERSION = env_nonempty("GRAPH_VERSION", "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
 
+# Facebook Page Reels (optional)
+ENABLE_FB_PUBLISH = env_bool("ENABLE_FB_PUBLISH", False)
+FB_PAGE_ID = env_nonempty("FB_PAGE_ID")
+FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
+
+# YouTube Shorts (optional)
+ENABLE_YT_PUBLISH = env_bool("ENABLE_YT_PUBLISH", False)
+YOUTUBE_CLIENT_ID = env_nonempty("YOUTUBE_CLIENT_ID")
+YOUTUBE_CLIENT_SECRET = env_nonempty("YOUTUBE_CLIENT_SECRET")
+YOUTUBE_REFRESH_TOKEN = env_nonempty("YOUTUBE_REFRESH_TOKEN")
+
+# TikTok (optional)
+ENABLE_TIKTOK_PUBLISH = env_bool("ENABLE_TIKTOK_PUBLISH", False)
+TIKTOK_ACCESS_TOKEN = env_nonempty("TIKTOK_ACCESS_TOKEN")
+TIKTOK_OPEN_ID = env_nonempty("TIKTOK_OPEN_ID")
+
 # Runway (optional)
 RUNWAY_ENABLED = env_bool("RUNWAY_ENABLED", False)
 RUNWAY_API_KEY = env_nonempty("RUNWAY_API_KEY")
@@ -135,20 +147,22 @@ RUNWAY_I2V_MODEL = env_nonempty("RUNWAY_I2V_MODEL", "gen4.5")
 RUNWAY_I2V_SECONDS = env_int("RUNWAY_I2V_SECONDS", 5)
 RUNWAY_TIMEOUT = env_int("RUNWAY_TIMEOUT", 420)
 RUNWAY_POLL_SEC = env_int("RUNWAY_POLL_SEC", 6)
+RUNWAY_MP4_RETRIES = env_int("RUNWAY_MP4_RETRIES", 3)
+RUNWAY_PROBABILITY = env_float("RUNWAY_PROBABILITY", 0.55)
 
 # Autonomy / randomness
 MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.75)  # 0..1
 LOGO_PROBABILITY = env_float("LOGO_PROBABILITY", 0.85)    # 0..1
 MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
 
-# Better download retry for runway mp4
-RUNWAY_MP4_RETRIES = env_int("RUNWAY_MP4_RETRIES", 3)
-
 print("ENV CHECK:")
 print(" - RUN_MODE:", RUN_MODE)
 print(" - DRY_RUN:", DRY_RUN)
 print(" - ENABLE_THREADS_PUBLISH:", ENABLE_THREADS_PUBLISH)
 print(" - ENABLE_IG_PUBLISH:", ENABLE_IG_PUBLISH)
+print(" - ENABLE_FB_PUBLISH:", ENABLE_FB_PUBLISH)
+print(" - ENABLE_YT_PUBLISH:", ENABLE_YT_PUBLISH)
+print(" - ENABLE_TIKTOK_PUBLISH:", ENABLE_TIKTOK_PUBLISH)
 print(" - ENABLE_REELS:", ENABLE_REELS)
 print(" - RUNWAY enabled:", RUNWAY_ENABLED and bool(RUNWAY_API_KEY))
 print(" - R2_PUBLIC_BASE_URL set:", bool(R2_PUBLIC_BASE_URL))
@@ -258,9 +272,11 @@ def _raise_meta_error(r: requests.Response, label: str = "HTTP") -> None:
         body = r.request.body
         if isinstance(body, bytes):
             body = body.decode("utf-8", errors="replace")
-        print("REQUEST BODY:", body)
+        # No imprimimos tokens
+        safe_body = body.replace(str(IG_ACCESS_TOKEN or ""), "***").replace(str(THREADS_USER_ACCESS_TOKEN or ""), "***").replace(str(FB_PAGE_ACCESS_TOKEN or ""), "***")
+        print("REQUEST BODY:", safe_body[:4000])
     print("STATUS:", r.status_code)
-    print("RESPONSE TEXT:", r.text)
+    print("RESPONSE TEXT:", (r.text or "")[:4000])
     print("========================\n")
     r.raise_for_status()
 
@@ -285,7 +301,6 @@ def _get_with_retries(url: str, *, headers=None, params=None, timeout=30, label=
         try:
             r = requests.get(url, headers=headers, params=params, timeout=timeout, allow_redirects=allow_redirects)
             if r.status_code >= 400:
-                # print meta once for last attempt
                 if attempt >= retries:
                     print(f"\n====== {label} ERROR ======")
                     print("URL:", url)
@@ -363,11 +378,6 @@ def upload_bytes_to_r2_public(file_bytes: bytes, ext: str, prefix: str, content_
         head = requests.head(url, timeout=10, allow_redirects=True)
         if head.status_code != 200:
             raise RuntimeError(f"R2 public URL no accesible (status {head.status_code}): {url}")
-        ct = (head.headers.get("Content-Type") or "").lower()
-        if expect_kind == "image" and "image" not in ct:
-            raise RuntimeError(f"R2 URL no parece imagen (Content-Type={ct}): {url}")
-        if expect_kind == "video" and "video" not in ct:
-            print(f"AVISO: Content-Type inesperado para video: {ct} (URL {url})")
     except Exception as e:
         print("AVISO: validación HEAD falló (no rompe):", str(e))
 
@@ -400,7 +410,6 @@ META_IMAGE_RE2 = re.compile(
 IMG_SRC_RE = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
 
 def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
-    # Special case: YouTube thumbnail
     if is_youtube_url(page_url):
         vid = extract_youtube_video_id(page_url)
         if vid:
@@ -440,7 +449,6 @@ def extract_best_images(page_url: str, max_images: int = 5) -> List[str]:
 
         return found[:max_images]
     except Exception:
-        # fallback youtube if weird redirect
         if is_youtube_url(page_url):
             vid = extract_youtube_video_id(page_url)
             if vid:
@@ -481,7 +489,6 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
         except Exception:
             continue
 
-    # dedupe by link
     seen = set()
     deduped: List[Dict[str, Any]] = []
     for a in raw:
@@ -489,7 +496,6 @@ def fetch_rss_articles(rss_feeds: List[str], max_per_feed: int, shuffle: bool) -
             seen.add(a["link"])
             deduped.append(a)
 
-    # balance per feed
     if max_per_feed > 0:
         counts: Dict[str, int] = {}
         balanced: List[Dict[str, Any]] = []
@@ -521,7 +527,6 @@ def openai_text(prompt: str) -> str:
     model = env_nonempty("OPENAI_MODEL", OPENAI_MODEL) or "gpt-4.1-mini"
     client = openai_client()
 
-    # Prefer Responses API, fallback to chat.completions
     try:
         resp = client.responses.create(model=model, input=prompt)
         out = getattr(resp, "output_text", None)
@@ -537,35 +542,37 @@ def openai_text(prompt: str) -> str:
     return (resp.choices[0].message.content or "").strip()
 
 # =========================
-# Copy (gaming esports)
+# Copy (AFILADO)
 # =========================
 
-THREADS_PROMPT_ESPORTS = """Eres editor para una cuenta de Threads sobre esports/gaming en español LATAM.
-Crea un post:
-- 1 párrafo corto, claro y con vibe esports.
-- Termina con una pregunta a la comunidad.
-- Incluye "Fuente:" + link al final.
-Datos:
+THREADS_PROMPT_SHARP = """Eres editor de una cuenta de gaming/esports en español LATAM.
+Objetivo: maximizar comentarios (polémica sana, postura, duda, debate).
+Reglas:
+- 1 HOOK fuerte (1 línea) tipo: "¿X murió?" / "Esto es una estafa?" / "Riot la cagó?" (sin insultos)
+- 2-3 líneas cortas con la noticia + postura/opinión con carácter
+- 1 pregunta al final para pelear en comentarios
+- Máximo 55 palabras (sin contar la fuente)
+- Cierra con: Fuente: {link}
 Título: {title}
-Link: {link}
 """
 
-IG_PROMPT_ESPORTS = """Eres editor de Instagram (esports/gaming) en español LATAM.
-Escribe un caption natural y humano:
-- 1-2 párrafos cortos
-- 5-10 hashtags relevantes al final
-- Cierra con una pregunta
-- Incluye "Fuente:" + link al final
+IG_PROMPT_SHARP = """Eres editor de Reels gaming/esports en español LATAM.
+Objetivo: retención + comentarios.
+- 1 HOOK fuerte (1 línea)
+- 2-3 líneas: contexto + postura
+- 1 pregunta final
+- 5-10 hashtags al final
+- Incluye Fuente: {link}
+- Máximo 120 palabras
 Título: {title}
-Link: {link}
 """
 
 def build_threads_text(item: Dict[str, Any], mode: str = "new") -> str:
     title = item.get("title", "")
     link = item.get("link", "")
-    prompt = THREADS_PROMPT_ESPORTS.format(title=title, link=link)
+    prompt = THREADS_PROMPT_SHARP.format(title=title, link=link)
     if mode == "repost":
-        prompt += "\nExtra: reescribe como REPOST con otra mirada/opinión, sin sonar repetido."
+        prompt += "\nExtra: reescribe como REPOST con otro ángulo, sin sonar repetido."
     text = openai_text(prompt).strip()
     if "Fuente:" not in text:
         text = f"{text}\n\nFuente: {link}"
@@ -573,7 +580,7 @@ def build_threads_text(item: Dict[str, Any], mode: str = "new") -> str:
 
 def build_instagram_caption(item: Dict[str, Any], link: str) -> str:
     title = item.get("title", "")
-    prompt = IG_PROMPT_ESPORTS.format(title=title, link=link)
+    prompt = IG_PROMPT_SHARP.format(title=title, link=link)
     text = openai_text(prompt).strip()
     if "Fuente:" not in text:
         text = f"{text}\n\nFuente: {link}"
@@ -601,7 +608,7 @@ def clip_threads_text(text: str, max_chars: int = 500) -> str:
     return text
 
 # =========================
-# Threads API (real)
+# Threads API
 # =========================
 
 def _threads_headers(token: str) -> Dict[str, str]:
@@ -670,7 +677,7 @@ def threads_publish_text_image(user_id: str, access_token: str, dry_run: bool, t
     return {"ok": True, "container": {"id": container_id}, "publish": res, "image_url": r2_url}
 
 # =========================
-# Runway (image->video) optional
+# Runway (image->video)
 # =========================
 
 MP4_URL_RE = re.compile(r"https?://[^\s\"']+\.mp4[^\s\"']*", re.IGNORECASE)
@@ -725,9 +732,6 @@ def runway_wait_for_mp4(task_id: str, timeout_sec: int = 420) -> str:
     raise TimeoutError(f"Runway task timeout. Last={last}")
 
 def download_runway_mp4_robust(mp4_url: str, task_id: Optional[str] = None) -> bytes:
-    """
-    Tries hard to download mp4. If it 401s, re-fetches task to get a fresh signed URL and retries.
-    """
     headers = {
         "User-Agent": "Mozilla/5.0",
         "Accept": "video/*,*/*;q=0.8",
@@ -743,8 +747,6 @@ def download_runway_mp4_robust(mp4_url: str, task_id: Optional[str] = None) -> b
             return r.content
         except Exception as e:
             last_err = e
-
-            # If unauthorized, try refreshing URL from task (signed URL may rotate)
             msg = str(e).lower()
             if ("401" in msg or "unauthorized" in msg) and task_id:
                 try:
@@ -753,16 +755,15 @@ def download_runway_mp4_robust(mp4_url: str, task_id: Optional[str] = None) -> b
                     m = MP4_URL_RE.search(s)
                     if m:
                         url_to_try = m.group(0)
-                        print("Runway mp4 URL refreshed:", url_to_try[:120] + ("..." if len(url_to_try) > 120 else ""))
+                        print("Runway mp4 URL refreshed:", url_to_try[:140] + ("..." if len(url_to_try) > 140 else ""))
                 except Exception:
                     pass
-
             time.sleep(2.0)
 
     raise RuntimeError(f"No se pudo descargar mp4 de Runway tras reintentos. Último error: {last_err}")
 
 # =========================
-# Reel generator helpers (wrap text, pick music/logo)
+# Reel generator helpers
 # =========================
 
 def _require_file(path: str, label: str) -> None:
@@ -770,14 +771,10 @@ def _require_file(path: str, label: str) -> None:
         raise RuntimeError(f"Falta {label} en repo: {path}")
 
 def wrap_text_lines(text: str, max_chars_per_line: int = 30, max_lines: int = 3) -> str:
-    """
-    Simple wrapping for ffmpeg drawtext using newline breaks.
-    """
     t = (text or "").strip().replace("\n", " ")
     words = t.split()
     if not words:
         return ""
-
     lines: List[str] = []
     cur = ""
     for w in words:
@@ -791,13 +788,8 @@ def wrap_text_lines(text: str, max_chars_per_line: int = 30, max_lines: int = 3)
             cur = w
             if len(lines) >= max_lines:
                 break
-
     if len(lines) < max_lines and cur:
         lines.append(cur)
-
-    # If overflow, truncate last line
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
     if lines:
         lines[-1] = lines[-1][:max_chars_per_line].rstrip()
     return "\n".join(lines).strip()
@@ -816,7 +808,6 @@ def list_mp3_files(search_dir: str) -> List[str]:
             for f in fnames:
                 if f.lower().endswith(".mp3"):
                     files.append(os.path.join(root, f))
-    # Also include DEFAULT_ASSET_MUSIC if it's a file and not already in list
     if DEFAULT_ASSET_MUSIC and os.path.isfile(DEFAULT_ASSET_MUSIC) and DEFAULT_ASSET_MUSIC not in files:
         files.append(DEFAULT_ASSET_MUSIC)
     return files
@@ -826,21 +817,17 @@ def pick_music_path() -> Optional[str]:
     if random.random() > p:
         print(f"Music selected: NONE (prob={p})")
         return None
-
     candidates = list_mp3_files(MUSIC_SEARCH_DIR)
-    # filter out tiny/bad files
     good = []
     for c in candidates:
         try:
-            if os.path.isfile(c) and os.path.getsize(c) > 50_000:  # ~50KB minimum
+            if os.path.isfile(c) and os.path.getsize(c) > 50_000:
                 good.append(c)
         except Exception:
             continue
-
     if not good:
-        print("Music selected: NONE (mudo)  (no hay mp3 válidos en assets/ o son muy pequeños)")
+        print("Music selected: NONE (mudo) (no hay mp3 válidos en assets/)")
         return None
-
     chosen = random.choice(good)
     print("Music selected:", chosen)
     return chosen
@@ -854,9 +841,6 @@ def generate_reel_from_image(
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
 ) -> bytes:
-    """
-    Stable template: bg + image + optional logo + wrapped text + optional music.
-    """
     _require_file(bg_path, "ASSET_BG")
     if not os.path.exists(news_image_path):
         raise RuntimeError(f"Falta news image local: {news_image_path}")
@@ -869,14 +853,8 @@ def generate_reel_from_image(
     music_ok = bool(music_path) and os.path.exists(music_path)
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 
-    # Choose font sizes based on number of lines
     n_lines = max(1, headline_wrapped.count("\n") + 1)
-    if n_lines == 1:
-        title_size = 54
-    elif n_lines == 2:
-        title_size = 50
-    else:
-        title_size = 44
+    title_size = 54 if n_lines == 1 else 50 if n_lines == 2 else 44
 
     with tempfile.TemporaryDirectory() as td:
         out_mp4 = os.path.join(td, "reel.mp4")
@@ -894,22 +872,10 @@ def generate_reel_from_image(
             "-i", bg_path,
             "-i", news_image_path,
         ]
-
-        # optional logo
         if logo_ok:
-            cmd += ["-i", logo_path]  # index 3 when present
-
-        # optional music
+            cmd += ["-i", logo_path]
         if music_ok:
-            cmd += ["-i", music_path]  # last input
-
-        # filter graph
-        # Inputs:
-        # 0: black base
-        # 1: bg
-        # 2: news image
-        # 3: logo (optional)
-        # audio: last (optional)
+            cmd += ["-i", music_path]
 
         vf_parts = []
         vf_parts.append(f"[1:v]scale={REEL_W}:{REEL_H},format=rgba[bg];")
@@ -934,13 +900,9 @@ def generate_reel_from_image(
             f"[vout]"
         )
 
-        vf = "".join(vf_parts)
+        cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
 
-        cmd += ["-filter_complex", vf, "-map", "[vout]"]
-
-        # audio mapping:
         if music_ok:
-            # music is last input
             audio_index = 3 if not logo_ok else 4
             cmd += ["-map", f"{audio_index}:a", "-filter:a", "volume=0.35", "-c:a", "aac", "-b:a", "128k"]
         else:
@@ -972,9 +934,6 @@ def generate_reel_from_video_bg(
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
 ) -> bytes:
-    """
-    Use a vertical bg video (e.g. Runway i2v output) as reel background + overlays.
-    """
     if not os.path.exists(bg_video_path):
         raise RuntimeError(f"Falta bg video local: {bg_video_path}")
     if not os.path.exists(FONT_BOLD):
@@ -987,12 +946,7 @@ def generate_reel_from_video_bg(
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 
     n_lines = max(1, headline_wrapped.count("\n") + 1)
-    if n_lines == 1:
-        title_size = 56
-    elif n_lines == 2:
-        title_size = 50
-    else:
-        title_size = 44
+    title_size = 56 if n_lines == 1 else 50 if n_lines == 2 else 44
 
     with tempfile.TemporaryDirectory() as td:
         out_mp4 = os.path.join(td, "reel.mp4")
@@ -1034,12 +988,10 @@ def generate_reel_from_video_bg(
             f"fontsize=44:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18"
             f"[vout]"
         )
-        vf = "".join(vf_parts)
 
-        cmd += ["-filter_complex", vf, "-map", "[vout]"]
+        cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
 
         if music_ok:
-            # if logo exists, music is input 2 else 1
             audio_index = 2 if logo_ok else 1
             cmd += ["-map", f"{audio_index}:a", "-filter:a", "volume=0.35", "-c:a", "aac", "-b:a", "128k"]
         else:
@@ -1116,6 +1068,133 @@ def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
     print("IG publish: publicando...")
     res = ig_api_post(f"{IG_USER_ID}/media_publish", {"creation_id": creation_id, "access_token": IG_ACCESS_TOKEN})
     return res
+
+# =========================
+# Facebook Page Reels publish (optional)
+# =========================
+
+def fb_publish_reel(video_url: str, caption: str) -> Optional[Dict[str, Any]]:
+    if not ENABLE_FB_PUBLISH:
+        return None
+    if not (FB_PAGE_ID and FB_PAGE_ACCESS_TOKEN):
+        print("FB: faltan FB_PAGE_ID o FB_PAGE_ACCESS_TOKEN. Saltando.")
+        return {"ok": False, "error": "missing_fb_page_token_or_id"}
+
+    try:
+        url = f"{GRAPH_BASE}/{FB_PAGE_ID}/video_reels"
+        r = requests.post(
+            url,
+            data={
+                "video_url": video_url,
+                "description": caption,
+                "access_token": FB_PAGE_ACCESS_TOKEN,
+            },
+            timeout=HTTP_TIMEOUT,
+        )
+        _raise_meta_error(r, "FB REELS PUBLISH")
+        j = r.json()
+        print("FB publish OK:", j)
+        return {"ok": True, "response": j}
+    except Exception as e:
+        print("FB publish falló (no rompe):", str(e))
+        return {"ok": False, "error": str(e), "video_url": video_url}
+
+# =========================
+# YouTube Shorts publish (optional)
+# =========================
+
+def youtube_upload_short(video_path: str, title: str, description: str) -> Optional[Dict[str, Any]]:
+    """
+    Requiere:
+      google-api-python-client
+      google-auth
+      google-auth-oauthlib
+    y env:
+      YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET / YOUTUBE_REFRESH_TOKEN
+    """
+    if not ENABLE_YT_PUBLISH:
+        return None
+    if not (YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET and YOUTUBE_REFRESH_TOKEN):
+        print("YT: faltan YOUTUBE_CLIENT_ID/SECRET/REFRESH_TOKEN. Saltando.")
+        return {"ok": False, "error": "missing_youtube_oauth"}
+
+    try:
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaFileUpload
+
+        creds = Credentials(
+            None,
+            refresh_token=YOUTUBE_REFRESH_TOKEN,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=YOUTUBE_CLIENT_ID,
+            client_secret=YOUTUBE_CLIENT_SECRET,
+            scopes=["https://www.googleapis.com/auth/youtube.upload"],
+        )
+
+        youtube = build("youtube", "v3", credentials=creds)
+
+        body = {
+            "snippet": {
+                "title": title[:95],
+                "description": description[:4500],
+                "categoryId": "20",
+            },
+            "status": {
+                "privacyStatus": "public",
+                "selfDeclaredMadeForKids": False,
+            },
+        }
+
+        media = MediaFileUpload(video_path, chunksize=-1, resumable=True, mimetype="video/mp4")
+        req = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
+
+        resp = None
+        while resp is None:
+            status, resp = req.next_chunk()
+            if status:
+                print(f"YT upload progress: {int(status.progress() * 100)}%")
+
+        print("YT publish OK:", resp)
+        return {"ok": True, "response": resp}
+    except Exception as e:
+        print("YT publish falló (no rompe):", str(e))
+        return {"ok": False, "error": str(e)}
+
+# =========================
+# TikTok publish (optional, best effort)
+# =========================
+
+def tiktok_publish_video_from_url(video_url: str, caption: str) -> Optional[Dict[str, Any]]:
+    """
+    Requiere Content Posting API habilitada.
+    Env: TIKTOK_ACCESS_TOKEN, TIKTOK_OPEN_ID
+    """
+    if not ENABLE_TIKTOK_PUBLISH:
+        return None
+    if not (TIKTOK_ACCESS_TOKEN and TIKTOK_OPEN_ID):
+        print("TikTok: faltan TIKTOK_ACCESS_TOKEN o TIKTOK_OPEN_ID. Saltando.")
+        return {"ok": False, "error": "missing_tiktok_token_or_open_id"}
+
+    try:
+        init_url = "https://open.tiktokapis.com/v2/post/publish/video/init/"
+        headers = {
+            "Authorization": f"Bearer {TIKTOK_ACCESS_TOKEN}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "open_id": TIKTOK_OPEN_ID,
+            "source_info": {"source": "PULL_FROM_URL", "video_url": video_url},
+            "post_info": {"title": caption[:150]},
+        }
+        r = requests.post(init_url, headers=headers, json=payload, timeout=HTTP_TIMEOUT)
+        _raise_meta_error(r, "TIKTOK INIT")
+        j = r.json()
+        print("TikTok init OK:", j)
+        return {"ok": True, "response": j}
+    except Exception as e:
+        print("TikTok publish falló (no rompe):", str(e))
+        return {"ok": False, "error": str(e), "video_url": video_url}
 
 # =========================
 # State
@@ -1200,7 +1279,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     assets_cfg = cfg.get("assets", {}) or {}
     asset_bg = assets_cfg.get("bg") or DEFAULT_ASSET_BG
     asset_logo_default = assets_cfg.get("logo") or DEFAULT_ASSET_LOGO
-    asset_music_hint = assets_cfg.get("music") or DEFAULT_ASSET_MUSIC
     cta_text = assets_cfg.get("cta") or "Sigue para más"
 
     threads_cfg = cfg.get("threads", {})
@@ -1270,7 +1348,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             processed = [x for x in processed if x.get("link") != link]
             continue
 
-        # Threads publish (or dry-run)
+        # Threads publish
         threads_res = None
         try:
             threads_res = threads_publish_text_image(
@@ -1287,16 +1365,13 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         # Reel generation
         reel_url = None
+        reel_bytes = None
         if ENABLE_REELS:
             try:
-                # download chosen image locally
                 img_bytes, img_ext = download_image_bytes(chosen_img)
-
-                # rehost to r2 for runway input
                 img_r2_url = upload_image_bytes_to_r2_public(img_bytes, img_ext, prefix=threads_media_prefix)
                 print("Imagen rehost R2:", img_r2_url)
 
-                # choose music + logo randomly
                 chosen_music = pick_music_path()
                 chosen_logo = pick_logo_path(asset_logo_default)
 
@@ -1305,7 +1380,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     with open(local_img, "wb") as f:
                         f.write(img_bytes)
 
-                    use_runway = RUNWAY_ENABLED and bool(RUNWAY_API_KEY)
+                    use_runway = (RUNWAY_ENABLED and bool(RUNWAY_API_KEY) and (random.random() <= max(0.0, min(1.0, RUNWAY_PROBABILITY))))
                     if use_runway:
                         try:
                             runway_prompt = (
@@ -1317,7 +1392,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             print("Runway task created:", task_id)
 
                             mp4_url = runway_wait_for_mp4(task_id, timeout_sec=RUNWAY_TIMEOUT)
-                            print("Runway mp4 URL:", mp4_url)
+                            print("Runway mp4 URL:", mp4_url[:160] + ("..." if len(mp4_url) > 160 else ""))
 
                             mp4_bytes = download_runway_mp4_robust(mp4_url, task_id=task_id)
                             bg_vid = os.path.join(td, "bg.mp4")
@@ -1359,11 +1434,9 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as e:
                 print("Reel generation falló (no rompe):", str(e))
 
-        # IG publish (optional)
+        # IG publish
         ig_res = None
-        ig_kind = None
         if reel_url:
-            ig_kind = "reel"
             if ENABLE_IG_PUBLISH and (not acct_dry_run):
                 try:
                     ig_caption = build_instagram_caption(item, link)
@@ -1375,11 +1448,36 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 print("[DRY_RUN] IG disabled or dry_run, no publico.")
                 ig_res = {"video_url": reel_url, "published": False}
-        else:
-            if ENABLE_IG_PUBLISH and (not acct_dry_run):
-                print("IG: no hay reel_url, entonces NO se publica (esto pasa si falló la generación del reel).")
 
-        # mark posted in state if Threads actually published
+        # FB publish
+        fb_res = None
+        if reel_url and (not acct_dry_run):
+            fb_res = fb_publish_reel(reel_url, build_instagram_caption(item, link))
+
+        # YouTube publish (needs local file)
+        yt_res = None
+        if reel_url and (not acct_dry_run) and ENABLE_YT_PUBLISH:
+            try:
+                with tempfile.TemporaryDirectory() as td:
+                    p = os.path.join(td, "reel.mp4")
+                    # descargar desde R2
+                    rr = _get_with_retries(reel_url, timeout=90, label="R2 DOWNLOAD REEL", retries=2)
+                    with open(p, "wb") as f:
+                        f.write(rr.content)
+                    cap = build_instagram_caption(item, link)
+                    yt_title = (cap.splitlines()[0].strip()[:85] + " #Shorts").strip()
+                    yt_desc = cap + "\n\n#Shorts #gaming #esports"
+                    yt_res = youtube_upload_short(p, yt_title, yt_desc)
+            except Exception as e:
+                print("YT publish falló (no rompe):", str(e))
+                yt_res = {"ok": False, "error": str(e)}
+
+        # TikTok publish
+        tt_res = None
+        if reel_url and (not acct_dry_run):
+            tt_res = tiktok_publish_video_from_url(reel_url, build_instagram_caption(item, link))
+
+        # state
         if threads_res and threads_res.get("ok") and not threads_res.get("dry_run"):
             mark_posted(state, link)
             save_threads_state(state_key, state)
@@ -1393,7 +1491,9 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "mode": mode,
                 "threads": threads_res,
                 "ig": ig_res,
-                "ig_kind": ig_kind,
+                "fb": fb_res,
+                "yt": yt_res,
+                "tiktok": tt_res,
                 "dry_run": acct_dry_run,
             }
         )
@@ -1406,10 +1506,14 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "enable_reels": ENABLE_REELS,
             "reel_seconds": REEL_SECONDS,
             "enable_ig_publish": ENABLE_IG_PUBLISH,
+            "enable_fb_publish": ENABLE_FB_PUBLISH,
+            "enable_yt_publish": ENABLE_YT_PUBLISH,
+            "enable_tiktok_publish": ENABLE_TIKTOK_PUBLISH,
             "enable_threads_publish": ENABLE_THREADS_PUBLISH,
             "dry_run": DRY_RUN,
             "graph_version": f"v{GRAPH_VERSION}",
             "runway_enabled": RUNWAY_ENABLED and bool(RUNWAY_API_KEY),
+            "runway_probability": RUNWAY_PROBABILITY,
             "music_probability": MUSIC_PROBABILITY,
             "logo_probability": LOGO_PROBABILITY,
         },

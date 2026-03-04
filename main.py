@@ -63,14 +63,71 @@ def env_float(name: str, default: float) -> float:
         return default
 
 # =========================
-# MODE SWITCH (A or B)
+# MODE ROUTER (A-G)
 # =========================
+
 RUN_MODE = (env_nonempty("RUN_MODE", "A") or "A").strip().upper()
+
+print("RUN_MODE:", RUN_MODE)
+
+# MODE B
 if RUN_MODE in ("B", "UGC", "MODE_B", "MODEB"):
-    print(">>> RUN_MODE=B detectado. Corriendo Modo B (UGC) y saliendo.")
+    print(">>> RUN_MODE B - UGC ENGINE")
     from ugc_mode_b import run_mode_b
     run_mode_b()
     raise SystemExit(0)
+
+# MODE C
+if RUN_MODE in ("C", "MODE_C"):
+    print(">>> RUN_MODE C - CLIP GENERATOR")
+    try:
+        from ugc_mode_c import run_mode_c
+        run_mode_c()
+        raise SystemExit(0)
+    except Exception as e:
+        print("Modo C no disponible:", e)
+
+# MODE D
+if RUN_MODE in ("D", "MODE_D"):
+    print(">>> RUN_MODE D - VIRAL ENGINE")
+    try:
+        from ugc_mode_d import run_mode_d
+        run_mode_d()
+        raise SystemExit(0)
+    except Exception as e:
+        print("Modo D no disponible:", e)
+
+# MODE E
+if RUN_MODE in ("E", "MODE_E"):
+    print(">>> RUN_MODE E - TWITCH HARVESTER")
+    try:
+        from ugc_mode_e import run_mode_e
+        run_mode_e()
+        raise SystemExit(0)
+    except Exception as e:
+        print("Modo E no disponible:", e)
+
+# MODE F
+if RUN_MODE in ("F", "MODE_F"):
+    print(">>> RUN_MODE F - VIRAL ANALYTICS")
+    try:
+        from ugc_mode_f import run_mode_f
+        run_mode_f()
+        raise SystemExit(0)
+    except Exception as e:
+        print("Modo F no disponible:", e)
+
+# MODE G
+if RUN_MODE in ("G", "MODE_G"):
+    print(">>> RUN_MODE G - TREND HUNTER")
+    try:
+        from ugc_mode_g import run_mode_g
+        run_mode_g()
+        raise SystemExit(0)
+    except Exception as e:
+        print("Modo G no disponible:", e)
+
+print(">>> RUN_MODE A - EDITORIAL ENGINE")
 
 # =========================
 # GLOBAL ENV (infra)

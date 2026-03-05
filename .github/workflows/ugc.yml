@@ -1,13 +1,22 @@
-name: Robot UGC Runner (Mode B)
+name: Robot UGC Runner (Modo B)
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/20 * * * *"  # cada 20 min (ajusta)
+    - cron: "*/30 * * * *"  # cada 30 min (ajústalo si quieres)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ugc-mode-b
+  cancel-in-progress: false
 
 jobs:
-  run:
+  run-ugc-b:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,59 +28,48 @@ jobs:
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
 
       - name: Run Mode B
-        run: RUN_MODE=B python -u main.py
         env:
-          # R2
+          RUN_MODE: B
+
+          # --- R2 / S3 ---
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
-          # IN/OUT
-          UGC_INBOX_PREFIX: "ugc/inbox"
-          UGC_OUT_PREFIX: "ugc/outputs/reels"
+          # --- UGC settings ---
+          UGC_INBOX_PREFIX: ugc/inbox
+          UGC_OUTPUT_PREFIX: ugc/outputs/reels
+          UGC_MAX_ITEMS: "6"
 
-          # IG publish (si lo quieres activo)
+          # --- Reel settings ---
+          REEL_W: "1080"
+          REEL_H: "1920"
+          REEL_SECONDS: "12"
+
+          # --- HUD overlays ---
+          HUD_DIR: assets
+          HUD_PREFIX: hud_
+          HUD_PROBABILITY: "0.85"
+          HUD_OPACITY: "0.75"
+
+          # --- Music ---
+          MUSIC_SEARCH_DIR: assets
+          MUSIC_PROBABILITY: "0.65"
+          MUSIC_VOLUME: "0.35"
+
+          # --- IG publish (si lo quieres prendido) ---
           ENABLE_IG_PUBLISH: "true"
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           GRAPH_VERSION: "v25.0"
 
-          # OpenAI captions (opcional pero recomendado)
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: "gpt-4.1-mini"
+          # --- Safety ---
+          DRY_RUN: "false"
 
-          # Estilo
-          REEL_SECONDS: "12"
-          REEL_FPS: "30"
-          ENABLE_HUD_OVERLAYS: "true"
-          HUD_DIR: "assets/hud"
-          GLITCH_PROB: "0.45"
-          SHAKE_PROB: "0.35"
-          GRAIN: "0.08"
-          SAT: "1.2"
-          CONTRAST: "1.15"
-          BRIGHT: "0.02"
-
-          # Música
-          ENABLE_MUSIC: "true"
-          MUSIC_SEARCH_DIR: "assets"
-          MUSIC_VOLUME: "0.20"
-          ORIG_VOLUME: "1.00"
-
-          # Runway intro sorpresa
-          RUNWAY_ENABLED: "true"
-          RUNWAY_API_KEY: ${{ secrets.RUNWAY_API_KEY }}
-          RUNWAY_BASE: "https://api.dev.runwayml.com"
-          RUNWAY_VERSION: "2024-11-06"
-          RUNWAY_I2V_MODEL: "gen4.5"
-          RUNWAY_INTRO_SECONDS: "3"
-          RUNWAY_INTRO_PROB: "0.55"
-          RUNWAY_TIMEOUT: "420"
-          RUNWAY_POLL_SEC: "6"
+        run: python -u main.py

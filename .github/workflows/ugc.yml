@@ -1,29 +1,18 @@
-name: Robot UGC Runner (Modo B)
+name: Robot UGC Runner (Mode B)
 
 on:
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Simular (no publica IG). Igual procesa, sube video a R2 y deja URLs."
-        required: false
-        default: "false"
-      publish_ig:
-        description: "Publicar en Instagram"
-        required: false
-        default: "true"
   schedule:
-    - cron: "0 14 * * *" # 9am Colombia
-    - cron: "0 20 * * *" # 3pm Colombia
-    - cron: "0 2 * * *"  # 9pm Colombia
+    - cron: "*/20 * * * *"  # cada 20 min (ajusta)
 
 jobs:
-  run-ugc:
+  run:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -31,39 +20,58 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-
-      - name: Install ffmpeg
-        run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          ffmpeg -version
-          ffprobe -version
 
-      - name: Run robot (MODE B)
+      - name: Run Mode B
+        run: RUN_MODE=B python -u main.py
         env:
-          RUN_MODE: "B"
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
-          ENABLE_IG_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ig || 'true' }}
-
           # R2
-          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
-          # OpenAI (caption + voz)
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: "gpt-4.1-mini"
-          OPENAI_TTS_MODEL: "gpt-4o-mini-tts"
+          # IN/OUT
+          UGC_INBOX_PREFIX: "ugc/inbox"
+          UGC_OUT_PREFIX: "ugc/outputs/reels"
 
-          # Instagram
-          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          # IG publish (si lo quieres activo)
+          ENABLE_IG_PUBLISH: "true"
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           GRAPH_VERSION: "v25.0"
 
-          # Control diario
-          MAX_POSTS_PER_DAY: "1"
-        run: |
-          python -u main.py
+          # OpenAI captions (opcional pero recomendado)
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: "gpt-4.1-mini"
+
+          # Estilo
+          REEL_SECONDS: "12"
+          REEL_FPS: "30"
+          ENABLE_HUD_OVERLAYS: "true"
+          HUD_DIR: "assets/hud"
+          GLITCH_PROB: "0.45"
+          SHAKE_PROB: "0.35"
+          GRAIN: "0.08"
+          SAT: "1.2"
+          CONTRAST: "1.15"
+          BRIGHT: "0.02"
+
+          # Música
+          ENABLE_MUSIC: "true"
+          MUSIC_SEARCH_DIR: "assets"
+          MUSIC_VOLUME: "0.20"
+          ORIG_VOLUME: "1.00"
+
+          # Runway intro sorpresa
+          RUNWAY_ENABLED: "true"
+          RUNWAY_API_KEY: ${{ secrets.RUNWAY_API_KEY }}
+          RUNWAY_BASE: "https://api.dev.runwayml.com"
+          RUNWAY_VERSION: "2024-11-06"
+          RUNWAY_I2V_MODEL: "gen4.5"
+          RUNWAY_INTRO_SECONDS: "3"
+          RUNWAY_INTRO_PROB: "0.55"
+          RUNWAY_TIMEOUT: "420"
+          RUNWAY_POLL_SEC: "6"

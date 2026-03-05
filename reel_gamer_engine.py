@@ -4,10 +4,9 @@ import json
 import random
 import tempfile
 import subprocess
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 
 import requests
-
 
 # -------------------------
 # ENV helpers
@@ -18,12 +17,6 @@ def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
         return default
     v = v.strip()
     return v if v else default
-
-def env_bool(name: str, default: bool = False) -> bool:
-    v = os.getenv(name)
-    if v is None:
-        return default
-    return v.strip().lower() in ("1", "true", "yes", "y", "on")
 
 def env_int(name: str, default: int) -> int:
     v = os.getenv(name)
@@ -43,112 +36,56 @@ def env_float(name: str, default: float) -> float:
     except Exception:
         return default
 
+def env_bool(name: str, default: bool = False) -> bool:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    return v.strip().lower() in ("1", "true", "yes", "y", "on")
 
 # -------------------------
-# Defaults
+# Defaults / tuning
 # -------------------------
 HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
+
 REEL_W = env_int("REEL_W", 1080)
 REEL_H = env_int("REEL_H", 1920)
 REEL_FPS = env_int("REEL_FPS", 30)
+REEL_SECONDS = env_int("REEL_SECONDS", 8)
 
 FONT_BOLD = env_nonempty("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 
-# Logo rule (percentages must sum ~100)
-LOGO_NONE_PCT = env_int("LOGO_NONE_PCT", 60)
-LOGO_SMALL_PCT = env_int("LOGO_SMALL_PCT", 30)
-LOGO_BIG_PCT = env_int("LOGO_BIG_PCT", 10)
+# Brand assets (optional)
+ASSET_LOGO = env_nonempty("ASSET_LOGO", "assets/logo.png")
+LOGO_PROB = env_float("LOGO_PROBABILITY", 0.25)  # más bajo = menos institucional
+LOGO_MODE = env_nonempty("LOGO_MODE", "auto")    # auto|none|small|big
 
-# Music always?
-REEL_MUSIC_ALWAYS = env_bool("REEL_MUSIC_ALWAYS", True)
-REEL_MUSIC_VOLUME = env_float("REEL_MUSIC_VOLUME", 0.15)
+# FX probabilities
+GLITCH_PROB = env_float("GLITCH_PROBABILITY", 0.35)
+HUD_PROB = env_float("HUD_PROBABILITY", 0.60)
+SCANLINES_PROB = env_float("SCANLINES_PROBABILITY", 0.45)
 
-# Voice sometimes?
-REEL_VOICE_PCT = env_int("REEL_VOICE_PCT", 30)  # 0..100
-REEL_VOICE_VOLUME = env_float("REEL_VOICE_VOLUME", 1.0)
-
-# If you want: add SFX later
-REEL_GLITCH_PCT = env_int("REEL_GLITCH_PCT", 60)  # 0..100
-REEL_SCANLINES_PCT = env_int("REEL_SCANLINES_PCT", 70)  # 0..100
-
+# Text behavior
+MAX_HOOK_CHARS = env_int("MAX_HOOK_CHARS", 18)         # HOOK corto
+MAX_BODY_CHARS = env_int("MAX_BODY_CHARS", 48)         # 1 frase
+MAX_CTA_CHARS  = env_int("MAX_CTA_CHARS", 26)          # pregunta corta
+TEXT_MAX_LINES = env_int("TEXT_MAX_LINES", 2)          # 1-2 líneas
 
 # -------------------------
-# Style library (variedad gamer)
+# Style library (random look)
 # -------------------------
-STYLE_LIBRARY = [
-    {
-        "name": "esports_broadcast",
-        "weight": 22,
-        "bg_mode": "gradient",
-        "accent": "magenta",
-        "hud": True,
-        "glitch": False,
-        "scanlines": True,
-        "headline_box_opacity": 0.55,
-    },
-    {
-        "name": "cyberpunk_neon",
-        "weight": 22,
-        "bg_mode": "noise",
-        "accent": "neon",
-        "hud": True,
-        "glitch": True,
-        "scanlines": True,
-        "headline_box_opacity": 0.50,
-    },
-    {
-        "name": "arcade_pixel",
-        "weight": 18,
-        "bg_mode": "noise",
-        "accent": "pixel",
-        "hud": False,
-        "glitch": True,
-        "scanlines": True,
-        "headline_box_opacity": 0.60,
-    },
-    {
-        "name": "fifa_card_drop",
-        "weight": 20,
-        "bg_mode": "gradient",
-        "accent": "gold",
-        "hud": True,
-        "glitch": False,
-        "scanlines": False,
-        "headline_box_opacity": 0.55,
-    },
-    {
-        "name": "loot_drop_legendary",
-        "weight": 18,
-        "bg_mode": "gradient",
-        "accent": "legendary",
-        "hud": True,
-        "glitch": True,
-        "scanlines": False,
-        "headline_box_opacity": 0.50,
-    },
+STYLE_LIBRARY: List[Dict[str, Any]] = [
+    {"name": "cyber_neon", "box_op": 0.40, "contrast": 1.10, "sat": 1.30, "shake": 0.0022},
+    {"name": "esports_broadcast", "box_op": 0.48, "contrast": 1.08, "sat": 1.20, "shake": 0.0012},
+    {"name": "arcade_glitch", "box_op": 0.38, "contrast": 1.14, "sat": 1.38, "shake": 0.0028},
+    {"name": "minimal_punch", "box_op": 0.32, "contrast": 1.06, "sat": 1.15, "shake": 0.0008},
 ]
 
-
-def weighted_pick(items):
-    total = sum(max(0, int(x.get("weight", 1))) for x in items)
-    r = random.randint(1, max(1, total))
-    acc = 0
-    for it in items:
-        w = max(0, int(it.get("weight", 1)))
-        acc += w
-        if r <= acc:
-            return it
-    return items[0]
-
-
-def pick_logo_mode() -> str:
-    modes = (["none"] * LOGO_NONE_PCT) + (["small"] * LOGO_SMALL_PCT) + (["big"] * LOGO_BIG_PCT)
-    return random.choice(modes) if modes else "none"
-
+def weighted_pick(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    # simple uniform; you can add weights later
+    return random.choice(items)
 
 # -------------------------
-# OpenAI text “director”
-# (Usa tu mismo Responses API por HTTP como en Modo B, cero SDK required)
+# OpenAI text director (viral + corto)
 # -------------------------
 def openai_text(prompt: str) -> str:
     api_key = env_nonempty("OPENAI_API_KEY")
@@ -173,7 +110,6 @@ def openai_text(prompt: str) -> str:
     if out:
         return str(out).strip()
 
-    # fallback parse
     texts = []
     for c in j.get("output", []) or []:
         for part in c.get("content", []) or []:
@@ -181,307 +117,285 @@ def openai_text(prompt: str) -> str:
                 texts.append(part["text"])
     return "\n".join(texts).strip()
 
+def _clip(s: str, n: int) -> str:
+    s = (s or "").replace("\n", " ").strip()
+    return s[:n].rstrip()
 
-def ai_director_plan(headline: str, link: str) -> Dict[str, Any]:
+def ai_viral_plan(title: str, link: str = "") -> Dict[str, str]:
     """
-    La IA NO genera el video; genera el "plan" (estilo + copy en pantalla + energía).
+    Devuelve HOOK / BODY / CTA en español, MUY corto, polémico.
     """
-    base_style = weighted_pick(STYLE_LIBRARY)
-    logo_mode = pick_logo_mode()
-
     prompt = f"""
-Eres director creativo para Reels GAMER (LATAM). Tu trabajo es dar un PLAN para que ffmpeg lo anime.
-No inventes marcas ni datos. Mantén el headline fiel.
-Devuelve SOLO JSON válido.
+Eres editor viral GAMING/ESPORTS LATAM.
+Objetivo: comentarios. Sin insultos.
 
-HEADLINE: {headline}
-LINK: {link}
+Genera SOLO estas 3 líneas (sin nada más):
+HOOK: (máx {MAX_HOOK_CHARS} caracteres)
+BODY: (máx {MAX_BODY_CHARS} caracteres)
+CTA:  (máx {MAX_CTA_CHARS} caracteres, pregunta)
 
-Elige:
-- on_screen_headline: versión corta del headline (máx 60 chars)
-- on_screen_kicker: 2-4 palabras tipo "BREAKING", "RUMOR", "UPDATE", "OFICIAL" (en español)
-- cta: 1 frase corta (máx 32 chars) tipo "Comenta tu opinión"
-- energy: number 1..10 (más alto = más punch)
-- text_style: "bold"|"ultra"|"minimal"
-- mood_music: "hype"|"trap"|"phonk"|"electro"
+Noticia/tema:
+{title}
+
+Link (referencia, no lo copies): {link}
 """
     try:
         raw = openai_text(prompt)
-        j = json.loads(raw)
     except Exception:
-        # fallback safe
-        j = {
-            "on_screen_headline": (headline or "")[:60],
-            "on_screen_kicker": "UPDATE",
-            "cta": "Comenta tu opinión",
-            "energy": 7,
-            "text_style": "bold",
-            "mood_music": "hype",
-        }
+        raw = ""
 
-    # merge with base style
-    j["style"] = base_style
-    j["logo_mode"] = logo_mode
-    return j
+    hook = body = cta = ""
+    for line in (raw or "").splitlines():
+        line = line.strip()
+        if line.upper().startswith("HOOK:"):
+            hook = line.split(":", 1)[1].strip()
+        elif line.upper().startswith("BODY:"):
+            body = line.split(":", 1)[1].strip()
+        elif line.upper().startswith("CTA:"):
+            cta = line.split(":", 1)[1].strip()
 
+    # fallbacks
+    hook = _clip(hook or "ESPORTS DRAMA", MAX_HOOK_CHARS)
+    body = _clip(body or _clip(title, MAX_BODY_CHARS), MAX_BODY_CHARS)
+    cta  = _clip(cta  or "¿TÚ QUÉ OPINAS?", MAX_CTA_CHARS)
 
-# -------------------------
-# Utilities
-# -------------------------
-def _require_file(path: str, label: str) -> None:
-    if not os.path.exists(path):
-        raise RuntimeError(f"Falta {label} en repo: {path}")
-
-def _safe_text(s: str, max_len: int) -> str:
-    s = (s or "").replace("\n", " ").strip()
-    if len(s) > max_len:
-        s = s[:max_len].rstrip()
-    return s
-
+    return {"hook": hook.upper(), "body": body.upper(), "cta": cta.upper()}
 
 # -------------------------
-# Core: render gamer reel from ONE image
+# Text layout helpers
 # -------------------------
-def render_gamer_reel_mp4_bytes(
+def wrap_lines(text: str, max_chars_line: int = 16, max_lines: int = 2) -> str:
+    t = (text or "").strip().replace("\n", " ")
+    words = t.split()
+    if not words:
+        return ""
+    lines = []
+    cur = ""
+    for w in words:
+        if not cur:
+            cur = w
+            continue
+        if len(cur) + 1 + len(w) <= max_chars_line:
+            cur = cur + " " + w
+        else:
+            lines.append(cur)
+            cur = w
+            if len(lines) >= max_lines:
+                break
+    if len(lines) < max_lines and cur:
+        lines.append(cur)
+    lines = lines[:max_lines]
+    return "\n".join(lines).strip()
+
+# -------------------------
+# Core renderer: FULLSCREEN image + punch overlays
+# -------------------------
+def render_gamer_reel_from_image_bytes(
     *,
     headline: str,
     link: str,
-    news_image_path: str,
-    bg_path: str,
-    logo_path: str,
-    seconds: int,
-    music_path: Optional[str] = None,
-    voice_mp3_path: Optional[str] = None,
+    image_bytes: bytes,
+    image_ext: str = ".jpg",
+    seconds: Optional[int] = None,
 ) -> Tuple[bytes, Dict[str, Any]]:
     """
-    Returns (mp4_bytes, plan_used)
+    FULLSCREEN: la foto es el recurso principal.
+    Anim: zoom + (glitch/hud/scanlines opcional) + textos cortos.
     """
-    _require_file(bg_path, "ASSET_BG")
-    _require_file(logo_path, "ASSET_LOGO")
-    _require_file(news_image_path, "news_image_path")
-    _require_file(FONT_BOLD, "FONT_BOLD")
+    if not os.path.exists(FONT_BOLD):
+        raise RuntimeError(f"FONT_BOLD no existe: {FONT_BOLD}")
 
-    plan = ai_director_plan(headline=headline, link=link)
-    style = plan.get("style") or {}
-    logo_mode = plan.get("logo_mode", "none")
+    seconds = int(seconds or REEL_SECONDS)
+    style = weighted_pick(STYLE_LIBRARY)
+    plan = ai_viral_plan(headline, link)
 
-    on_head = _safe_text(plan.get("on_screen_headline", headline), 80)
-    kicker = _safe_text(plan.get("on_screen_kicker", "UPDATE"), 16).upper()
-    cta = _safe_text(plan.get("cta", "Sigue para más"), 40)
+    # Random toggles
+    enable_glitch = random.random() < GLITCH_PROB
+    enable_hud = random.random() < HUD_PROB
+    enable_scan = random.random() < SCANLINES_PROB
 
-    energy = int(plan.get("energy", 7))
-    energy = max(1, min(10, energy))
-
-    # Motion tuning
-    # zoom: higher energy => more aggressive zoom
-    zoom_start = 1.05 + (energy * 0.01)   # 1.06..1.15
-    zoom_end = 1.20 + (energy * 0.015)    # 1.215..1.35
-
-    enable_glitch = bool(style.get("glitch", False)) and (random.randint(1, 100) <= REEL_GLITCH_PCT)
-    enable_scanlines = bool(style.get("scanlines", False)) and (random.randint(1, 100) <= REEL_SCANLINES_PCT)
-    enable_hud = bool(style.get("hud", False))
-
-    # Logo size/alpha by mode
-    if logo_mode == "big":
-        logo_scale = 760
-        logo_alpha = 1.0
-        logo_y = 120
-    elif logo_mode == "small":
-        logo_scale = 420
-        logo_alpha = 0.9
-        logo_y = 140
+    # Logo decision (menos institucional)
+    logo_mode = (LOGO_MODE or "auto").lower()
+    use_logo = False
+    if logo_mode == "none":
+        use_logo = False
+    elif logo_mode in ("small", "big"):
+        use_logo = os.path.exists(ASSET_LOGO)
     else:
-        logo_scale = 10
-        logo_alpha = 0.0
-        logo_y = 140
+        use_logo = (random.random() < max(0.0, min(1.0, LOGO_PROB))) and os.path.exists(ASSET_LOGO)
+        logo_mode = "small" if random.random() < 0.75 else "big"
 
-    headline_box_op = float(style.get("headline_box_opacity", 0.55))
-    headline_box_op = max(0.25, min(0.75, headline_box_op))
+    # Text positions random (para que no se vea plantilla)
+    # top or mid-left
+    variant = random.choice(["top_left", "mid_left", "bottom_left"])
+    if variant == "top_left":
+        hook_y, body_y, cta_y = 220, 340, 1580
+    elif variant == "mid_left":
+        hook_y, body_y, cta_y = 740, 880, 1580
+    else:
+        hook_y, body_y, cta_y = 1220, 1380, 1580
 
-    # Build audio flags
-    music_ok = REEL_MUSIC_ALWAYS and bool(music_path) and os.path.exists(music_path)
-    voice_ok = bool(voice_mp3_path) and os.path.exists(voice_mp3_path)
+    hook = wrap_lines(plan["hook"], max_chars_line=14, max_lines=1)
+    body = wrap_lines(plan["body"], max_chars_line=18, max_lines=TEXT_MAX_LINES)
+    cta  = wrap_lines(plan["cta"],  max_chars_line=18, max_lines=1)
 
+    # Make video
     with tempfile.TemporaryDirectory() as td:
+        img_path = os.path.join(td, f"img{image_ext if image_ext.startswith('.') else '.jpg'}")
         out_mp4 = os.path.join(td, "out.mp4")
-        title_txt = os.path.join(td, "title.txt")
-        cta_txt = os.path.join(td, "cta.txt")
-        kicker_txt = os.path.join(td, "kicker.txt")
+        hook_txt = os.path.join(td, "hook.txt")
+        body_txt = os.path.join(td, "body.txt")
+        cta_txt  = os.path.join(td, "cta.txt")
 
-        with open(title_txt, "w", encoding="utf-8") as f:
-            f.write(on_head)
+        with open(img_path, "wb") as f:
+            f.write(image_bytes)
+        with open(hook_txt, "w", encoding="utf-8") as f:
+            f.write(hook)
+        with open(body_txt, "w", encoding="utf-8") as f:
+            f.write(body)
         with open(cta_txt, "w", encoding="utf-8") as f:
             f.write(cta)
-        with open(kicker_txt, "w", encoding="utf-8") as f:
-            f.write(kicker)
 
-        # Inputs:
-        # 0: base color
-        # 1: bg image
-        # 2: news image
-        # 3: logo
+        # Zoompan tuning
+        # más punch con shake (muy leve)
+        shake = float(style.get("shake", 0.0015))
+        contrast = float(style.get("contrast", 1.10))
+        sat = float(style.get("sat", 1.25))
+        box_op = float(style.get("box_op", 0.42))
+
+        # Build filter_complex
+        # 0: image (loop)
+        # 1: logo (optional)
         cmd = [
-            "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-            "-f", "lavfi", "-i", f"color=c=black:s={REEL_W}x{REEL_H}:r={REEL_FPS}:d={int(seconds)}",
-            "-i", bg_path,
-            "-i", news_image_path,
-            "-i", logo_path,
+            "ffmpeg", "-y", "-nostdin", "-hide_banner",
+            "-loglevel", "error",
+            "-loop", "1", "-i", img_path,
         ]
-        # optional audio inputs after video inputs
-        # music: idx 4
-        if music_ok:
-            cmd += ["-i", music_path]
-        # voice: next
-        if voice_ok:
-            cmd += ["-i", voice_mp3_path]
+        if use_logo:
+            cmd += ["-i", ASSET_LOGO]
 
-        # Animated background: base bg + subtle movement + noise/scanlines
-        # News image: zoompan (Ken Burns) + slight rotate/shake with random noise (cheap trick)
-        # HUD: overlay some moving boxes/lines made with drawbox + noise
+        # Base fullscreen fill + cinematic zoom
+        frames = seconds * REEL_FPS
+        # zoom increases slowly; crop stays centered but with tiny shake
+        zexpr = "min(1.22,1+0.0009*on)"
+        xexpr = f"(iw/2)-(iw/zoom/2)+{shake}*iw*sin(2*PI*on/17)"
+        yexpr = f"(ih/2)-(ih/zoom/2)+{shake}*ih*cos(2*PI*on/19)"
 
-        # Background pipeline
-        # bg image scale to full
-        fc = []
-        fc.append(f"[1:v]scale={REEL_W}:{REEL_H},format=rgba[bg]")
-
-        # add subtle animated noise layer (optional)
-        # using geq noise is expensive; we do a lightweight noise source
-        fc.append(f"noise=alls=20:allf=t+u,format=rgba[no]")
-
-        # compose bg + noise at low alpha
-        fc.append(f"[bg][no]overlay=0:0:format=auto:alpha=0.08[bg2]")
-
-        # scanlines overlay
-        if enable_scanlines:
-            # create moving scanlines
-            fc.append(f"color=c=black@0.0:s={REEL_W}x{REEL_H}:r={REEL_FPS}:d={int(seconds)}[sl0]")
-            # draw many thin boxes via drawbox is heavy; simulate via blend with a generated pattern
-            # simplest: use 'tblend' with noise - looks like CRT
-            fc.append(f"[bg2]tblend=all_mode=average,eq=contrast=1.05:saturation=1.15[bg3]")
-        else:
-            fc.append(f"[bg2]eq=contrast=1.06:saturation=1.18[bg3]")
-
-        # base over color
-        fc.append(f"[0:v][bg3]overlay=0:0:format=auto[v0]")
-
-        # News image: scale then zoompan
-        # Keep it centered around mid-upper
-        news_w = REEL_W - 140
-        fc.append(f"[2:v]scale={news_w}:-1,format=rgba[news]")
-        # zoompan: frames = seconds*fps
-        frames = int(seconds * REEL_FPS)
-        # zoom expression: from zoom_start to zoom_end across frames
-        zexpr = f"if(lte(on,0),{zoom_start},min({zoom_end},zoom+0.0015))"
-        fc.append(
-            f"[news]zoompan=z='{zexpr}':d={frames}:s={news_w}x{int(REEL_H*0.42)}:fps={REEL_FPS}[news_z]"
+        vf = []
+        vf.append(
+            f"[0:v]scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+            f"crop={REEL_W}:{REEL_H},"
+            f"zoompan=z='{zexpr}':x='{xexpr}':y='{yexpr}':d={frames}:s={REEL_W}x{REEL_H}:fps={REEL_FPS},"
+            f"eq=contrast={contrast}:saturation={sat},"
+            f"format=rgba[v0]"
         )
 
-        # place news image
-        news_y = 520
-        fc.append(f"[v0][news_z]overlay=(W-w)/2:{news_y}:format=auto[v1]")
+        # Scanlines (light)
+        if enable_scan:
+            vf.append(
+                f"color=c=white@0.035:s={REEL_W}x{REEL_H}:r={REEL_FPS}:d={seconds}[sl];"
+                f"[v0][sl]blend=all_mode=multiply:all_opacity=0.55[v1]"
+            )
+            base = "[v1]"
+        else:
+            base = "[v0]"
 
-        # HUD / frames / accents
+        # HUD overlay (cheap but effective)
         if enable_hud:
-            # a few animated boxes
-            fc.append(
-                f"[v1]drawbox=x=40:y=470:w={REEL_W-80}:h={int(REEL_H*0.46)}:color=white@0.08:t=4,"
-                f"drawbox=x=60:y=490:w={REEL_W-120}:h={int(REEL_H*0.46)-40}:color=white@0.05:t=2"
+            vf.append(
+                f"{base}"
+                f"drawbox=x=40:y=430:w={REEL_W-80}:h=12:color=white@0.18:t=fill,"
+                f"drawbox=x=40:y=430:w=12:h={REEL_H-860}:color=white@0.10:t=fill,"
+                f"drawbox=x={REEL_W-52}:y=430:w=12:h={REEL_H-860}:color=white@0.10:t=fill,"
+                f"drawbox=x=40:y={REEL_H-430}:w={REEL_W-80}:h=12:color=white@0.12:t=fill"
                 f"[v2]"
             )
+            base2 = "[v2]"
         else:
-            fc.append(f"[v1]copy[v2]")
+            base2 = base
 
-        # Logo overlay (if any)
-        if logo_alpha > 0.01:
-            fc.append(f"[3:v]scale={logo_scale}:-1,format=rgba,colorchannelmixer=aa={logo_alpha}[lg]")
-            fc.append(f"[v2][lg]overlay=(W-w)/2:{logo_y}:format=auto[v3]")
-        else:
-            fc.append(f"[v2]copy[v3]")
-
-        # Kicker (small) + headline + CTA
-        # Use boxed text; looks broadcast.
-        # headline position:
-        head_y = 1320
-        cta_y = 1540
-
-        # glitch effect (cheap): occasionally add slight color shift via eq/hue
+        # Glitch tint occasionally (subtle)
         if enable_glitch:
-            fc.append(f"[v3]hue=h=2:s=1.1,eq=contrast=1.08:saturation=1.25[v3g]")
-            base_for_text = "[v3g]"
+            vf.append(f"{base2}hue=h=2:s=1.05,eq=contrast={contrast+0.03}:saturation={sat+0.08}[v3]")
+            base3 = "[v3]"
         else:
-            base_for_text = "[v3]"
+            base3 = base2
 
-        draw = (
-            f"{base_for_text}"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={kicker_txt}:x=60:y=460:fontsize=44:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:x=60:y={head_y}:fontsize=52:fontcolor=white:box=1:boxcolor=black@{headline_box_op}:boxborderw=26,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:x=60:y={cta_y}:fontsize=44:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18"
+        # Logo overlay (top-right small / center big)
+        if use_logo:
+            if logo_mode == "big":
+                vf.append(f"[1:v]scale=560:-1,format=rgba[lg];{base3}[lg]overlay=(W-w)/2:120:format=auto[v4]")
+                base4 = "[v4]"
+            else:
+                vf.append(f"[1:v]scale=240:-1,format=rgba[lg];{base3}[lg]overlay=W-w-60:80:format=auto[v4]")
+                base4 = "[v4]"
+        else:
+            base4 = base3
+
+        # Text overlays: hook, body, cta (entrada con fade)
+        # Hook BIG, body medium, CTA medium
+        text = (
+            f"{base4}"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={hook_txt}:"
+            f"x=70:y={hook_y}:fontsize=86:fontcolor=white:"
+            f"borderw=2:bordercolor=black@0.6:"
+            f"box=1:boxcolor=black@{box_op}:boxborderw=22:"
+            f"alpha='if(lt(t,0.15),0, if(lt(t,0.40),(t-0.15)/0.25,1))',"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={body_txt}:"
+            f"x=70:y={body_y}:fontsize=58:fontcolor=white:"
+            f"borderw=2:bordercolor=black@0.5:"
+            f"box=1:boxcolor=black@{box_op-0.06}:boxborderw=20:"
+            f"alpha='if(lt(t,0.35),0, if(lt(t,0.65),(t-0.35)/0.30,1))',"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
+            f"x=70:y={cta_y}:fontsize=56:fontcolor=white:"
+            f"borderw=2:bordercolor=black@0.5:"
+            f"box=1:boxcolor=black@0.30:boxborderw=18:"
+            f"alpha='if(lt(t,0.85),0, if(lt(t,1.10),(t-0.85)/0.25,1))'"
             f"[vout]"
         )
-        fc.append(draw)
 
-        filter_complex = ";".join(fc)
+        # Important: filter graph must be single string.
+        # We constructed vf parts; join with ';' except first already sets [v0]
+        # We'll build as:
+        # 1) first line produces [v0]
+        # 2) following lines reference [v0] or produce [v1],[v2]...
+        parts = []
+        parts.append(vf[0])
+        for p in vf[1:]:
+            parts.append(p)
+        parts.append(text)
 
-        cmd += ["-filter_complex", filter_complex, "-map", "[vout]"]
-
-        # AUDIO MIX:
-        # If music only -> keep music
-        # If music + voice -> mix
-        # If none -> silent
-        audio_inputs = []
-        music_index = None
-        voice_index = None
-        next_audio_idx = 4
-
-        if music_ok:
-            music_index = next_audio_idx
-            next_audio_idx += 1
-        if voice_ok:
-            voice_index = next_audio_idx
-            next_audio_idx += 1
-
-        if music_index is not None or voice_index is not None:
-            # build amix
-            aparts = []
-            mix_ins = []
-            if music_index is not None:
-                aparts.append(f"[{music_index}:a]volume={REEL_MUSIC_VOLUME}[am]")
-                mix_ins.append("[am]")
-            if voice_index is not None:
-                aparts.append(f"[{voice_index}:a]volume={REEL_VOICE_VOLUME}[av]")
-                mix_ins.append("[av]")
-
-            if len(mix_ins) == 1:
-                # single audio
-                fc_audio = ";".join(aparts) + f";{mix_ins[0]}anull[aout]"
-            else:
-                fc_audio = ";".join(aparts) + f";{''.join(mix_ins)}amix=inputs={len(mix_ins)}:duration=first:dropout_transition=2[aout]"
-
-            cmd += ["-filter_complex", filter_complex + ";" + fc_audio, "-map", "[vout]", "-map", "[aout]"]
-            cmd += ["-c:a", "aac", "-b:a", "128k"]
-        else:
-            cmd += ["-an"]
+        filter_complex = ";".join(parts)
 
         cmd += [
-            "-t", str(int(seconds)),
-            "-r", str(REEL_FPS),
+            "-t", str(seconds),
+            "-filter_complex", filter_complex,
+            "-map", "[vout]",
+            "-an",
             "-c:v", "libx264",
-            "-preset", "veryfast",
             "-pix_fmt", "yuv420p",
+            "-preset", "veryfast",
             "-movflags", "+faststart",
-            "-shortest",
             out_mp4,
         ]
 
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
         if p.returncode != 0:
-            raise RuntimeError(f"ffmpeg gamer reel failed:\n{(p.stderr or '')[:4000]}")
+            raise RuntimeError(f"FFmpeg falló:\n{(p.stderr or '')[:4000]}")
 
         with open(out_mp4, "rb") as f:
             mp4_bytes = f.read()
 
-    return mp4_bytes, plan
-
-
-def should_add_voice() -> bool:
-    return random.randint(1, 100) <= max(0, min(100, REEL_VOICE_PCT))
+    meta = {
+        "style": style,
+        "plan": plan,
+        "enable_glitch": enable_glitch,
+        "enable_hud": enable_hud,
+        "enable_scanlines": enable_scan,
+        "use_logo": use_logo,
+        "logo_mode": logo_mode,
+        "variant": variant,
+        "seconds": seconds,
+        "fps": REEL_FPS,
+    }
+    return mp4_bytes, meta

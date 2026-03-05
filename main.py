@@ -100,13 +100,10 @@ if RUN_MODE in ("D", "MODE_D"):
 # MODE E
 if RUN_MODE in ("E", "MODE_E"):
     print(">>> RUN_MODE E - TWITCH HARVESTER")
-    try:
-        from ugc_mode_e import run_mode_e
-        run_mode_e()
-        raise SystemExit(0)
-    except Exception as e:
-        print("Modo E no disponible:", e)
-
+    from ugc_mode_e import run_mode_e
+    run_mode_e()
+    raise SystemExit(0)
+    
 # MODE F
 if RUN_MODE in ("F", "MODE_F"):
     print(">>> RUN_MODE F - VIRAL ANALYTICS")

@@ -1,19 +1,13 @@
 name: Robot UGC Runner (Modo B)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
+  # (opcional) automático cada 2 horas
   schedule:
-    - cron: "*/30 * * * *"  # cada 30 min (ajústalo si quieres)
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ugc-mode-b
-  cancel-in-progress: false
+    - cron: "0 */2 * * *"
 
 jobs:
-  run-ugc-b:
+  ugc_mode_b:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -21,17 +15,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install system deps (ffmpeg)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+
+      - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Mode B
+      - name: Run Mode B (UGC)
+        run: python -u main.py
         env:
           RUN_MODE: B
 
@@ -42,34 +43,33 @@ jobs:
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
-          # --- UGC settings ---
+          # --- UGC paths (puedes dejarlos así) ---
           UGC_INBOX_PREFIX: ugc/inbox
           UGC_OUTPUT_PREFIX: ugc/outputs/reels
           UGC_MAX_ITEMS: "6"
 
-          # --- Reel settings ---
+          # --- Reel params ---
           REEL_W: "1080"
           REEL_H: "1920"
           REEL_SECONDS: "12"
 
-          # --- HUD overlays ---
+          # --- HUD overlays (usa tus PNG hud_*.png dentro de /assets) ---
           HUD_DIR: assets
           HUD_PREFIX: hud_
           HUD_PROBABILITY: "0.85"
           HUD_OPACITY: "0.75"
 
-          # --- Music ---
+          # --- Music (usa tus mp3 dentro de /assets) ---
           MUSIC_SEARCH_DIR: assets
           MUSIC_PROBABILITY: "0.65"
           MUSIC_VOLUME: "0.35"
 
-          # --- IG publish (si lo quieres prendido) ---
+          # --- Instagram publish (si quieres que publique) ---
           ENABLE_IG_PUBLISH: "true"
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           GRAPH_VERSION: "v25.0"
 
-          # --- Safety ---
+          # --- Control ---
           DRY_RUN: "false"
-
-        run: python -u main.py
+          HTTP_TIMEOUT: "30"

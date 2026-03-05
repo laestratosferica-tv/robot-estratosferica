@@ -1,47 +1,93 @@
 # ugc_mode_e.py
-# AUTO EXPLORER (TWITCH) -> R2 INBOX
-
 import os
-import time
+import re
 import json
+import time
 import random
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Tuple
+import hashlib
+from datetime import datetime, timezone
+from typing import Dict, Any, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import requests
 import boto3
 
-# =========================
-# ENV (Twitch)
-# =========================
-TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
-TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
-
-MAX_CLIPS = int(os.getenv("TWITCH_MAX_CLIPS_PER_RUN", "3"))
-LOOKBACK_HOURS = int(os.getenv("TWITCH_LOOKBACK_HOURS", "24"))
-MIN_VIEWS = int(os.getenv("TWITCH_MIN_VIEWS", "3000"))
-
-HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "30"))
 
 # =========================
-# ENV (R2)
+# ENV helpers
 # =========================
-BUCKET_NAME = os.getenv("BUCKET_NAME")
-R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL")
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 
-UGC_INBOX_PREFIX = os.getenv("UGC_INBOX_PREFIX", "ugc/inbox/").strip()
-if not UGC_INBOX_PREFIX.endswith("/"):
-    UGC_INBOX_PREFIX += "/"
+def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    v = v.strip()
+    return v if v else default
+
+def env_int(name: str, default: int) -> int:
+    v = os.getenv(name)
+    if not v or not v.strip():
+        return default
+    try:
+        return int(v.strip())
+    except Exception:
+        return default
+
+def env_float(name: str, default: float) -> float:
+    v = os.getenv(name)
+    if not v or not v.strip():
+        return default
+    try:
+        return float(v.strip())
+    except Exception:
+        return default
 
 
 # =========================
-# R2 CLIENT
+# Twitch
 # =========================
+
+TWITCH_CLIENT_ID = env_nonempty("TWITCH_CLIENT_ID")
+TWITCH_CLIENT_SECRET = env_nonempty("TWITCH_CLIENT_SECRET")
+
+TWITCH_GAMES = env_nonempty(
+    "TWITCH_GAMES",
+    "Just Chatting,League of Legends,Counter-Strike,Grand Theft Auto V,Minecraft,VALORANT,Apex Legends"
+)
+
+TWITCH_CLIPS_PER_GAME = env_int("TWITCH_CLIPS_PER_GAME", 6)
+TWITCH_PICK_TOTAL = env_int("TWITCH_PICK_TOTAL", 3)
+TWITCH_MIN_VIEWS = env_int("TWITCH_MIN_VIEWS", 800)
+TWITCH_PERIOD_DAYS = env_int("TWITCH_PERIOD_DAYS", 7)
+
+HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
+
+# =========================
+# R2
+# =========================
+AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
+R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
+BUCKET_NAME = env_nonempty("BUCKET_NAME")
+
+R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
+R2_INBOX_PREFIX = (env_nonempty("R2_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
+
+USER_AGENT = "Mozilla/5.0 (robot-ugc-e)"
+
+# Twitch clip thumbnails: ...-preview-480x272.jpg  -> mp4 real: ... .mp4
+CLIP_PREVIEW_RE = re.compile(r"-preview-\d+x\d+\.jpg($|\?)", re.IGNORECASE)
+
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+def iso_now() -> str:
+    return now_utc().strftime("%Y-%m-%d")
+
 def r2_client():
-    if not (BUCKET_NAME and R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY):
-        raise RuntimeError("Faltan env R2: BUCKET_NAME, R2_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY")
+    if not (R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and BUCKET_NAME):
+        raise RuntimeError("Faltan credenciales R2/S3 (R2_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME)")
     return boto3.client(
         "s3",
         endpoint_url=R2_ENDPOINT_URL,
@@ -50,20 +96,14 @@ def r2_client():
         region_name="auto",
     )
 
+def upload_bytes_to_r2(key: str, data: bytes, content_type: str = "video/mp4") -> str:
+    s3 = r2_client()
+    s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=data, ContentType=content_type)
+    if R2_PUBLIC_BASE_URL.startswith("http"):
+        return f"{R2_PUBLIC_BASE_URL}/{key}"
+    return key
 
-def s3_put_bytes(key: str, data: bytes, content_type: str):
-    r2_client().put_object(
-        Bucket=BUCKET_NAME,
-        Key=key,
-        Body=data,
-        ContentType=content_type,
-    )
-
-
-# =========================
-# Twitch Auth
-# =========================
-def get_app_token() -> str:
+def twitch_app_token() -> str:
     if not (TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET):
         raise RuntimeError("Faltan env Twitch: TWITCH_CLIENT_ID y TWITCH_CLIENT_SECRET")
 
@@ -75,135 +115,138 @@ def get_app_token() -> str:
     }
     r = requests.post(url, params=params, timeout=HTTP_TIMEOUT)
     r.raise_for_status()
-    return r.json()["access_token"]
+    j = r.json()
+    tok = j.get("access_token")
+    if not tok:
+        raise RuntimeError(f"Twitch no devolvió access_token: {j}")
+    return tok
 
-
-def headers(token: str) -> Dict[str, str]:
+def twitch_headers(token: str) -> Dict[str, str]:
     return {
-        "Client-ID": TWITCH_CLIENT_ID,
+        "Client-ID": TWITCH_CLIENT_ID or "",
         "Authorization": f"Bearer {token}",
-        "User-Agent": "ugc-trend-bot",
+        "User-Agent": USER_AGENT,
     }
 
-
-# =========================
-# Twitch Data
-# =========================
-def get_top_games(token: str) -> List[Dict]:
-    url = "https://api.twitch.tv/helix/games/top"
-    r = requests.get(url, headers=headers(token), params={"first": 20}, timeout=HTTP_TIMEOUT)
+def twitch_get_game_id(token: str, game_name: str) -> Optional[str]:
+    url = "https://api.twitch.tv/helix/games"
+    r = requests.get(url, headers=twitch_headers(token), params={"name": game_name}, timeout=HTTP_TIMEOUT)
     r.raise_for_status()
-    return r.json().get("data", [])
+    data = (r.json() or {}).get("data") or []
+    if not data:
+        return None
+    return data[0].get("id")
 
-
-def get_clips(token: str, game_id: str) -> List[Dict]:
-    start = datetime.utcnow() - timedelta(hours=LOOKBACK_HOURS)
+def twitch_get_clips(token: str, game_id: str, first: int, started_at_iso: str) -> List[Dict[str, Any]]:
+    url = "https://api.twitch.tv/helix/clips"
     params = {
         "game_id": game_id,
-        "started_at": start.isoformat("T") + "Z",
-        "first": 20,
+        "first": int(max(1, min(100, first))),
+        "started_at": started_at_iso,
     }
-    r = requests.get("https://api.twitch.tv/helix/clips", headers=headers(token), params=params, timeout=HTTP_TIMEOUT)
+    r = requests.get(url, headers=twitch_headers(token), params=params, timeout=HTTP_TIMEOUT)
     r.raise_for_status()
-    return r.json().get("data", [])
+    return (r.json() or {}).get("data") or []
 
+def clip_mp4_from_thumbnail(thumbnail_url: str) -> Optional[str]:
+    """
+    Clips reales usan thumbnails tipo:
+      https://clips-media-assets2.twitch.tv/...-preview-480x272.jpg
+    El mp4 real suele ser:
+      https://clips-media-assets2.twitch.tv/....mp4
+    """
+    if not thumbnail_url:
+        return None
+    u = thumbnail_url.strip()
+    if not u.startswith("http"):
+        return None
+    if CLIP_PREVIEW_RE.search(u):
+        u2 = CLIP_PREVIEW_RE.sub(".mp4", u)
+        return u2.split("?")[0]
+    # fallback: si ya viene mp4
+    if u.lower().endswith(".mp4"):
+        return u
+    return None
 
-def score_clip(clip: Dict) -> float:
-    views = int(clip.get("view_count", 0))
-    created_at = clip.get("created_at", "")
-    try:
-        age = datetime.utcnow() - datetime.fromisoformat(created_at.replace("Z", "+00:00")).replace(tzinfo=None)
-        age_hours = age.total_seconds() / 3600
-    except Exception:
-        age_hours = 9999
-
-    # score simple: views + bonus por frescura
-    score = (views * 0.7) + (1000 / (1 + age_hours))
-    return float(score)
-
-
-# =========================
-# Download clip bytes
-# =========================
-def twitch_mp4_url_from_thumbnail(thumbnail_url: str) -> str:
-    # Twitch: thumbnail_url contiene "-preview-..." -> mp4 es antes de "-preview" + ".mp4"
-    return thumbnail_url.split("-preview")[0] + ".mp4"
-
-
-def download_clip_bytes(mp4_url: str) -> bytes:
-    r = requests.get(mp4_url, timeout=60, headers={"User-Agent": "ugc-trend-bot"})
+def download_bytes(url: str) -> bytes:
+    r = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=HTTP_TIMEOUT, allow_redirects=True)
     r.raise_for_status()
     return r.content
 
+def safe_slug(s: str) -> str:
+    s = (s or "").strip()
+    s = re.sub(r"[^a-zA-Z0-9\-_]+", "_", s)[:120]
+    return s.strip("_") or "clip"
 
-# =========================
-# Upload to R2 inbox
-# =========================
-def make_inbox_key(clip: Dict) -> str:
-    # para ordenar y evitar colisiones: fecha + game + id
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    cid = clip.get("id", "unknown")
-    game_id = clip.get("game_id", "game")
-    return f"{UGC_INBOX_PREFIX}{today}__twitch__{game_id}__{cid}.mp4"
-
-
-# =========================
-# Main
-# =========================
-def run_mode_e():
+def run_mode_e() -> None:
     print("===== MODE E (TWITCH) -> R2 INBOX =====")
 
-    token = get_app_token()
-    games = get_top_games(token)
+    token = twitch_app_token()
 
-    candidates: List[Dict] = []
+    # periodo
+    started_at = (now_utc() - timedelta_days(TWITCH_PERIOD_DAYS)).isoformat().replace("+00:00", "Z")
 
-    for g in games[:10]:
-        name = g.get("name", "")
-        gid = g.get("id", "")
+    game_names = [x.strip() for x in (TWITCH_GAMES or "").split(",") if x.strip()]
+    if not game_names:
+        raise RuntimeError("TWITCH_GAMES vacío. Pon algo tipo: 'VALORANT,League of Legends,Counter-Strike'")
+
+    all_candidates: List[Dict[str, Any]] = []
+
+    for g in game_names:
+        print("Exploring:", g)
+        gid = twitch_get_game_id(token, g)
         if not gid:
+            print(" - No game_id encontrado, skip")
             continue
 
-        print("Exploring:", name)
-        clips = get_clips(token, gid)
-
+        clips = twitch_get_clips(token, gid, first=TWITCH_CLIPS_PER_GAME, started_at_iso=started_at)
         for c in clips:
-            views = int(c.get("view_count", 0))
-            if views < MIN_VIEWS:
+            views = int(c.get("view_count") or 0)
+            thumb = c.get("thumbnail_url") or ""
+            mp4 = clip_mp4_from_thumbnail(thumb)
+
+            if not mp4:
                 continue
-            c["score"] = score_clip(c)
-            candidates.append(c)
+            if views < TWITCH_MIN_VIEWS:
+                continue
 
-    candidates.sort(key=lambda x: float(x.get("score", 0)), reverse=True)
+            all_candidates.append({
+                "game": g,
+                "id": c.get("id"),
+                "title": c.get("title") or "",
+                "creator": c.get("creator_name") or "",
+                "views": views,
+                "mp4": mp4,
+                "url": c.get("url") or "",
+                "created_at": c.get("created_at") or "",
+            })
 
-    picks = candidates[:MAX_CLIPS]
-    if not picks:
-        print("No hay clips que cumplan MIN_VIEWS.")
+    if not all_candidates:
+        print("No hay clips candidatos con los filtros actuales.")
         return
 
-    print(f"Seleccionados {len(picks)} clips para subir a inbox.")
+    # random sorpresa
+    random.shuffle(all_candidates)
+    picked = all_candidates[:max(1, TWITCH_PICK_TOTAL)]
 
-    for clip in picks:
-        title = clip.get("title", "")
-        views = clip.get("view_count", 0)
-        thumb = clip.get("thumbnail_url", "")
-        if not thumb:
-            continue
+    print(f"Seleccionados {len(picked)} clips para subir a inbox.")
 
-        mp4_url = twitch_mp4_url_from_thumbnail(thumb)
+    for c in picked:
+        mp4_url = c["mp4"]
+        views = c.get("views", 0)
+        title = c.get("title", "")
+
         print("Downloading:", mp4_url)
-        video_bytes = download_clip_bytes(mp4_url)
+        data = download_bytes(mp4_url)
 
-        key = make_inbox_key(clip)
+        # key único
+        h = hashlib.sha1(data).hexdigest()[:10]
+        key = f"{R2_INBOX_PREFIX}/{iso_now()}__twitch__{c.get('id','unknown')}__{safe_slug(title)}__{h}.mp4"
+
         print("Uploading to R2 inbox:", key)
-        s3_put_bytes(key, video_bytes, "video/mp4")
+        upload_bytes_to_r2(key, data, "video/mp4")
+        print(f"OK: {title[:60]} | views: {views}")
 
-        print("OK:", title, "| views:", views)
-
-        time.sleep(1.0)
-
-    print("===== MODE E DONE =====")
-
-
-if __name__ == "__main__":
-    run_mode_e()
+def timedelta_days(days: int):
+    from datetime import timedelta
+    return timedelta(days=int(max(0, days)))

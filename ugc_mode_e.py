@@ -1,157 +1,164 @@
 # ugc_mode_e.py
-# SOURCE ENGINE - TWITCH CLIP HARVESTER
-
 import os
 import requests
-import hashlib
-from datetime import datetime
-
-from ugc_mode_b import (
-    r2_client,
-    s3_put_bytes
-)
+import random
+import time
+from datetime import datetime, timedelta
+from typing import List, Dict
 
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
 TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
 
-BUCKET_NAME = os.getenv("BUCKET_NAME")
+MAX_CLIPS = int(os.getenv("TWITCH_MAX_CLIPS_PER_RUN", "3"))
+LOOKBACK_HOURS = int(os.getenv("TWITCH_LOOKBACK_HOURS", "24"))
+MIN_VIEWS = int(os.getenv("TWITCH_MIN_VIEWS", "3000"))
 
-INBOX_PREFIX = "ugc/inbox/"
+# -------------------------
+# Auth
+# -------------------------
 
-TOP_STREAMERS = [
-    "shroud",
-    "s1mple",
-    "tarik",
-    "ninja",
-    "xqc",
-]
-
-
-def short_hash(s):
-    return hashlib.sha1(s.encode()).hexdigest()[:10]
-
-
-# -----------------------------------
-# TWITCH AUTH
-# -----------------------------------
-
-def get_twitch_token():
+def get_app_token():
 
     url = "https://id.twitch.tv/oauth2/token"
 
     params = {
         "client_id": TWITCH_CLIENT_ID,
         "client_secret": TWITCH_CLIENT_SECRET,
-        "grant_type": "client_credentials",
+        "grant_type": "client_credentials"
     }
 
     r = requests.post(url, params=params)
+    r.raise_for_status()
 
     return r.json()["access_token"]
 
 
-# -----------------------------------
-# GET CLIPS
-# -----------------------------------
+def headers(token):
 
-def get_clips(user, token):
-
-    url = "https://api.twitch.tv/helix/clips"
-
-    headers = {
+    return {
         "Client-ID": TWITCH_CLIENT_ID,
         "Authorization": f"Bearer {token}"
     }
 
-    params = {
-        "broadcaster_id": user,
-        "first": 5
-    }
+# -------------------------
+# Top Games
+# -------------------------
 
-    r = requests.get(url, headers=headers, params=params)
+def get_top_games(token):
 
-    return r.json().get("data", [])
+    url = "https://api.twitch.tv/helix/games/top"
 
+    r = requests.get(url, headers=headers(token), params={"first": 20})
 
-# -----------------------------------
-# DOWNLOAD CLIP
-# -----------------------------------
+    r.raise_for_status()
 
-def download_clip(url):
+    return r.json()["data"]
 
-    r = requests.get(url)
+# -------------------------
+# Clips
+# -------------------------
 
-    return r.content
+def get_clips(token, game_id):
 
-
-# -----------------------------------
-# FIND STREAMER IDS
-# -----------------------------------
-
-def get_user_id(username, token):
-
-    url = "https://api.twitch.tv/helix/users"
-
-    headers = {
-        "Client-ID": TWITCH_CLIENT_ID,
-        "Authorization": f"Bearer {token}"
-    }
+    start = datetime.utcnow() - timedelta(hours=LOOKBACK_HOURS)
 
     params = {
-        "login": username
+        "game_id": game_id,
+        "started_at": start.isoformat("T") + "Z",
+        "first": 20
     }
 
-    r = requests.get(url, headers=headers, params=params)
+    r = requests.get(
+        "https://api.twitch.tv/helix/clips",
+        headers=headers(token),
+        params=params
+    )
 
-    data = r.json()["data"]
+    r.raise_for_status()
 
-    if not data:
-        return None
+    return r.json()["data"]
 
-    return data[0]["id"]
+# -------------------------
+# Viral Score
+# -------------------------
 
+def score_clip(clip):
 
-# -----------------------------------
-# MAIN
-# -----------------------------------
+    views = clip["view_count"]
+
+    age = datetime.utcnow() - datetime.fromisoformat(
+        clip["created_at"].replace("Z", "+00:00")
+    )
+
+    age_hours = age.total_seconds() / 3600
+
+    score = (views * 0.7) + (1000 / (1 + age_hours))
+
+    return score
+
+# -------------------------
+# Download clip
+# -------------------------
+
+def download_clip(clip):
+
+    thumb = clip["thumbnail_url"]
+
+    mp4 = thumb.split("-preview")[0] + ".mp4"
+
+    print("Downloading:", mp4)
+
+    r = requests.get(mp4)
+
+    filename = f"ugc/inbox/{clip['id']}.mp4"
+
+    with open(filename, "wb") as f:
+        f.write(r.content)
+
+    return filename
+
+# -------------------------
+# Main
+# -------------------------
 
 def run_mode_e():
 
-    print("===== MODE E TWITCH HARVESTER =====")
+    print("===== MODO E AUTO EXPLORER =====")
 
-    s3 = r2_client()
+    token = get_app_token()
 
-    token = get_twitch_token()
+    games = get_top_games(token)
 
-    for streamer in TOP_STREAMERS:
+    candidates: List[Dict] = []
 
-        print("Buscando clips:", streamer)
+    for g in games[:10]:
 
-        user_id = get_user_id(streamer, token)
+        print("Exploring:", g["name"])
 
-        if not user_id:
-            continue
+        clips = get_clips(token, g["id"])
 
-        clips = get_clips(user_id, token)
+        for c in clips:
 
-        for clip in clips:
+            if c["view_count"] < MIN_VIEWS:
+                continue
 
-            video_url = clip["thumbnail_url"].split("-preview")[0] + ".mp4"
+            c["score"] = score_clip(c)
 
-            print("Descargando clip:", video_url)
+            candidates.append(c)
 
-            try:
+    candidates.sort(key=lambda x: x["score"], reverse=True)
 
-                video_bytes = download_clip(video_url)
+    picks = candidates[:MAX_CLIPS]
 
-                key = f"{INBOX_PREFIX}{short_hash(video_url)}.mp4"
+    for clip in picks:
 
-                s3_put_bytes(key, video_bytes, "video/mp4")
+        print(
+            "Selected:",
+            clip["title"],
+            "| views:",
+            clip["view_count"]
+        )
 
-                print("Guardado en inbox:", key)
+        download_clip(clip)
 
-            except Exception as e:
-
-                print("Error clip:", str(e))
-
-    print("===== MODE E DONE =====")
+    print("Modo E terminado")

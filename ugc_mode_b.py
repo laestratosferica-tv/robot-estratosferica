@@ -213,36 +213,60 @@ def build_reel(
     music_mp3: Optional[str],
 ) -> None:
     """
-    Convierte input a 1080x1920 y aplica HUD overlay opcional.
+    MODO 3: vertical 1080x1920 + HUD + glitch + zoom punch
+    - zoom punch: micro-zooms (retención)
+    - glitch: rgb shift + pequeños “saltos” sutiles
+    - flash: micro-flashes
     """
-    # 1) base: escalar + crop para vertical
-    # 2) overlay: PNG encima
-    # 3) audio: opcional (mp3)
-    #
-    # Nota: forzamos duración a REEL_SECONDS (si el input es más largo, recorta)
-    #
-    # Filter video:
-    # - scale/crop: force_original_aspect_ratio=increase + crop
-    # - fps 30
-    # - overlay HUD con alpha (opacity)
-    #
+    # Intensidades (ajústalas si quieres más/menos loco)
+    ZOOM_BASE = 1.00
+    ZOOM_PEAK = 1.08          # 1.05-1.12 recomendado
+    GLITCH_STRENGTH = 0.006   # 0.003-0.012 recomendado
+    FLASH_STRENGTH = 0.18     # 0.10-0.30 recomendado
+
     vf_parts = []
 
+    # 1) Base: escala/crop a vertical y fps
     vf_parts.append(
         f"[0:v]scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
         f"crop={REEL_W}:{REEL_H},fps=30,format=rgba[v0];"
     )
 
+    # 2) Zoom punch (sutil): zoom in/out con leve pan
+    # Usamos zoompan para dar micro-movimiento. d=1 porque procesamos frame a frame a 30fps.
+    # z sube y baja con sin() (punch). x/y mueven suavemente para evitar “static video”.
+    vf_parts.append(
+        f"[v0]zoompan="
+        f"z='{ZOOM_BASE}+({ZOOM_PEAK-ZOOM_BASE})*abs(sin(2*PI*on/45))':"
+        f"x='iw/2-(iw/zoom/2)+20*sin(2*PI*on/120)':"
+        f"y='ih/2-(ih/zoom/2)+18*cos(2*PI*on/110)':"
+        f"d=1:s={REEL_W}x{REEL_H}:fps=30,format=rgba[vz];"
+    )
+
+    # 3) Glitch (RGB split suave) + micro “jump”
+    # - rgbashift hace separación RGB (glitch)
+    # - rotate/translate muy sutil (para sensación de “impacto”)
+    vf_parts.append(
+        f"[vz]rgbashift=rh={GLITCH_STRENGTH}:rv=0:gh=0:gv={GLITCH_STRENGTH}:"
+        f"bh={GLITCH_STRENGTH}:bv=0,format=rgba[vg];"
+    )
+
+    # 4) Flash punch (muy sutil) con eq: brillo sube y baja rápido
+    vf_parts.append(
+        f"[vg]eq=brightness='{FLASH_STRENGTH}*abs(sin(2*PI*t*0.9))':"
+        f"contrast='1.0+0.10*abs(sin(2*PI*t*0.7))',format=rgba[vfx];"
+    )
+
+    # 5) HUD overlay (si existe) con opacidad
     if hud_png:
-        # Convert HUD to rgba, scale to full frame, apply opacity
-        # colorchannelmixer=aa=opacity to set alpha
         vf_parts.append(
-            f"[1:v]scale={REEL_W}:{REEL_H},format=rgba,colorchannelmixer=aa={max(0.0, min(1.0, HUD_OPACITY))}[hud];"
+            f"[1:v]scale={REEL_W}:{REEL_H},format=rgba,"
+            f"colorchannelmixer=aa={max(0.0, min(1.0, HUD_OPACITY))}[hud];"
         )
-        vf_parts.append("[v0][hud]overlay=0:0:format=auto[vout]")
+        vf_parts.append("[vfx][hud]overlay=0:0:format=auto[vout]")
         video_map = "[vout]"
     else:
-        vf_parts.append("[v0]copy[vout]")
+        vf_parts.append("[vfx]copy[vout]")
         video_map = "[vout]"
 
     cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error"]
@@ -259,8 +283,6 @@ def build_reel(
 
     # audio
     if music_mp3:
-        # music index depends on whether hud exists:
-        # inputs: 0=video, 1=hud (if exists), 1 or 2 = music
         music_idx = 2 if hud_png else 1
         cmd += ["-map", f"{music_idx}:a", "-filter:a", f"volume={MUSIC_VOLUME}", "-c:a", "aac", "-b:a", "128k"]
     else:

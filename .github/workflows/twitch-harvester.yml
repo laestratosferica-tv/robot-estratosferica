@@ -1,0 +1,20 @@
+name: Robot Clip Hunter (Modo E)
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # cada 30 minutos
+  workflow_dispatch:
+
+jobs:
+  run-harvester:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Mode E
+        run: RUN_MODE=E python -u main.py

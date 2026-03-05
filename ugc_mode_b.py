@@ -1,27 +1,22 @@
-# ugc_mode_b.py
 import os
 import re
 import json
 import time
+import uuid
 import random
 import hashlib
 import tempfile
 import subprocess
-from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Optional, Dict, Any, List, Tuple
 
-import boto3
 import requests
-
-try:
-    from openai import OpenAI
-except Exception:
-    OpenAI = None
+import boto3
 
 
-# =========================
+# -------------------------
 # ENV helpers
-# =========================
+# -------------------------
+
 def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
     v = os.getenv(name)
     if v is None:
@@ -54,70 +49,55 @@ def env_float(name: str, default: float) -> float:
         return default
 
 
-# =========================
-# Core settings
-# =========================
-REEL_W = env_int("REEL_W", 1080)
-REEL_H = env_int("REEL_H", 1920)
-REEL_FPS = env_int("REEL_FPS", 30)
-REEL_SECONDS = env_int("REEL_SECONDS", 12)  # en B suele ir mejor 10-15
+# -------------------------
+# GLOBAL CONFIG
+# -------------------------
 
 HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
 
-# R2
+# R2 / S3
 AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
 
-INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
-OUT_PREFIX = (env_nonempty("UGC_OUT_PREFIX", "ugc/outputs/reels") or "ugc/outputs/reels").strip().strip("/")
+# UGC paths in R2
+UGC_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
+UGC_OUTPUT_PREFIX = (env_nonempty("UGC_OUTPUT_PREFIX", "ugc/outputs/reels") or "ugc/outputs/reels").strip().strip("/")
 
-# Visual style
-ENABLE_HUD_OVERLAYS = env_bool("ENABLE_HUD_OVERLAYS", True)
-HUD_DIR = env_nonempty("HUD_DIR", "assets/hud") or "assets/hud"
-GLITCH_PROB = env_float("GLITCH_PROB", 0.45)   # prob de flashes glitch
-SHAKE_PROB = env_float("SHAKE_PROB", 0.35)
-GRAIN = env_float("GRAIN", 0.08)               # 0..0.2 recomendado
-SAT = env_float("SAT", 1.20)
-CONTRAST = env_float("CONTRAST", 1.15)
-BRIGHT = env_float("BRIGHT", 0.02)
+# Reel params
+REEL_W = env_int("REEL_W", 1080)
+REEL_H = env_int("REEL_H", 1920)
+REEL_SECONDS = env_int("REEL_SECONDS", 12)
 
-# Audio
-ENABLE_MUSIC = env_bool("ENABLE_MUSIC", True)
-MUSIC_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
-MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.20)
-ORIG_VOLUME = env_float("ORIG_VOLUME", 1.00)
+# HUD overlays
+HUD_DIR = env_nonempty("HUD_DIR", "assets") or "assets"
+HUD_PREFIX = env_nonempty("HUD_PREFIX", "hud_") or "hud_"
+HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.85)  # 0..1
+HUD_OPACITY = env_float("HUD_OPACITY", 0.75)          # 0..1
 
-# Publish IG
-ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", False)
+# Music (optional)
+MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
+MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.65)  # 0..1
+MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.35)
+
+# IG publish (optional)
+ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", True)
 IG_USER_ID = env_nonempty("IG_USER_ID")
 IG_ACCESS_TOKEN = env_nonempty("IG_ACCESS_TOKEN")
 GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
 
-# OpenAI captions
-OPENAI_API_KEY = env_nonempty("OPENAI_API_KEY")
-OPENAI_MODEL = env_nonempty("OPENAI_MODEL", "gpt-4.1-mini")
-
-# Runway (intro sorpresa)
-RUNWAY_ENABLED = env_bool("RUNWAY_ENABLED", False)
-RUNWAY_API_KEY = env_nonempty("RUNWAY_API_KEY")
-RUNWAY_VERSION = env_nonempty("RUNWAY_VERSION", "2024-11-06")
-RUNWAY_BASE = (env_nonempty("RUNWAY_BASE", "https://api.dev.runwayml.com") or "").rstrip("/")
-RUNWAY_I2V_MODEL = env_nonempty("RUNWAY_I2V_MODEL", "gen4.5")
-RUNWAY_INTRO_SECONDS = env_int("RUNWAY_INTRO_SECONDS", 3)
-RUNWAY_INTRO_PROB = env_float("RUNWAY_INTRO_PROB", 0.55)
-RUNWAY_TIMEOUT = env_int("RUNWAY_TIMEOUT", 420)
-RUNWAY_POLL_SEC = env_int("RUNWAY_POLL_SEC", 6)
-
-MP4_URL_RE = re.compile(r"https?://[^\s\"']+\.mp4[^\s\"']*", re.IGNORECASE)
+# Safety / controls
+DRY_RUN = env_bool("DRY_RUN", False)
+MAX_ITEMS_PER_RUN = env_int("UGC_MAX_ITEMS", 6)
 
 
-# =========================
+# -------------------------
 # R2 helpers
-# =========================
+# -------------------------
+
 def r2_client():
     if not (R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and BUCKET_NAME):
         raise RuntimeError("Faltan credenciales R2/S3 (R2_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME)")
@@ -129,172 +109,211 @@ def r2_client():
         region_name="auto",
     )
 
-def list_r2_keys(prefix: str) -> List[str]:
+def r2_list_keys(prefix: str, max_keys: int = 50) -> List[str]:
     s3 = r2_client()
     keys: List[str] = []
     token = None
     while True:
-        kwargs = {"Bucket": BUCKET_NAME, "Prefix": prefix}
+        kwargs = {"Bucket": BUCKET_NAME, "Prefix": prefix, "MaxKeys": max_keys}
         if token:
             kwargs["ContinuationToken"] = token
-        res = s3.list_objects_v2(**kwargs)
-        for it in (res.get("Contents") or []):
-            k = it.get("Key")
-            if k and k.lower().endswith(".mp4"):
+        resp = s3.list_objects_v2(**kwargs)
+        for obj in (resp.get("Contents") or []):
+            k = obj.get("Key")
+            if k and not k.endswith("/"):
                 keys.append(k)
-        if res.get("IsTruncated"):
-            token = res.get("NextContinuationToken")
+        if resp.get("IsTruncated"):
+            token = resp.get("NextContinuationToken")
         else:
             break
-    keys.sort()
     return keys
 
-def get_r2_bytes(key: str) -> bytes:
+def r2_download_to_file(key: str, dst_path: str) -> None:
     s3 = r2_client()
-    obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
-    return obj["Body"].read()
+    s3.download_file(BUCKET_NAME, key, dst_path)
 
-def put_r2_bytes(key: str, data: bytes, content_type: str = "video/mp4") -> str:
+def r2_upload_file_public(local_path: str, key: str, content_type: str = "video/mp4") -> str:
+    if not R2_PUBLIC_BASE_URL.startswith("http"):
+        raise RuntimeError("R2_PUBLIC_BASE_URL inválido. Debe empezar por https://")
+
     s3 = r2_client()
-    s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=data, ContentType=content_type)
-    if R2_PUBLIC_BASE_URL.startswith("http"):
-        return f"{R2_PUBLIC_BASE_URL}/{key}"
-    return key
+    with open(local_path, "rb") as f:
+        s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=f.read(), ContentType=content_type)
 
-def delete_r2_key(key: str) -> None:
+    return f"{R2_PUBLIC_BASE_URL}/{key}"
+
+def r2_move_object(src_key: str, dst_key: str) -> None:
     s3 = r2_client()
-    s3.delete_object(Bucket=BUCKET_NAME, Key=key)
+    s3.copy_object(Bucket=BUCKET_NAME, CopySource={"Bucket": BUCKET_NAME, "Key": src_key}, Key=dst_key)
+    s3.delete_object(Bucket=BUCKET_NAME, Key=src_key)
 
 
-# =========================
-# Local helpers
-# =========================
-def ffprobe_has_audio(path: str) -> bool:
-    try:
-        p = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_type", "-of", "json", path],
-            capture_output=True, text=True, timeout=20, check=False
-        )
-        if p.returncode != 0:
-            return False
-        j = json.loads(p.stdout or "{}")
-        return bool((j.get("streams") or []))
-    except Exception:
-        return False
+# -------------------------
+# HUD + music picking
+# -------------------------
 
-def pick_music_file() -> Optional[str]:
-    if not ENABLE_MUSIC:
+def pick_hud_overlay() -> Optional[str]:
+    if random.random() > max(0.0, min(1.0, HUD_PROBABILITY)):
         return None
-    if not os.path.isdir(MUSIC_DIR):
+    if not os.path.isdir(HUD_DIR):
         return None
-    cands = []
-    for root, _, files in os.walk(MUSIC_DIR):
-        for f in files:
-            if f.lower().endswith(".mp3"):
-                p = os.path.join(root, f)
-                try:
-                    if os.path.getsize(p) > 50_000:
-                        cands.append(p)
-                except Exception:
-                    pass
-    if not cands:
-        return None
-    return random.choice(cands)
 
-def list_hud_overlays() -> List[str]:
-    if not (ENABLE_HUD_OVERLAYS and os.path.isdir(HUD_DIR)):
-        return []
-    out = []
+    files = []
     for f in os.listdir(HUD_DIR):
-        if f.lower().endswith(".png"):
-            out.append(os.path.join(HUD_DIR, f))
-    out.sort()
+        if f.startswith(HUD_PREFIX) and f.lower().endswith(".png"):
+            files.append(os.path.join(HUD_DIR, f))
+
+    if not files:
+        return None
+    return random.choice(files)
+
+def list_mp3_files(search_dir: str) -> List[str]:
+    out: List[str] = []
+    if search_dir and os.path.isdir(search_dir):
+        for root, _, fnames in os.walk(search_dir):
+            for fn in fnames:
+                if fn.lower().endswith(".mp3"):
+                    out.append(os.path.join(root, fn))
     return out
 
-def safe_hash(data: bytes) -> str:
-    return hashlib.sha1(data).hexdigest()[:10]
-
-
-# =========================
-# Caption (polémico sano)
-# =========================
-CAPTION_TEMPLATES = [
-    "¿Esto es skill o pura suerte? 😭🔥\nTeam {a} vs Team {b}… ¿de qué lado estás? 👇",
-    "Esto debería ser ilegal en ranked 💀🎮\n¿Lo aplaudes o lo reportas? 👇",
-    "El gaming en 2026: {a} o {b} 😤\n¿Quién tiene la razón? 👇",
-    "Nadie habla de esto… y es el verdadero problema 😶‍🌫️\n¿Exagero o es real? 👇",
-    "Si te pasa esto, ¿sigues jugando o cierras el juego? 😭\nCuéntame tu peor tilt 👇",
-]
-
-HASHTAGS = ["#gaming", "#esports", "#gamer", "#clips", "#reels", "#twitch", "#latam"]
-
-def openai_client():
-    if not OpenAI:
+def pick_music() -> Optional[str]:
+    if random.random() > max(0.0, min(1.0, MUSIC_PROBABILITY)):
         return None
-    if not OPENAI_API_KEY:
-        return None
-    return OpenAI(api_key=OPENAI_API_KEY)
-
-def build_caption_spicy(context: str) -> str:
-    # si hay OpenAI -> mejor copy
-    client = openai_client()
-    if client:
-        prompt = f"""Eres editor de clips gaming en español LATAM.
-Objetivo: comentarios y debate (polémica sana).
-Reglas:
-- 1 HOOK fuerte (máx 8 palabras)
-- 1 línea opinión con carácter (sin insultos)
-- 1 pregunta que divida bandos
-- Máx 35 palabras + 3-6 hashtags
-Contexto: {context}
-"""
+    candidates = list_mp3_files(MUSIC_SEARCH_DIR)
+    # filtra mp3 muy pequeños
+    good = []
+    for c in candidates:
         try:
-            resp = client.responses.create(model=(OPENAI_MODEL or "gpt-4.1-mini"), input=prompt)
-            txt = (getattr(resp, "output_text", "") or "").strip()
-            if txt:
-                return txt
+            if os.path.isfile(c) and os.path.getsize(c) > 50_000:
+                good.append(c)
         except Exception:
             pass
-
-    # fallback templates
-    a = random.choice(["skill", "suerte", "cringe", "cine"])
-    b = random.choice(["trampa", "talento", "humo", "oro"])
-    base = random.choice(CAPTION_TEMPLATES).format(a=a, b=b)
-    tags = " ".join(random.sample(HASHTAGS, k=min(5, len(HASHTAGS))))
-    return f"{base}\n{tags}"
+    if not good:
+        return None
+    return random.choice(good)
 
 
-# =========================
-# IG publish
-# =========================
+# -------------------------
+# FFmpeg reel builder
+# -------------------------
+
+def run_cmd(cmd: List[str], timeout: int = 480) -> None:
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+    if p.returncode != 0:
+        raise RuntimeError(
+            "FFmpeg falló.\n"
+            f"CMD: {' '.join(cmd)}\n\n"
+            f"STDERR:\n{(p.stderr or '')[:4000]}"
+        )
+
+def build_reel(
+    input_video: str,
+    output_video: str,
+    hud_png: Optional[str],
+    music_mp3: Optional[str],
+) -> None:
+    """
+    Convierte input a 1080x1920 y aplica HUD overlay opcional.
+    """
+    # 1) base: escalar + crop para vertical
+    # 2) overlay: PNG encima
+    # 3) audio: opcional (mp3)
+    #
+    # Nota: forzamos duración a REEL_SECONDS (si el input es más largo, recorta)
+    #
+    # Filter video:
+    # - scale/crop: force_original_aspect_ratio=increase + crop
+    # - fps 30
+    # - overlay HUD con alpha (opacity)
+    #
+    vf_parts = []
+
+    vf_parts.append(
+        f"[0:v]scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+        f"crop={REEL_W}:{REEL_H},fps=30,format=rgba[v0];"
+    )
+
+    if hud_png:
+        # Convert HUD to rgba, scale to full frame, apply opacity
+        # colorchannelmixer=aa=opacity to set alpha
+        vf_parts.append(
+            f"[1:v]scale={REEL_W}:{REEL_H},format=rgba,colorchannelmixer=aa={max(0.0, min(1.0, HUD_OPACITY))}[hud];"
+        )
+        vf_parts.append("[v0][hud]overlay=0:0:format=auto[vout]")
+        video_map = "[vout]"
+    else:
+        vf_parts.append("[v0]copy[vout]")
+        video_map = "[vout]"
+
+    cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error"]
+
+    # inputs
+    cmd += ["-i", input_video]
+    if hud_png:
+        cmd += ["-i", hud_png]
+    if music_mp3:
+        cmd += ["-i", music_mp3]
+
+    cmd += ["-filter_complex", "".join(vf_parts)]
+    cmd += ["-map", video_map]
+
+    # audio
+    if music_mp3:
+        # music index depends on whether hud exists:
+        # inputs: 0=video, 1=hud (if exists), 1 or 2 = music
+        music_idx = 2 if hud_png else 1
+        cmd += ["-map", f"{music_idx}:a", "-filter:a", f"volume={MUSIC_VOLUME}", "-c:a", "aac", "-b:a", "128k"]
+    else:
+        cmd += ["-an"]
+
+    cmd += [
+        "-t", str(int(REEL_SECONDS)),
+        "-r", "30",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        output_video,
+    ]
+
+    run_cmd(cmd, timeout=600)
+
+
+# -------------------------
+# IG publish (optional)
+# -------------------------
+
 def ig_api_post(path: str, data: Dict[str, Any]) -> Dict[str, Any]:
     url = f"{GRAPH_BASE}/{path.lstrip('/')}"
     r = requests.post(url, data=data, timeout=HTTP_TIMEOUT)
-    r.raise_for_status()
+    if r.status_code >= 400:
+        raise RuntimeError(f"IG POST failed: {r.status_code} {r.text[:1500]}")
     return r.json()
 
 def ig_api_get(path: str, params: Dict[str, Any]) -> Dict[str, Any]:
     url = f"{GRAPH_BASE}/{path.lstrip('/')}"
     r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
-    r.raise_for_status()
+    if r.status_code >= 400:
+        raise RuntimeError(f"IG GET failed: {r.status_code} {r.text[:1500]}")
     return r.json()
 
 def ig_wait_container(creation_id: str, access_token: str, timeout_sec: int = 900) -> None:
     start = time.time()
     while time.time() - start < timeout_sec:
         j = ig_api_get(f"{creation_id}", {"fields": "status_code", "access_token": access_token})
-        status = (j.get("status_code") or "").upper()
-        print("IG status:", status)
-        if status in ("FINISHED", "PUBLISHED"):
+        st = (j.get("status_code") or "").upper()
+        print("IG status:", st)
+        if st in ("FINISHED", "PUBLISHED"):
             return
-        if status in ("ERROR", "FAILED"):
+        if st in ("ERROR", "FAILED"):
             raise RuntimeError(f"IG container failed: {j}")
         time.sleep(3)
-    raise TimeoutError(f"IG container not ready after {timeout_sec}s")
+    raise TimeoutError("IG container timeout")
 
 def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
     if not (IG_USER_ID and IG_ACCESS_TOKEN):
         raise RuntimeError("Faltan IG_USER_ID o IG_ACCESS_TOKEN")
+
     print("Creating IG container")
     j = ig_api_post(
         f"{IG_USER_ID}/media",
@@ -308,370 +327,114 @@ def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
     )
     creation_id = j.get("id")
     if not creation_id:
-        raise RuntimeError(f"IG reels create failed: {j}")
+        raise RuntimeError(f"IG create failed: {j}")
 
     print("Waiting IG container:", creation_id)
-    ig_wait_container(creation_id, IG_ACCESS_TOKEN, timeout_sec=900)
+    ig_wait_container(creation_id, IG_ACCESS_TOKEN)
 
     print("Publishing IG")
     res = ig_api_post(f"{IG_USER_ID}/media_publish", {"creation_id": creation_id, "access_token": IG_ACCESS_TOKEN})
     return res
 
 
-# =========================
-# Runway intro (image->video)
-# =========================
-def runway_headers() -> Dict[str, str]:
-    if not RUNWAY_API_KEY:
-        raise RuntimeError("Falta RUNWAY_API_KEY")
-    return {
-        "Authorization": f"Bearer {RUNWAY_API_KEY}",
-        "X-Runway-Version": RUNWAY_VERSION,
-        "Content-Type": "application/json",
-    }
+# -------------------------
+# Caption (simple)
+# -------------------------
 
-def runway_create_image_to_video(image_https_url: str, prompt_text: str, seconds: int) -> str:
-    url = f"{RUNWAY_BASE}/v1/image_to_video"
-    payload = {
-        "model": RUNWAY_I2V_MODEL,
-        "promptText": prompt_text[:900],
-        "ratio": "720:1280",
-        "duration": int(max(2, min(10, seconds))),
-        "promptImage": image_https_url,
-    }
-    r = requests.post(url, headers=runway_headers(), json=payload, timeout=HTTP_TIMEOUT)
-    r.raise_for_status()
-    j = r.json()
-    tid = j.get("id")
-    if not tid:
-        raise RuntimeError(f"Runway no devolvió id: {j}")
-    return tid
-
-def runway_get_task(task_id: str) -> Dict[str, Any]:
-    url = f"{RUNWAY_BASE}/v1/tasks/{task_id}"
-    r = requests.get(url, headers=runway_headers(), timeout=HTTP_TIMEOUT)
-    r.raise_for_status()
-    return r.json()
-
-def runway_wait_for_mp4(task_id: str, timeout_sec: int) -> str:
-    start = time.time()
-    last = None
-    while time.time() - start < timeout_sec:
-        j = runway_get_task(task_id)
-        last = j
-        status = (j.get("status") or "").upper()
-        if status in ("SUCCEEDED", "SUCCESS", "COMPLETED", "FINISHED"):
-            s = json.dumps(j)
-            m = MP4_URL_RE.search(s)
-            if m:
-                return m.group(0)
-            raise RuntimeError(f"Task OK pero sin mp4 en respuesta: {j}")
-        if status in ("FAILED", "ERROR", "CANCELED", "CANCELLED"):
-            raise RuntimeError(f"Runway task failed: {j}")
-        time.sleep(RUNWAY_POLL_SEC)
-    raise TimeoutError(f"Runway timeout. Last={last}")
-
-def download_url_bytes(url: str) -> bytes:
-    r = requests.get(url, timeout=60, allow_redirects=True)
-    r.raise_for_status()
-    return r.content
-
-
-# =========================
-# FFmpeg: gamer reel pipeline
-# =========================
-def extract_frame_as_jpg(video_path: str, out_jpg: str) -> None:
-    # toma un frame temprano (0.5s)
-    cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-           "-ss", "0.5", "-i", video_path, "-frames:v", "1", "-q:v", "3", out_jpg]
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
-    if p.returncode != 0:
-        raise RuntimeError(f"ffmpeg frame extract falló: {(p.stderr or '')[:1200]}")
-
-def build_filter(video_has_audio: bool, overlay_path: Optional[str]) -> str:
-    # Base: crop para 9:16 + zoom lento + color + grain
-    # Random: flash glitch + shake (aprox, sin volverse loco)
-    zoom_expr = "zoom+0.00035"
-    zoom_expr = f"if(lte(zoom,1.12),{zoom_expr},1.12)"
-    base = (
-        f"[0:v]"
-        f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
-        f"crop={REEL_W}:{REEL_H},fps={REEL_FPS},"
-        f"zoompan=z='{zoom_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={REEL_W}x{REEL_H},"
-        f"eq=contrast={CONTRAST}:brightness={BRIGHT}:saturation={SAT},"
-        f"noise=alls={GRAIN}:allf=t+u"
-        f"[v0];"
+def build_caption_for_clip(src_key: str) -> str:
+    # caption sencillo (puedes cambiarlo por OpenAI si quieres)
+    base = os.path.basename(src_key)
+    return (
+        "🎮 Momento gamer del día… y pasó de verdad 😳🔥\n"
+        "¿Te ha pasado algo así jugando? 👇\n\n"
+        "#gaming #esports #gamer #clips #reels"
+        f"\n\n({base})"
     )
 
-    # Glitch flash (simple): a veces invertimos/solarize con enable
-    glitch_on = "between(t,2,2.08)+between(t,5,5.08)+between(t,8,8.08)"
-    if random.random() > GLITCH_PROB:
-        glitch_on = "0"
 
-    glitch = (
-        f"[v0]colorchannelmixer=rr='if({glitch_on},0.2,1)':gg='if({glitch_on},1.3,1)':bb='if({glitch_on},1.6,1)'"
-        f"[v1];"
-    )
+# -------------------------
+# Main runner
+# -------------------------
 
-    # Shake leve
-    shake_on = "between(t,3,3.12)+between(t,6,6.12)"
-    if random.random() > SHAKE_PROB:
-        shake_on = "0"
-
-    shake = (
-        f"[v1]crop={REEL_W}:{REEL_H}:x='if({shake_on}, 6*sin(80*t), 0)':y='if({shake_on}, 6*cos(70*t), 0)'"
-        f"[v2];"
-    )
-
-    if overlay_path:
-        # overlay HUD con alpha
-        ov = (
-            f"[1:v]scale={REEL_W}:{REEL_H},format=rgba[ov];"
-            f"[v2][ov]overlay=0:0:format=auto[vout]"
-        )
-        return base + glitch + shake + ov
-
-    return base + glitch + shake + "[v2]copy[vout]"
-
-def make_reel(input_mp4: str, output_mp4: str, overlay_png: Optional[str], music_mp3: Optional[str]) -> None:
-    has_audio = ffprobe_has_audio(input_mp4)
-
-    cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-           "-i", input_mp4]
-
-    if overlay_png:
-        cmd += ["-i", overlay_png]
-    if music_mp3:
-        cmd += ["-i", music_mp3]
-
-    # filtros video
-    filt = build_filter(has_audio, overlay_png)
-
-    cmd += ["-filter_complex", filt, "-map", "[vout]"]
-
-    # audio mix
-    if has_audio and music_mp3:
-        # inputs:
-        # 0 = video (con audio)
-        # 1 = overlay (si existe)
-        # last = music
-        music_idx = 2 if overlay_png else 1
-        cmd += [
-            "-map", "0:a:0",
-            "-map", f"{music_idx}:a:0",
-            "-filter_complex",
-            filt + f";[0:a]volume={ORIG_VOLUME}[a0];[{music_idx}:a]volume={MUSIC_VOLUME}[a1];[a0][a1]amix=inputs=2:duration=shortest:dropout_transition=2[aout]",
-            "-map", "[vout]",
-            "-map", "[aout]",
-            "-c:a", "aac", "-b:a", "128k"
-        ]
-    elif has_audio:
-        cmd += ["-map", "0:a:0", "-c:a", "aac", "-b:a", "128k"]
-    elif music_mp3:
-        music_idx = 2 if overlay_png else 1
-        cmd += ["-map", f"{music_idx}:a:0", "-c:a", "aac", "-b:a", "128k"]
-    else:
-        cmd += ["-an"]
-
-    cmd += [
-        "-t", str(int(REEL_SECONDS)),
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
-        output_mp4
-    ]
-
-    # importante: como usamos -filter_complex dos veces en mix, hacemos una versión simple:
-    # => si hay mix, el cmd arriba duplicaría filter_complex.
-    # Para no enredar: si hay mix, hacemos otra ruta.
-    if has_audio and music_mp3:
-        cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-               "-i", input_mp4]
-        if overlay_png:
-            cmd += ["-i", overlay_png]
-        cmd += ["-i", music_mp3]
-
-        music_idx = 2 if overlay_png else 1
-        filt2 = build_filter(has_audio, overlay_png)
-
-        cmd += ["-filter_complex",
-                filt2 +
-                f";[0:a]volume={ORIG_VOLUME}[a0];[{music_idx}:a]volume={MUSIC_VOLUME}[a1];"
-                f"[a0][a1]amix=inputs=2:duration=shortest:dropout_transition=2[aout]",
-                "-map", "[vout]", "-map", "[aout]",
-                "-t", str(int(REEL_SECONDS)),
-                "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "128k",
-                "-movflags", "+faststart",
-                output_mp4
-                ]
-
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)
-    if p.returncode != 0:
-        raise RuntimeError(f"ffmpeg falló:\n{(p.stderr or '')[:4000]}")
-
-def concat_intro(intro_mp4: str, main_mp4: str, out_mp4: str) -> None:
-    # concat demuxer (requiere mismos codecs; aquí ambos x264/aac)
-    with tempfile.TemporaryDirectory() as td:
-        lst = os.path.join(td, "list.txt")
-        with open(lst, "w", encoding="utf-8") as f:
-            f.write(f"file '{intro_mp4}'\n")
-            f.write(f"file '{main_mp4}'\n")
-        cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-               "-f", "concat", "-safe", "0", "-i", lst,
-               "-c", "copy", out_mp4]
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
-        if p.returncode != 0:
-            # fallback: re-encode
-            cmd2 = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-                    "-i", intro_mp4, "-i", main_mp4,
-                    "-filter_complex", "[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[v][a]",
-                    "-map", "[v]", "-map", "[a]",
-                    "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", "-b:a", "128k",
-                    "-movflags", "+faststart",
-                    out_mp4]
-            p2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=600, check=False)
-            if p2.returncode != 0:
-                raise RuntimeError(f"concat falló:\n{(p2.stderr or '')[:2500]}")
-
-
-# =========================
-# Main Mode B
-# =========================
 def run_mode_b() -> None:
     print("UGC MODE B START")
+    print("ENV:")
+    print(" - DRY_RUN:", DRY_RUN)
+    print(" - R2_PUBLIC_BASE_URL set:", bool(R2_PUBLIC_BASE_URL))
+    print(" - UGC_INBOX_PREFIX:", UGC_INBOX_PREFIX)
+    print(" - UGC_OUTPUT_PREFIX:", UGC_OUTPUT_PREFIX)
+    print(" - HUD_DIR:", HUD_DIR)
+    print(" - ENABLE_IG_PUBLISH:", ENABLE_IG_PUBLISH)
 
-    keys = list_r2_keys(INBOX_PREFIX + "/")
+    inbox_prefix = f"{UGC_INBOX_PREFIX}/"
+    keys = r2_list_keys(inbox_prefix, max_keys=200)
+
+    # solo mp4
+    keys = [k for k in keys if k.lower().endswith(".mp4")]
+    keys.sort()
+
     if not keys:
-        print("Inbox vacío ✅")
+        print("Inbox vacío. Nada que procesar ✅")
         return
 
-    # random sorpresa: baraja orden cada corrida
-    random.shuffle(keys)
-
-    overlays = list_hud_overlays()
-    music = pick_music_file()
+    processed = 0
 
     for key in keys:
+        if processed >= MAX_ITEMS_PER_RUN:
+            break
+
         print("Processing:", key)
-        data = get_r2_bytes(key)
-        h = safe_hash(data)
 
         with tempfile.TemporaryDirectory() as td:
-            in_mp4 = os.path.join(td, "in.mp4")
-            out_main = os.path.join(td, "main.mp4")
-            out_final = os.path.join(td, "final.mp4")
-            frame_jpg = os.path.join(td, "frame.jpg")
+            in_path = os.path.join(td, "in.mp4")
+            out_path = os.path.join(td, "reel.mp4")
 
-            with open(in_mp4, "wb") as f:
-                f.write(data)
+            # download
+            r2_download_to_file(key, in_path)
 
-            overlay_png = random.choice(overlays) if overlays else None
+            # pick HUD + music
+            hud = pick_hud_overlay()
+            music = pick_music()
 
-            # 1) main reel con estilo gamer
-            make_reel(in_mp4, out_main, overlay_png=overlay_png, music_mp3=music)
+            print("HUD:", hud if hud else "NONE")
+            print("MUSIC:", music if music else "NONE")
 
-            # 2) Runway intro sorpresa (opcional)
-            use_intro = (
-                RUNWAY_ENABLED and bool(RUNWAY_API_KEY) and bool(RUNWAY_BASE)
-                and (random.random() <= max(0.0, min(1.0, RUNWAY_INTRO_PROB)))
+            # build reel
+            build_reel(
+                input_video=in_path,
+                output_video=out_path,
+                hud_png=hud,
+                music_mp3=music,
             )
 
-            if use_intro:
-                try:
-                    extract_frame_as_jpg(in_mp4, frame_jpg)
-                    with open(frame_jpg, "rb") as f:
-                        img_bytes = f.read()
+            # upload output
+            with open(out_path, "rb") as f:
+                h = hashlib.sha1(f.read()).hexdigest()[:10]
 
-                    # subimos frame a R2 para darle URL https a Runway
-                    img_key = f"{OUT_PREFIX}/runway_frames/{h}.jpg"
-                    img_url = put_r2_bytes(img_key, img_bytes, content_type="image/jpeg")
+            out_key = f"{UGC_OUTPUT_PREFIX}/{h}.mp4"
+            out_url = r2_upload_file_public(out_path, out_key)
 
-                    prompt = "Esports neon glitch cinematic intro, HUD overlays, high energy, cyberpunk gaming vibe"
-                    task_id = runway_create_image_to_video(img_url, prompt, seconds=RUNWAY_INTRO_SECONDS)
-                    print("Runway task:", task_id)
+            print("Uploaded reel:", out_url)
 
-                    mp4_url = runway_wait_for_mp4(task_id, timeout_sec=RUNWAY_TIMEOUT)
-                    intro_bytes = download_url_bytes(mp4_url)
-
-                    intro_mp4 = os.path.join(td, "intro.mp4")
-                    with open(intro_mp4, "wb") as f:
-                        f.write(intro_bytes)
-
-                    # convert intro a 1080x1920 con audio mudo (para concat fácil)
-                    intro_norm = os.path.join(td, "intro_norm.mp4")
-                    cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-                           "-i", intro_mp4,
-                           "-vf", f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,crop={REEL_W}:{REEL_H},fps={REEL_FPS}",
-                           "-an",
-                           "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-                           "-movflags", "+faststart",
-                           intro_norm]
-                    subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=True)
-
-                    # añade audio silent para concat v+a más robusto
-                    intro_a = os.path.join(td, "intro_a.mp4")
-                    cmd2 = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-                            "-i", intro_norm,
-                            "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-                            "-shortest",
-                            "-c:v", "copy",
-                            "-c:a", "aac", "-b:a", "128k",
-                            intro_a]
-                    subprocess.run(cmd2, capture_output=True, text=True, timeout=300, check=True)
-
-                    # main ya tiene o no audio, forzamos audio silent si no tiene
-                    main_a = os.path.join(td, "main_a.mp4")
-                    if ffprobe_has_audio(out_main):
-                        # ok
-                        main_a = out_main
-                    else:
-                        cmd3 = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-                                "-i", out_main,
-                                "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-                                "-shortest",
-                                "-c:v", "copy",
-                                "-c:a", "aac", "-b:a", "128k",
-                                main_a]
-                        subprocess.run(cmd3, capture_output=True, text=True, timeout=300, check=True)
-
-                    concat_intro(intro_a, main_a, out_final)
-                    final_path = out_final
-                    print("Runway intro ✅")
-                except Exception as e:
-                    print("Runway intro falló (sigue sin romper):", str(e))
-                    final_path = out_main
+            # publish IG
+            caption = build_caption_for_clip(key)
+            if DRY_RUN:
+                print("[DRY_RUN] Caption:\n", caption)
             else:
-                final_path = out_main
+                if ENABLE_IG_PUBLISH and IG_USER_ID and IG_ACCESS_TOKEN:
+                    res = ig_publish_reel(out_url, caption)
+                    print("IG publish:", res)
+                else:
+                    print("IG publish skipped (disabled o faltan tokens).")
 
-            with open(final_path, "rb") as f:
-                final_bytes = f.read()
+            # move processed inbox item to archive (para no repetir)
+            archive_key = key.replace(f"{UGC_INBOX_PREFIX}/", f"{UGC_INBOX_PREFIX}_done/", 1)
+            if DRY_RUN:
+                print("[DRY_RUN] No muevo archivo en inbox.")
+            else:
+                r2_move_object(key, archive_key)
+                print("Moved inbox item to:", archive_key)
 
-        out_key = f"{OUT_PREFIX}/{h}.mp4"
-        public_url = put_r2_bytes(out_key, final_bytes, content_type="video/mp4")
-
-        # Caption
-        context = f"Clip gaming procesado desde {key.split('/')[-1]}"
-        caption = build_caption_spicy(context)
-        print("CAPTION:", caption)
-
-        # IG publish
-        if ENABLE_IG_PUBLISH:
-            try:
-                res = ig_publish_reel(public_url, caption)
-                print("IG publish:", res)
-            except Exception as e:
-                print("IG publish falló (no rompe):", str(e))
-
-        print("Publicado:", public_url)
-
-        # ✅ Opcional: mover o borrar inbox para que no se reprocesse
-        # Yo recomiendo BORRAR de inbox al procesar:
-        try:
-            delete_r2_key(key)
-        except Exception as e:
-            print("No pude borrar inbox (no rompe):", str(e))
+        processed += 1
 
     print("UGC MODE B DONE")

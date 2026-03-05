@@ -1,16 +1,15 @@
-name: Robot Clip Hunter (Modo E)
+name: Twitch Harvester (Mode E)
 
 on:
-  schedule:
-    - cron: "*/30 * * * *"   # cada 30 minutos
   workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"  # cada 30 min (ajusta)
 
 jobs:
-  run-harvester:
+  run:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -22,14 +21,28 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run Mode E
-        run: python -u main.py
+        run: RUN_MODE=E python -u main.py
         env:
-          RUN_MODE: E
-
+          # Twitch
           TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
           TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
 
+          # Ajustes de exploración
+          TWITCH_GAMES: "Just Chatting,League of Legends,Counter-Strike,Grand Theft Auto V,Minecraft,VALORANT"
+          TWITCH_CLIPS_PER_GAME: "8"
+          TWITCH_PICK_TOTAL: "3"
+          TWITCH_MIN_VIEWS: "800"
+          TWITCH_PERIOD_DAYS: "7"
+
+          # R2
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+
+          # Inbox
+          R2_INBOX_PREFIX: "ugc/inbox"
+
+          # Timeouts
+          HTTP_TIMEOUT: "30"

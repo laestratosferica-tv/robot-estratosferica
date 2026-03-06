@@ -1,0 +1,66 @@
+name: Viral Gamer Brain (Modo F)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 */3 * * *"   # cada 3 horas
+
+concurrency:
+  group: robot-publisher
+  cancel-in-progress: false
+
+jobs:
+  mode-f:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests boto3
+
+      - name: Run Mode F
+        run: python -u main.py
+        env:
+          RUN_MODE: F
+
+          # R2
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+          # Queue
+          UGC_INBOX_PREFIX: "ugc/inbox/"
+          VIRAL_STATE_KEY: "ugc/state/viral_state.json"
+          VIRAL_IDEAS_PREFIX: "ugc/ideas/"
+
+          # Twitch
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+          TWITCH_MAX_CLIPS_PER_RUN: "3"
+          TWITCH_LOOKBACK_HOURS: "24"
+          TWITCH_MIN_VIEWS: "2500"
+          TWITCH_TOP_GAMES: "10"
+
+          # Reddit
+          REDDIT_ENABLED: "true"
+          REDDIT_SUBS: "esports,leagueoflegends,GlobalOffensive,VALORANT,gaming"
+          REDDIT_MIN_SCORE: "400"
+
+          # OpenAI optional
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: "gpt-4.1-mini"
+
+          # Control
+          DRY_RUN: "false"
+          HTTP_TIMEOUT: "30"

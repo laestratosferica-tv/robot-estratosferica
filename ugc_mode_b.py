@@ -538,7 +538,7 @@ def run_mode_b() -> None:
                     print("IG publish skipped (disabled o faltan tokens).")
 
                 if ENABLE_FB_PUBLISH and FB_PAGE_ID and FB_PAGE_ACCESS_TOKEN:
-                    fb_res = fb_publish_reel(out_url, caption)
+                    fb_res = fb_publish_reel(out_path, caption)
                     print("FB publish:", fb_res)
                 else:
                     print("FB publish skipped (disabled o faltan tokens).")

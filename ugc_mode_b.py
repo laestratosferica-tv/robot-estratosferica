@@ -71,9 +71,11 @@ REEL_SECONDS = env_int("REEL_SECONDS", 12)
 HUD_DIR = env_nonempty("HUD_DIR", "assets") or "assets"
 HUD_PREFIX = env_nonempty("HUD_PREFIX", "hud_") or "hud_"
 HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.85)
+HUD_OPACITY = env_float("HUD_OPACITY", 0.75)
 
 MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
 MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.65)
+MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.35)
 
 GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
@@ -186,16 +188,27 @@ def run_cmd(cmd):
 
 
 def build_reel(input_video, output_video, hud_png, music_mp3):
-    vf = "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v0];"
+    vf_parts = []
+
+    vf_parts.append(
+        f"[0:v]scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+        f"crop={REEL_W}:{REEL_H},fps=30,format=yuv420p[v0];"
+    )
 
     if hud_png:
-        vf += "[1:v]scale=1080:1920[h];[v0][h]overlay=0:0[v1];"
-        vout = "[v1]"
+        vf_parts.append(
+            f"[1:v]scale={REEL_W}:{REEL_H},format=rgba,"
+            f"colorchannelmixer=aa={max(0.0, min(1.0, HUD_OPACITY))}[hud];"
+        )
+        vf_parts.append("[v0][hud]overlay=0:0:format=auto[vout]")
+        video_map = "[vout]"
     else:
-        vf += "[v0]copy[v1];"
-        vout = "[v1]"
+        vf_parts.append("[v0]copy[vout]")
+        video_map = "[vout]"
 
-    cmd = ["ffmpeg", "-y", "-i", input_video]
+    cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error"]
+
+    cmd += ["-i", input_video]
 
     if hud_png:
         cmd += ["-i", hud_png]
@@ -203,17 +216,25 @@ def build_reel(input_video, output_video, hud_png, music_mp3):
     if music_mp3:
         cmd += ["-i", music_mp3]
 
-    cmd += ["-filter_complex", vf, "-map", vout]
+    cmd += ["-filter_complex", "".join(vf_parts)]
+    cmd += ["-map", video_map]
 
     if music_mp3:
         idx = 2 if hud_png else 1
-        cmd += ["-map", f"{idx}:a"]
+        cmd += [
+            "-map", f"{idx}:a",
+            "-filter:a", f"volume={MUSIC_VOLUME}",
+            "-c:a", "aac",
+            "-b:a", "128k",
+        ]
     else:
         cmd += ["-an"]
 
     cmd += [
         "-t",
         str(REEL_SECONDS),
+        "-r",
+        "30",
         "-c:v",
         "libx264",
         "-preset",

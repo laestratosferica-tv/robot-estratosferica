@@ -1,85 +1,83 @@
 name: Robot UGC Runner (Modo B)
 
 on:
-workflow_dispatch: {}
-schedule:
-- cron: "0 */6 * * *"   # cada 6 horas (4 veces al día)
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 */6 * * *"   # cada 6 horas (4 veces al día)
 
 concurrency:
-group: robot-publisher
-cancel-in-progress: false
+  group: robot-publisher
+  cancel-in-progress: false
 
 jobs:
-ugc_mode_b:
-runs-on: ubuntu-latest
-timeout-minutes: 30
+  ugc_mode_b:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
-```
-steps:
-  - name: Checkout
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Set up Python
-    uses: actions/setup-python@v5
-    with:
-      python-version: "3.11"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-  - name: Install system deps (ffmpeg)
-    run: |
-      sudo apt-get update
-      sudo apt-get install -y ffmpeg
-      ffmpeg -version
+      - name: Install system deps (ffmpeg)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
 
-  - name: Install Python deps
-    run: |
-      python -m pip install --upgrade pip
-      pip install -r requirements.txt
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-  - name: Run Mode B (UGC)
-    run: python -u main.py
-    env:
-      RUN_MODE: B
+      - name: Run Mode B (UGC)
+        run: python -u main.py
+        env:
+          RUN_MODE: B
 
-      # --- R2 / S3 ---
-      R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
-      R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+          # --- R2 / S3 ---
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
-      # --- UGC paths ---
-      UGC_INBOX_PREFIX: ugc/inbox
-      UGC_OUTPUT_PREFIX: ugc/outputs/reels
-      UGC_MAX_ITEMS: "1"          # 1 reel por corrida (cola ordenada)
+          # --- UGC paths ---
+          UGC_INBOX_PREFIX: ugc/inbox
+          UGC_OUTPUT_PREFIX: ugc/outputs/reels
+          UGC_MAX_ITEMS: "1"
 
-      # --- Reel params ---
-      REEL_W: "1080"
-      REEL_H: "1920"
-      REEL_SECONDS: "12"
+          # --- Reel params ---
+          REEL_W: "1080"
+          REEL_H: "1920"
+          REEL_SECONDS: "12"
 
-      # --- HUD overlays ---
-      HUD_DIR: assets
-      HUD_PREFIX: hud_
-      HUD_PROBABILITY: "0.85"
-      HUD_OPACITY: "0.75"
+          # --- HUD overlays ---
+          HUD_DIR: assets
+          HUD_PREFIX: hud_
+          HUD_PROBABILITY: "0.85"
+          HUD_OPACITY: "0.75"
 
-      # --- Music ---
-      MUSIC_SEARCH_DIR: assets
-      MUSIC_PROBABILITY: "0.65"
-      MUSIC_VOLUME: "0.35"
+          # --- Music ---
+          MUSIC_SEARCH_DIR: assets
+          MUSIC_PROBABILITY: "0.65"
+          MUSIC_VOLUME: "0.35"
 
-      # --- Instagram publish ---
-      ENABLE_IG_PUBLISH: "true"
-      IG_USER_ID: ${{ secrets.IG_USER_ID }}
-      IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
-      GRAPH_VERSION: "v25.0"
-             
-      # --- Facebook publish ---
-      ENABLE_FB_PUBLISH: "true"
-      FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-      
-      FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
-      # --- Control ---
-      DRY_RUN: "false"
-      HTTP_TIMEOUT: "30"
+          # --- Instagram publish ---
+          ENABLE_IG_PUBLISH: "true"
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          GRAPH_VERSION: "v25.0"
 
+          # --- Facebook publish ---
+          ENABLE_FB_PUBLISH: "true"
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+
+          # --- Control ---
+          DRY_RUN: "false"
+          HTTP_TIMEOUT: "30"

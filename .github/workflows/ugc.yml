@@ -2,9 +2,12 @@ name: Robot UGC Runner (Modo B)
 
 on:
   workflow_dispatch: {}
-  # (opcional) automático cada 2 horas
   schedule:
     - cron: "0 */2 * * *"
+
+concurrency:
+  group: ugc-mode-b
+  cancel-in-progress: false
 
 jobs:
   ugc_mode_b:
@@ -43,28 +46,28 @@ jobs:
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
-          # --- UGC paths (puedes dejarlos así) ---
+          # --- UGC paths ---
           UGC_INBOX_PREFIX: ugc/inbox
           UGC_OUTPUT_PREFIX: ugc/outputs/reels
-          UGC_MAX_ITEMS: "6"
+          UGC_MAX_ITEMS: "1"
 
           # --- Reel params ---
           REEL_W: "1080"
           REEL_H: "1920"
           REEL_SECONDS: "12"
 
-          # --- HUD overlays (usa tus PNG hud_*.png dentro de /assets) ---
+          # --- HUD overlays ---
           HUD_DIR: assets
           HUD_PREFIX: hud_
           HUD_PROBABILITY: "0.85"
           HUD_OPACITY: "0.75"
 
-          # --- Music (usa tus mp3 dentro de /assets) ---
+          # --- Music ---
           MUSIC_SEARCH_DIR: assets
           MUSIC_PROBABILITY: "0.65"
           MUSIC_VOLUME: "0.35"
 
-          # --- Instagram publish (si quieres que publique) ---
+          # --- Instagram publish ---
           ENABLE_IG_PUBLISH: "true"
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}

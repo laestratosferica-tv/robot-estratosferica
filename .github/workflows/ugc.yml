@@ -3,7 +3,7 @@ name: Robot UGC Runner (Modo B)
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 */6 * * *"   # cada 6 horas (4 veces al día)
 
 concurrency:
   group: ugc-mode-b
@@ -49,7 +49,7 @@ jobs:
           # --- UGC paths ---
           UGC_INBOX_PREFIX: ugc/inbox
           UGC_OUTPUT_PREFIX: ugc/outputs/reels
-          UGC_MAX_ITEMS: "1"
+          UGC_MAX_ITEMS: "1"          # 1 reel por corrida (cola ordenada)
 
           # --- Reel params ---
           REEL_W: "1080"

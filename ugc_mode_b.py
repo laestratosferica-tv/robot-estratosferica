@@ -30,27 +30,21 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 
 def env_int(name: str, default: int) -> int:
-    v = os.getenv(name)
-    if not v or not v.strip():
-        return default
     try:
-        return int(v.strip())
-    except Exception:
+        return int(os.getenv(name, default))
+    except:
         return default
 
 
 def env_float(name: str, default: float) -> float:
-    v = os.getenv(name)
-    if not v or not v.strip():
-        return default
     try:
-        return float(v.strip())
-    except Exception:
+        return float(os.getenv(name, default))
+    except:
         return default
 
 
 # -------------------------
-# GLOBAL CONFIG
+# CONFIG
 # -------------------------
 
 HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
@@ -59,41 +53,36 @@ AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
-R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
 
-UGC_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
-UGC_OUTPUT_PREFIX = (env_nonempty("UGC_OUTPUT_PREFIX", "ugc/outputs/reels") or "ugc/outputs/reels").strip().strip("/")
+R2_PUBLIC_BASE_URL = env_nonempty("R2_PUBLIC_BASE_URL")
+
+UGC_INBOX_PREFIX = env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox")
+UGC_OUTPUT_PREFIX = env_nonempty("UGC_OUTPUT_PREFIX", "ugc/outputs/reels")
 
 REEL_W = env_int("REEL_W", 1080)
 REEL_H = env_int("REEL_H", 1920)
 REEL_SECONDS = env_int("REEL_SECONDS", 12)
 
-HUD_DIR = env_nonempty("HUD_DIR", "assets") or "assets"
-HUD_PREFIX = env_nonempty("HUD_PREFIX", "hud_") or "hud_"
-HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.85)
+HUD_DIR = env_nonempty("HUD_DIR", "assets")
+HUD_PREFIX = env_nonempty("HUD_PREFIX", "hud_")
+HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.7)
 HUD_OPACITY = env_float("HUD_OPACITY", 0.35)
 
-MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
-MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.65)
+MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets")
+MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.5)
 MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.35)
 
-GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
+GRAPH_VERSION = env_nonempty("GRAPH_VERSION", "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
 
-ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", True)
 IG_USER_ID = env_nonempty("IG_USER_ID")
 IG_ACCESS_TOKEN = env_nonempty("IG_ACCESS_TOKEN")
 
-ENABLE_FB_PUBLISH = env_bool("ENABLE_FB_PUBLISH", False)
-FB_PAGE_ID = env_nonempty("FB_PAGE_ID")
-FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
-
-DRY_RUN = env_bool("DRY_RUN", False)
 MAX_ITEMS_PER_RUN = env_int("UGC_MAX_ITEMS", 6)
 
 
 # -------------------------
-# R2 helpers
+# R2
 # -------------------------
 
 def r2_client():
@@ -106,46 +95,74 @@ def r2_client():
     )
 
 
-def r2_list_keys(prefix: str) -> List[str]:
+def r2_list_keys(prefix):
+
     s3 = r2_client()
-    resp = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
+
+    resp = s3.list_objects_v2(
+        Bucket=BUCKET_NAME,
+        Prefix=prefix
+    )
+
     keys = []
+
     for obj in resp.get("Contents", []):
         k = obj["Key"]
+
         if not k.endswith("/"):
             keys.append(k)
+
     return keys
 
 
-def r2_download_to_file(key: str, dst_path: str):
-    s3 = r2_client()
-    s3.download_file(BUCKET_NAME, key, dst_path)
+def r2_download_to_file(key, dst):
+    r2_client().download_file(BUCKET_NAME, key, dst)
 
 
-def r2_upload_file_public(local_path: str, key: str):
-    s3 = r2_client()
+def r2_upload_file_public(local_path, key):
+
     with open(local_path, "rb") as f:
-        s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=f.read(), ContentType="video/mp4")
+
+        r2_client().put_object(
+            Bucket=BUCKET_NAME,
+            Key=key,
+            Body=f.read(),
+            ContentType="video/mp4"
+        )
+
     return f"{R2_PUBLIC_BASE_URL}/{key}"
 
 
-def r2_move_object(src_key: str, dst_key: str):
+def r2_move_object(src, dst):
+
     s3 = r2_client()
-    s3.copy_object(Bucket=BUCKET_NAME, CopySource={"Bucket": BUCKET_NAME, "Key": src_key}, Key=dst_key)
-    s3.delete_object(Bucket=BUCKET_NAME, Key=src_key)
+
+    s3.copy_object(
+        Bucket=BUCKET_NAME,
+        CopySource={"Bucket": BUCKET_NAME, "Key": src},
+        Key=dst,
+    )
+
+    s3.delete_object(
+        Bucket=BUCKET_NAME,
+        Key=src
+    )
 
 
 # -------------------------
-# HUD / music
+# HUD / MUSIC
 # -------------------------
 
 def pick_hud_overlay():
+
     if random.random() > HUD_PROBABILITY:
         return None
+
     if not os.path.isdir(HUD_DIR):
         return None
 
     files = []
+
     for f in os.listdir(HUD_DIR):
         if f.startswith(HUD_PREFIX) and f.endswith(".png"):
             files.append(os.path.join(HUD_DIR, f))
@@ -157,20 +174,25 @@ def pick_hud_overlay():
 
 
 def list_mp3_files(search_dir):
+
     out = []
+
     if os.path.isdir(search_dir):
         for root, _, files in os.walk(search_dir):
             for f in files:
                 if f.endswith(".mp3"):
                     out.append(os.path.join(root, f))
+
     return out
 
 
 def pick_music():
+
     if random.random() > MUSIC_PROBABILITY:
         return None
 
     candidates = list_mp3_files(MUSIC_SEARCH_DIR)
+
     if not candidates:
         return None
 
@@ -178,11 +200,13 @@ def pick_music():
 
 
 # -------------------------
-# FFmpeg builder
+# FFmpeg
 # -------------------------
 
 def run_cmd(cmd):
+
     p = subprocess.run(cmd, capture_output=True, text=True)
+
     if p.returncode != 0:
         raise RuntimeError(p.stderr)
 
@@ -197,17 +221,23 @@ def build_reel(input_video, output_video, hud_png, music_mp3):
     )
 
     if hud_png:
+
         vf_parts.append(
             f"[1:v]scale={REEL_W}:{REEL_H},format=rgba,"
             f"colorchannelmixer=aa={HUD_OPACITY}[hud];"
         )
+
         vf_parts.append("[v0][hud]overlay=0:0:format=auto,format=yuv420p[vout]")
-        video_map = "[vout]"
-    else:
-        vf_parts.append("[v0]format=yuv420p[vout]")
+
         video_map = "[vout]"
 
-    cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error"]
+    else:
+
+        vf_parts.append("[v0]format=yuv420p[vout]")
+
+        video_map = "[vout]"
+
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
 
     cmd += ["-i", input_video]
 
@@ -218,10 +248,13 @@ def build_reel(input_video, output_video, hud_png, music_mp3):
         cmd += ["-i", music_mp3]
 
     cmd += ["-filter_complex", "".join(vf_parts)]
+
     cmd += ["-map", video_map]
 
     if music_mp3:
+
         idx = 2 if hud_png else 1
+
         cmd += [
             "-map", f"{idx}:a",
             "-filter:a", f"volume={MUSIC_VOLUME}",
@@ -229,22 +262,18 @@ def build_reel(input_video, output_video, hud_png, music_mp3):
             "-b:a", "128k",
             "-shortest",
         ]
+
     else:
+
         cmd += ["-an"]
 
     cmd += [
-        "-t",
-        str(REEL_SECONDS),
-        "-r",
-        "30",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
+        "-t", str(REEL_SECONDS),
+        "-r", "30",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
         output_video,
     ]
 
@@ -278,11 +307,15 @@ def ig_publish_reel(video_url, caption):
 
         s = requests.get(
             f"{GRAPH_BASE}/{creation_id}",
-            params={"fields": "status_code", "access_token": IG_ACCESS_TOKEN},
+            params={
+                "fields": "status_code",
+                "access_token": IG_ACCESS_TOKEN
+            },
             timeout=HTTP_TIMEOUT,
         )
 
         status = s.json().get("status_code")
+
         print("IG status:", status)
 
         if status == "FINISHED":
@@ -295,7 +328,10 @@ def ig_publish_reel(video_url, caption):
 
     r = requests.post(
         f"{GRAPH_BASE}/{IG_USER_ID}/media_publish",
-        data={"creation_id": creation_id, "access_token": IG_ACCESS_TOKEN},
+        data={
+            "creation_id": creation_id,
+            "access_token": IG_ACCESS_TOKEN
+        },
         timeout=HTTP_TIMEOUT,
     )
 
@@ -307,6 +343,7 @@ def ig_publish_reel(video_url, caption):
 # -------------------------
 
 def build_caption_for_clip(src_key):
+
     base = os.path.basename(src_key)
 
     return (
@@ -318,7 +355,7 @@ def build_caption_for_clip(src_key):
 
 
 # -------------------------
-# main
+# MAIN
 # -------------------------
 
 def run_mode_b():
@@ -326,8 +363,11 @@ def run_mode_b():
     print("UGC MODE B START")
 
     inbox_prefix = f"{UGC_INBOX_PREFIX}/"
+
     keys = r2_list_keys(inbox_prefix)
+
     keys = [k for k in keys if k.endswith(".mp4")]
+
     keys.sort()
 
     if not keys:
@@ -358,8 +398,9 @@ def run_mode_b():
 
             build_reel(in_path, out_path, hud, music)
 
-            # debug reel local
+            # debug local
             debug_path = os.path.join(os.getcwd(), "debug_last_reel.mp4")
+
             with open(out_path, "rb") as src, open(debug_path, "wb") as dst:
                 dst.write(src.read())
 
@@ -369,18 +410,27 @@ def run_mode_b():
                 h = hashlib.sha1(f.read()).hexdigest()[:10]
 
             out_key = f"{UGC_OUTPUT_PREFIX}/{h}.mp4"
+
             out_url = r2_upload_file_public(out_path, out_key)
 
             print("Uploaded reel:", out_url)
 
             caption = build_caption_for_clip(key)
 
-            if not DRY_RUN:
+            ig = ig_publish_reel(out_url, caption)
 
-                if ENABLE_IG_PUBLISH and IG_USER_ID and IG_ACCESS_TOKEN:
-                    ig = ig_publish_reel(out_url, caption)
-                    print("IG publish:", ig)
+            print("IG publish:", ig)
 
-            processed += 1
+            archive_key = key.replace(
+                f"{UGC_INBOX_PREFIX}/",
+                f"{UGC_INBOX_PREFIX}_done/",
+                1,
+            )
+
+            r2_move_object(key, archive_key)
+
+            print("Moved inbox item to:", archive_key)
+
+        processed += 1
 
     print("UGC MODE B DONE")

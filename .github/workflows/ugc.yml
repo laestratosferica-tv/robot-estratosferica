@@ -73,7 +73,12 @@ steps:
       IG_USER_ID: ${{ secrets.IG_USER_ID }}
       IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
       GRAPH_VERSION: "v25.0"
-
+             
+      # --- Facebook publish ---
+      ENABLE_FB_PUBLISH: "true"
+      FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+      
+      FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
       # --- Control ---
       DRY_RUN: "false"
       HTTP_TIMEOUT: "30"

@@ -82,12 +82,22 @@ MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
 MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.65)  # 0..1
 MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.35)
 
+# Meta Graph
+GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
+GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
+
 # IG publish (optional)
 ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", True)
 IG_USER_ID = env_nonempty("IG_USER_ID")
 IG_ACCESS_TOKEN = env_nonempty("IG_ACCESS_TOKEN")
-GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
-GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
+
+# FB publish (optional)
+ENABLE_FB_PUBLISH = env_bool("ENABLE_FB_PUBLISH", False)
+FB_PAGE_ID = env_nonempty("FB_PAGE_ID")
+FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
+
+# TikTok publish (optional, apagado por ahora)
+ENABLE_TIKTOK_PUBLISH = env_bool("ENABLE_TIKTOK_PUBLISH", False)
 
 # Safety / controls
 DRY_RUN = env_bool("DRY_RUN", False)
@@ -180,7 +190,6 @@ def pick_music() -> Optional[str]:
     if random.random() > max(0.0, min(1.0, MUSIC_PROBABILITY)):
         return None
     candidates = list_mp3_files(MUSIC_SEARCH_DIR)
-    # filtra mp3 muy pequeños
     good = []
     for c in candidates:
         try:
@@ -212,29 +221,18 @@ def build_reel(
     hud_png: Optional[str],
     music_mp3: Optional[str],
 ) -> None:
-    """
-    MODO 3: vertical 1080x1920 + HUD + glitch + zoom punch
-    - zoom punch: micro-zooms (retención)
-    - glitch: rgb shift + pequeños “saltos” sutiles
-    - flash: micro-flashes
-    """
-    # Intensidades (ajústalas si quieres más/menos loco)
     ZOOM_BASE = 1.00
-    ZOOM_PEAK = 1.08          # 1.05-1.12 recomendado
-    GLITCH_STRENGTH = 0.006   # 0.003-0.012 recomendado
-    FLASH_STRENGTH = 0.18     # 0.10-0.30 recomendado
+    ZOOM_PEAK = 1.08
+    GLITCH_STRENGTH = 0.006
+    FLASH_STRENGTH = 0.18
 
     vf_parts = []
 
-    # 1) Base: escala/crop a vertical y fps
     vf_parts.append(
         f"[0:v]scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
         f"crop={REEL_W}:{REEL_H},fps=30,format=rgba[v0];"
     )
 
-    # 2) Zoom punch (sutil): zoom in/out con leve pan
-    # Usamos zoompan para dar micro-movimiento. d=1 porque procesamos frame a frame a 30fps.
-    # z sube y baja con sin() (punch). x/y mueven suavemente para evitar “static video”.
     vf_parts.append(
         f"[v0]zoompan="
         f"z='{ZOOM_BASE}+({ZOOM_PEAK-ZOOM_BASE})*abs(sin(2*PI*on/45))':"
@@ -243,21 +241,16 @@ def build_reel(
         f"d=1:s={REEL_W}x{REEL_H}:fps=30,format=rgba[vz];"
     )
 
-    # 3) Glitch (RGB split suave) + micro “jump”
-    # - rgbashift hace separación RGB (glitch)
-    # - rotate/translate muy sutil (para sensación de “impacto”)
     vf_parts.append(
         f"[vz]rgbashift=rh={GLITCH_STRENGTH}:rv=0:gh=0:gv={GLITCH_STRENGTH}:"
         f"bh={GLITCH_STRENGTH}:bv=0,format=rgba[vg];"
     )
 
-    # 4) Flash punch (muy sutil) con eq: brillo sube y baja rápido
     vf_parts.append(
         f"[vg]eq=brightness='{FLASH_STRENGTH}*abs(sin(2*PI*t*0.9))':"
         f"contrast='1.0+0.10*abs(sin(2*PI*t*0.7))',format=rgba[vfx];"
     )
 
-    # 5) HUD overlay (si existe) con opacidad
     if hud_png:
         vf_parts.append(
             f"[1:v]scale={REEL_W}:{REEL_H},format=rgba,"
@@ -271,7 +264,6 @@ def build_reel(
 
     cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error"]
 
-    # inputs
     cmd += ["-i", input_video]
     if hud_png:
         cmd += ["-i", hud_png]
@@ -281,7 +273,6 @@ def build_reel(
     cmd += ["-filter_complex", "".join(vf_parts)]
     cmd += ["-map", video_map]
 
-    # audio
     if music_mp3:
         music_idx = 2 if hud_png else 1
         cmd += ["-map", f"{music_idx}:a", "-filter:a", f"volume={MUSIC_VOLUME}", "-c:a", "aac", "-b:a", "128k"]
@@ -302,7 +293,7 @@ def build_reel(
 
 
 # -------------------------
-# IG publish (optional)
+# IG publish
 # -------------------------
 
 def ig_api_post(path: str, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -360,11 +351,48 @@ def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
 
 
 # -------------------------
-# Caption (simple)
+# FB publish
+# -------------------------
+
+def fb_publish_reel(video_url: str, caption: str) -> Optional[Dict[str, Any]]:
+    if not ENABLE_FB_PUBLISH:
+        print("FB publish skipped (disabled).")
+        return None
+
+    if not (FB_PAGE_ID and FB_PAGE_ACCESS_TOKEN):
+        print("FB publish skipped (faltan FB_PAGE_ID o FB_PAGE_ACCESS_TOKEN).")
+        return {"ok": False, "error": "missing_fb_page_credentials"}
+
+    try:
+        print("Creating FB reel")
+        url = f"{GRAPH_BASE}/{FB_PAGE_ID}/video_reels"
+        r = requests.post(
+            url,
+            data={
+                "video_url": video_url,
+                "description": caption,
+                "access_token": FB_PAGE_ACCESS_TOKEN,
+            },
+            timeout=HTTP_TIMEOUT,
+        )
+
+        if r.status_code >= 400:
+            raise RuntimeError(f"FB publish failed: {r.status_code} {r.text[:1500]}")
+
+        j = r.json()
+        print("FB publish OK:", j)
+        return {"ok": True, "response": j}
+
+    except Exception as e:
+        print("FB publish falló (no rompe):", str(e))
+        return {"ok": False, "error": str(e), "video_url": video_url}
+
+
+# -------------------------
+# Caption
 # -------------------------
 
 def build_caption_for_clip(src_key: str) -> str:
-    # caption sencillo (puedes cambiarlo por OpenAI si quieres)
     base = os.path.basename(src_key)
     return (
         "🎮 Momento gamer del día… y pasó de verdad 😳🔥\n"
@@ -387,11 +415,10 @@ def run_mode_b() -> None:
     print(" - UGC_OUTPUT_PREFIX:", UGC_OUTPUT_PREFIX)
     print(" - HUD_DIR:", HUD_DIR)
     print(" - ENABLE_IG_PUBLISH:", ENABLE_IG_PUBLISH)
+    print(" - ENABLE_FB_PUBLISH:", ENABLE_FB_PUBLISH)
 
     inbox_prefix = f"{UGC_INBOX_PREFIX}/"
     keys = r2_list_keys(inbox_prefix, max_keys=200)
-
-    # solo mp4
     keys = [k for k in keys if k.lower().endswith(".mp4")]
     keys.sort()
 
@@ -411,17 +438,14 @@ def run_mode_b() -> None:
             in_path = os.path.join(td, "in.mp4")
             out_path = os.path.join(td, "reel.mp4")
 
-            # download
             r2_download_to_file(key, in_path)
 
-            # pick HUD + music
             hud = pick_hud_overlay()
             music = pick_music()
 
             print("HUD:", hud if hud else "NONE")
             print("MUSIC:", music if music else "NONE")
 
-            # build reel
             build_reel(
                 input_video=in_path,
                 output_video=out_path,
@@ -429,7 +453,6 @@ def run_mode_b() -> None:
                 music_mp3=music,
             )
 
-            # upload output
             with open(out_path, "rb") as f:
                 h = hashlib.sha1(f.read()).hexdigest()[:10]
 
@@ -438,8 +461,8 @@ def run_mode_b() -> None:
 
             print("Uploaded reel:", out_url)
 
-            # publish IG
             caption = build_caption_for_clip(key)
+
             if DRY_RUN:
                 print("[DRY_RUN] Caption:\n", caption)
             else:
@@ -449,7 +472,12 @@ def run_mode_b() -> None:
                 else:
                     print("IG publish skipped (disabled o faltan tokens).")
 
-            # move processed inbox item to archive (para no repetir)
+                if ENABLE_FB_PUBLISH and FB_PAGE_ID and FB_PAGE_ACCESS_TOKEN:
+                    fb_res = fb_publish_reel(out_url, caption)
+                    print("FB publish:", fb_res)
+                else:
+                    print("FB publish skipped (disabled o faltan tokens).")
+
             archive_key = key.replace(f"{UGC_INBOX_PREFIX}/", f"{UGC_INBOX_PREFIX}_done/", 1)
             if DRY_RUN:
                 print("[DRY_RUN] No muevo archivo en inbox.")

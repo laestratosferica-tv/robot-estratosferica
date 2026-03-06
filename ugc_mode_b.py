@@ -49,39 +49,52 @@ def env_float(name: str, default: float) -> float:
         return default
 
 
+# -------------------------
+# GLOBAL CONFIG
+# -------------------------
+
 HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
 
+# R2 / S3
 AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
 
+# UGC paths in R2
 UGC_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
 UGC_OUTPUT_PREFIX = (env_nonempty("UGC_OUTPUT_PREFIX", "ugc/outputs/reels") or "ugc/outputs/reels").strip().strip("/")
 
+# Reel params
 REEL_W = env_int("REEL_W", 1080)
 REEL_H = env_int("REEL_H", 1920)
 REEL_SECONDS = env_int("REEL_SECONDS", 12)
 
+# HUD overlays
 HUD_DIR = env_nonempty("HUD_DIR", "assets") or "assets"
 HUD_PREFIX = env_nonempty("HUD_PREFIX", "hud_") or "hud_"
 HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.85)
 
+# Music
 MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
 MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.65)
 
+# Meta Graph
 GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
 
+# IG publish
 ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", True)
 IG_USER_ID = env_nonempty("IG_USER_ID")
 IG_ACCESS_TOKEN = env_nonempty("IG_ACCESS_TOKEN")
 
+# FB publish
 ENABLE_FB_PUBLISH = env_bool("ENABLE_FB_PUBLISH", False)
 FB_PAGE_ID = env_nonempty("FB_PAGE_ID")
 FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
 
+# Safety / controls
 DRY_RUN = env_bool("DRY_RUN", False)
 MAX_ITEMS_PER_RUN = env_int("UGC_MAX_ITEMS", 6)
 
@@ -141,7 +154,7 @@ def pick_hud_overlay():
 
     files = []
     for f in os.listdir(HUD_DIR):
-        if f.startswith("hud_") and f.endswith(".png"):
+        if f.startswith(HUD_PREFIX) and f.endswith(".png"):
             files.append(os.path.join(HUD_DIR, f))
 
     if not files:
@@ -182,14 +195,13 @@ def run_cmd(cmd):
 
 
 def build_reel(input_video, output_video, hud_png, music_mp3):
-
     vf = "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[v0];"
 
     if hud_png:
         vf += "[1:v]scale=1080:1920[h];[v0][h]overlay=0:0[v1];"
         vout = "[v1]"
     else:
-        vf += "[v0]copy[v1]"
+        vf += "[v0]copy[v1];"
         vout = "[v1]"
 
     cmd = ["ffmpeg", "-y", "-i", input_video]
@@ -205,6 +217,8 @@ def build_reel(input_video, output_video, hud_png, music_mp3):
     if music_mp3:
         idx = 2 if hud_png else 1
         cmd += ["-map", f"{idx}:a"]
+    else:
+        cmd += ["-an"]
 
     cmd += [
         "-t",
@@ -215,6 +229,8 @@ def build_reel(input_video, output_video, hud_png, music_mp3):
         "veryfast",
         "-pix_fmt",
         "yuv420p",
+        "-movflags",
+        "+faststart",
         output_video,
     ]
 
@@ -226,11 +242,8 @@ def build_reel(input_video, output_video, hud_png, music_mp3):
 # -------------------------
 
 def ig_publish_reel(video_url, caption):
-
-    url = f"{GRAPH_BASE}/{IG_USER_ID}/media"
-
     r = requests.post(
-        url,
+        f"{GRAPH_BASE}/{IG_USER_ID}/media",
         data={
             "media_type": "REELS",
             "video_url": video_url,
@@ -238,29 +251,44 @@ def ig_publish_reel(video_url, caption):
             "share_to_feed": "true",
             "access_token": IG_ACCESS_TOKEN,
         },
+        timeout=HTTP_TIMEOUT,
     )
 
-    j = r.json()
+    if r.status_code >= 400:
+        raise RuntimeError(f"IG create failed: {r.status_code} {r.text}")
 
+    j = r.json()
     creation_id = j["id"]
 
     while True:
         s = requests.get(
             f"{GRAPH_BASE}/{creation_id}",
             params={"fields": "status_code", "access_token": IG_ACCESS_TOKEN},
-        ).json()
+            timeout=HTTP_TIMEOUT,
+        )
 
-        print("IG status:", s.get("status_code"))
+        if s.status_code >= 400:
+            raise RuntimeError(f"IG status failed: {s.status_code} {s.text}")
 
-        if s.get("status_code") == "FINISHED":
+        sj = s.json()
+        print("IG status:", sj.get("status_code"))
+
+        if sj.get("status_code") == "FINISHED":
             break
+
+        if sj.get("status_code") in ("ERROR", "FAILED"):
+            raise RuntimeError(f"IG container failed: {sj}")
 
         time.sleep(3)
 
     r = requests.post(
         f"{GRAPH_BASE}/{IG_USER_ID}/media_publish",
         data={"creation_id": creation_id, "access_token": IG_ACCESS_TOKEN},
+        timeout=HTTP_TIMEOUT,
     )
+
+    if r.status_code >= 400:
+        raise RuntimeError(f"IG publish failed: {r.status_code} {r.text}")
 
     return r.json()
 
@@ -270,32 +298,38 @@ def ig_publish_reel(video_url, caption):
 # -------------------------
 
 def fb_start_reel_upload(file_size):
-
     r = requests.post(
         f"{GRAPH_BASE}/{FB_PAGE_ID}/video_reels",
         data={
             "upload_phase": "START",
-            "file_size": file_size,
+            "file_size": str(file_size),
             "access_token": FB_PAGE_ACCESS_TOKEN,
         },
+        timeout=HTTP_TIMEOUT,
     )
+
+    if r.status_code >= 400:
+        raise RuntimeError(f"FB START failed: {r.status_code} {r.text}")
 
     return r.json()
 
 
 def fb_transfer_reel(upload_url, video_path):
-
     with open(video_path, "rb") as f:
         chunk = f.read()
 
-    files = {"video_file_chunk": ("chunk.mp4", chunk, "video/mp4")}
-
     headers = {
         "Authorization": f"OAuth {FB_PAGE_ACCESS_TOKEN}",
-        "file_offset": 0
+        "file_offset": "0",
+        "Content-Type": "application/octet-stream",
     }
 
-    r = requests.post(upload_url, headers=headers, files=files)
+    r = requests.post(
+        upload_url,
+        headers=headers,
+        data=chunk,
+        timeout=HTTP_TIMEOUT,
+    )
 
     if r.status_code >= 400:
         raise RuntimeError(f"FB TRANSFER failed: {r.status_code} {r.text}")
@@ -304,7 +338,6 @@ def fb_transfer_reel(upload_url, video_path):
 
 
 def fb_finish_reel_upload(video_id, caption):
-
     r = requests.post(
         f"{GRAPH_BASE}/{FB_PAGE_ID}/video_reels",
         data={
@@ -314,30 +347,32 @@ def fb_finish_reel_upload(video_id, caption):
             "description": caption,
             "access_token": FB_PAGE_ACCESS_TOKEN,
         },
+        timeout=HTTP_TIMEOUT,
     )
+
+    if r.status_code >= 400:
+        raise RuntimeError(f"FB FINISH failed: {r.status_code} {r.text}")
 
     return r.json()
 
 
 def fb_publish_reel(video_path, caption):
-
     print("FB reel upload START")
 
     size = os.path.getsize(video_path)
-
     start = fb_start_reel_upload(size)
 
-    upload_url = start["upload_url"]
-    video_id = start["video_id"]
+    upload_url = start.get("upload_url")
+    video_id = start.get("video_id")
+
+    if not upload_url or not video_id:
+        raise RuntimeError(f"FB START inválido: {start}")
 
     print("FB reel upload TRANSFER")
-
     transfer = fb_transfer_reel(upload_url, video_path)
-
     print("FB transfer:", transfer)
 
     print("FB reel upload FINISH")
-
     finish = fb_finish_reel_upload(video_id, caption)
 
     return finish
@@ -348,7 +383,6 @@ def fb_publish_reel(video_path, caption):
 # -------------------------
 
 def build_caption_for_clip(src_key):
-
     base = os.path.basename(src_key)
 
     return (
@@ -364,15 +398,19 @@ def build_caption_for_clip(src_key):
 # -------------------------
 
 def run_mode_b():
-
     print("UGC MODE B START")
+    print("ENV:")
+    print(" - DRY_RUN:", DRY_RUN)
+    print(" - R2_PUBLIC_BASE_URL set:", bool(R2_PUBLIC_BASE_URL))
+    print(" - UGC_INBOX_PREFIX:", UGC_INBOX_PREFIX)
+    print(" - UGC_OUTPUT_PREFIX:", UGC_OUTPUT_PREFIX)
+    print(" - HUD_DIR:", HUD_DIR)
+    print(" - ENABLE_IG_PUBLISH:", ENABLE_IG_PUBLISH)
+    print(" - ENABLE_FB_PUBLISH:", ENABLE_FB_PUBLISH)
 
     inbox_prefix = f"{UGC_INBOX_PREFIX}/"
-
     keys = r2_list_keys(inbox_prefix)
-
     keys = [k for k in keys if k.endswith(".mp4")]
-
     keys.sort()
 
     if not keys:
@@ -382,14 +420,12 @@ def run_mode_b():
     processed = 0
 
     for key in keys:
-
         if processed >= MAX_ITEMS_PER_RUN:
             break
 
         print("Processing:", key)
 
         with tempfile.TemporaryDirectory() as td:
-
             in_path = os.path.join(td, "in.mp4")
             out_path = os.path.join(td, "reel.mp4")
 
@@ -407,30 +443,35 @@ def run_mode_b():
                 h = hashlib.sha1(f.read()).hexdigest()[:10]
 
             out_key = f"{UGC_OUTPUT_PREFIX}/{h}.mp4"
-
             out_url = r2_upload_file_public(out_path, out_key)
 
             print("Uploaded reel:", out_url)
 
             caption = build_caption_for_clip(key)
 
-            if ENABLE_IG_PUBLISH:
-                ig = ig_publish_reel(out_url, caption)
-                print("IG publish:", ig)
+            if DRY_RUN:
+                print("[DRY_RUN] No publica ni mueve archivo.")
+            else:
+                if ENABLE_IG_PUBLISH and IG_USER_ID and IG_ACCESS_TOKEN:
+                    ig = ig_publish_reel(out_url, caption)
+                    print("IG publish:", ig)
+                else:
+                    print("IG publish skipped (disabled o faltan tokens).")
 
-            if ENABLE_FB_PUBLISH:
-                fb = fb_publish_reel(out_path, caption)
-                print("FB publish:", fb)
+                if ENABLE_FB_PUBLISH and FB_PAGE_ID and FB_PAGE_ACCESS_TOKEN:
+                    fb = fb_publish_reel(out_path, caption)
+                    print("FB publish:", fb)
+                else:
+                    print("FB publish skipped (disabled o faltan tokens).")
 
-            archive_key = key.replace(
-                f"{UGC_INBOX_PREFIX}/",
-                f"{UGC_INBOX_PREFIX}_done/",
-                1,
-            )
+                archive_key = key.replace(
+                    f"{UGC_INBOX_PREFIX}/",
+                    f"{UGC_INBOX_PREFIX}_done/",
+                    1,
+                )
 
-            r2_move_object(key, archive_key)
-
-            print("Moved inbox item to:", archive_key)
+                r2_move_object(key, archive_key)
+                print("Moved inbox item to:", archive_key)
 
         processed += 1
 

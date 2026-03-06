@@ -4,7 +4,7 @@ import random
 import hashlib
 import tempfile
 import subprocess
-from typing import Optional, Dict, Any, List
+from typing import Optional, List
 
 import requests
 import boto3
@@ -55,46 +55,37 @@ def env_float(name: str, default: float) -> float:
 
 HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
 
-# R2 / S3
 AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
 
-# UGC paths in R2
 UGC_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
 UGC_OUTPUT_PREFIX = (env_nonempty("UGC_OUTPUT_PREFIX", "ugc/outputs/reels") or "ugc/outputs/reels").strip().strip("/")
 
-# Reel params
 REEL_W = env_int("REEL_W", 1080)
 REEL_H = env_int("REEL_H", 1920)
 REEL_SECONDS = env_int("REEL_SECONDS", 12)
 
-# HUD overlays
 HUD_DIR = env_nonempty("HUD_DIR", "assets") or "assets"
 HUD_PREFIX = env_nonempty("HUD_PREFIX", "hud_") or "hud_"
 HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.85)
 
-# Music
 MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
 MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.65)
 
-# Meta Graph
 GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
 
-# IG publish
 ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", True)
 IG_USER_ID = env_nonempty("IG_USER_ID")
 IG_ACCESS_TOKEN = env_nonempty("IG_ACCESS_TOKEN")
 
-# FB publish
 ENABLE_FB_PUBLISH = env_bool("ENABLE_FB_PUBLISH", False)
 FB_PAGE_ID = env_nonempty("FB_PAGE_ID")
 FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
 
-# Safety / controls
 DRY_RUN = env_bool("DRY_RUN", False)
 MAX_ITEMS_PER_RUN = env_int("UGC_MAX_ITEMS", 6)
 
@@ -294,7 +285,7 @@ def ig_publish_reel(video_url, caption):
 
 
 # -------------------------
-# FB upload
+# FB upload (hosted reel via file_url)
 # -------------------------
 
 def fb_start_reel_upload(file_size):
@@ -314,20 +305,15 @@ def fb_start_reel_upload(file_size):
     return r.json()
 
 
-def fb_transfer_reel(upload_url, video_path):
-    with open(video_path, "rb") as f:
-        chunk = f.read()
-
+def fb_transfer_reel_hosted(upload_url, public_video_url):
     headers = {
         "Authorization": f"OAuth {FB_PAGE_ACCESS_TOKEN}",
-        "file_offset": "0",
-        "Content-Type": "application/octet-stream",
+        "file_url": public_video_url,
     }
 
     r = requests.post(
         upload_url,
         headers=headers,
-        data=chunk,
         timeout=HTTP_TIMEOUT,
     )
 
@@ -356,10 +342,10 @@ def fb_finish_reel_upload(video_id, caption):
     return r.json()
 
 
-def fb_publish_reel(video_path, caption):
+def fb_publish_reel(public_video_url, local_video_path, caption):
     print("FB reel upload START")
 
-    size = os.path.getsize(video_path)
+    size = os.path.getsize(local_video_path)
     start = fb_start_reel_upload(size)
 
     upload_url = start.get("upload_url")
@@ -369,7 +355,7 @@ def fb_publish_reel(video_path, caption):
         raise RuntimeError(f"FB START inválido: {start}")
 
     print("FB reel upload TRANSFER")
-    transfer = fb_transfer_reel(upload_url, video_path)
+    transfer = fb_transfer_reel_hosted(upload_url, public_video_url)
     print("FB transfer:", transfer)
 
     print("FB reel upload FINISH")
@@ -459,7 +445,7 @@ def run_mode_b():
                     print("IG publish skipped (disabled o faltan tokens).")
 
                 if ENABLE_FB_PUBLISH and FB_PAGE_ID and FB_PAGE_ACCESS_TOKEN:
-                    fb = fb_publish_reel(out_path, caption)
+                    fb = fb_publish_reel(out_url, out_path, caption)
                     print("FB publish:", fb)
                 else:
                     print("FB publish skipped (disabled o faltan tokens).")

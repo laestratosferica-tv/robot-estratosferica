@@ -1,13 +1,10 @@
 import os
-import re
-import json
 import time
-import uuid
 import random
 import hashlib
 import tempfile
 import subprocess
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List
 
 import requests
 import boto3
@@ -24,11 +21,13 @@ def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
     v = v.strip()
     return v if v else default
 
+
 def env_bool(name: str, default: bool = False) -> bool:
     v = os.getenv(name)
     if v is None:
         return default
     return v.strip().lower() in ("1", "true", "yes", "y", "on")
+
 
 def env_int(name: str, default: int) -> int:
     v = os.getenv(name)
@@ -38,6 +37,7 @@ def env_int(name: str, default: int) -> int:
         return int(v.strip())
     except Exception:
         return default
+
 
 def env_float(name: str, default: float) -> float:
     v = os.getenv(name)
@@ -119,6 +119,7 @@ def r2_client():
         region_name="auto",
     )
 
+
 def r2_list_keys(prefix: str, max_keys: int = 50) -> List[str]:
     s3 = r2_client()
     keys: List[str] = []
@@ -138,9 +139,11 @@ def r2_list_keys(prefix: str, max_keys: int = 50) -> List[str]:
             break
     return keys
 
+
 def r2_download_to_file(key: str, dst_path: str) -> None:
     s3 = r2_client()
     s3.download_file(BUCKET_NAME, key, dst_path)
+
 
 def r2_upload_file_public(local_path: str, key: str, content_type: str = "video/mp4") -> str:
     if not R2_PUBLIC_BASE_URL.startswith("http"):
@@ -151,6 +154,7 @@ def r2_upload_file_public(local_path: str, key: str, content_type: str = "video/
         s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=f.read(), ContentType=content_type)
 
     return f"{R2_PUBLIC_BASE_URL}/{key}"
+
 
 def r2_move_object(src_key: str, dst_key: str) -> None:
     s3 = r2_client()
@@ -177,6 +181,7 @@ def pick_hud_overlay() -> Optional[str]:
         return None
     return random.choice(files)
 
+
 def list_mp3_files(search_dir: str) -> List[str]:
     out: List[str] = []
     if search_dir and os.path.isdir(search_dir):
@@ -185,6 +190,7 @@ def list_mp3_files(search_dir: str) -> List[str]:
                 if fn.lower().endswith(".mp3"):
                     out.append(os.path.join(root, fn))
     return out
+
 
 def pick_music() -> Optional[str]:
     if random.random() > max(0.0, min(1.0, MUSIC_PROBABILITY)):
@@ -214,6 +220,7 @@ def run_cmd(cmd: List[str], timeout: int = 480) -> None:
             f"CMD: {' '.join(cmd)}\n\n"
             f"STDERR:\n{(p.stderr or '')[:4000]}"
         )
+
 
 def build_reel(
     input_video: str,
@@ -303,12 +310,14 @@ def ig_api_post(path: str, data: Dict[str, Any]) -> Dict[str, Any]:
         raise RuntimeError(f"IG POST failed: {r.status_code} {r.text[:1500]}")
     return r.json()
 
+
 def ig_api_get(path: str, params: Dict[str, Any]) -> Dict[str, Any]:
     url = f"{GRAPH_BASE}/{path.lstrip('/')}"
     r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
     if r.status_code >= 400:
         raise RuntimeError(f"IG GET failed: {r.status_code} {r.text[:1500]}")
     return r.json()
+
 
 def ig_wait_container(creation_id: str, access_token: str, timeout_sec: int = 900) -> None:
     start = time.time()
@@ -322,6 +331,7 @@ def ig_wait_container(creation_id: str, access_token: str, timeout_sec: int = 90
             raise RuntimeError(f"IG container failed: {j}")
         time.sleep(3)
     raise TimeoutError("IG container timeout")
+
 
 def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
     if not (IG_USER_ID and IG_ACCESS_TOKEN):
@@ -354,9 +364,9 @@ def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
 # FB publish
 # -------------------------
 
-def fb_api_post(path: str, data: Dict[str, Any], files=None) -> Dict[str, Any]:
+def fb_api_post(path: str, data: Dict[str, Any]) -> Dict[str, Any]:
     url = f"{GRAPH_BASE}/{path.lstrip('/')}"
-    r = requests.post(url, data=data, files=files, timeout=HTTP_TIMEOUT)
+    r = requests.post(url, data=data, timeout=HTTP_TIMEOUT)
     if r.status_code >= 400:
         raise RuntimeError(f"FB POST failed: {r.status_code} {r.text[:2000]}")
     return r.json()
@@ -373,26 +383,64 @@ def fb_start_reel_upload(file_size: int) -> Dict[str, Any]:
     )
 
 
-def fb_transfer_reel_bytes(upload_url: str, video_path: str, offset: int = 0) -> Dict[str, Any]:
+def fb_transfer_reel_chunk(upload_url: str, video_path: str, start_offset: int, end_offset: int) -> Dict[str, Any]:
+    chunk_size = max(0, end_offset - start_offset)
+
     with open(video_path, "rb") as f:
-        f.seek(offset)
-        chunk = f.read()
+        f.seek(start_offset)
+        chunk = f.read(chunk_size if chunk_size > 0 else None)
 
     files = {
         "video_file_chunk": ("chunk.mp4", chunk, "video/mp4"),
     }
 
-    data = {
-        "access_token": FB_PAGE_ACCESS_TOKEN,
-        "start_offset": str(offset),
+    headers = {
+        "Authorization": f"OAuth {FB_PAGE_ACCESS_TOKEN}",
+        "file_offset": str(start_offset),
     }
 
-    r = requests.post(upload_url, data=data, files=files, timeout=HTTP_TIMEOUT)
+    r = requests.post(upload_url, headers=headers, files=files, timeout=HTTP_TIMEOUT)
 
     if r.status_code >= 400:
         raise RuntimeError(f"FB TRANSFER failed: {r.status_code} {r.text[:2000]}")
 
     return r.json()
+
+
+def _to_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def fb_transfer_reel_all(upload_url: str, video_path: str, start_res: Dict[str, Any]) -> Dict[str, Any]:
+    file_size = os.path.getsize(video_path)
+
+    start_offset = _to_int(start_res.get("start_offset"), 0)
+    end_offset = _to_int(start_res.get("end_offset"), file_size)
+
+    # Si Meta no devolvió offsets, intentamos una sola subida completa
+    if end_offset <= 0 or end_offset > file_size:
+        end_offset = file_size
+
+    last_res: Dict[str, Any] = {}
+
+    while start_offset < file_size:
+        print(f"FB transfer chunk: {start_offset} -> {end_offset} / {file_size}")
+        last_res = fb_transfer_reel_chunk(upload_url, video_path, start_offset, end_offset)
+
+        next_start = _to_int(last_res.get("start_offset"), end_offset)
+        next_end = _to_int(last_res.get("end_offset"), file_size)
+
+        # Si Meta no devuelve más offsets, asumimos que terminó
+        if next_start <= start_offset:
+            break
+
+        start_offset = next_start
+        end_offset = next_end if next_end > next_start else file_size
+
+    return last_res
 
 
 def fb_finish_reel_upload(video_id: str, caption: str) -> Dict[str, Any]:
@@ -409,7 +457,6 @@ def fb_finish_reel_upload(video_id: str, caption: str) -> Dict[str, Any]:
 
 
 def fb_publish_reel(video_path: str, caption: str) -> Optional[Dict[str, Any]]:
-
     if not ENABLE_FB_PUBLISH:
         print("FB publish skipped (disabled)")
         return None
@@ -419,11 +466,8 @@ def fb_publish_reel(video_path: str, caption: str) -> Optional[Dict[str, Any]]:
         return None
 
     try:
-
         print("FB reel upload START")
-
         file_size = os.path.getsize(video_path)
-
         start_res = fb_start_reel_upload(file_size)
 
         upload_url = start_res.get("upload_url")
@@ -433,23 +477,17 @@ def fb_publish_reel(video_path: str, caption: str) -> Optional[Dict[str, Any]]:
             raise RuntimeError(f"FB START inválido: {start_res}")
 
         print("FB reel upload TRANSFER")
-
-        transfer_res = fb_transfer_reel_bytes(upload_url, video_path)
-
+        transfer_res = fb_transfer_reel_all(upload_url, video_path, start_res)
         print("FB transfer:", transfer_res)
 
         print("FB reel upload FINISH")
-
         finish_res = fb_finish_reel_upload(video_id, caption)
-
         print("FB publish OK:", finish_res)
 
-        return finish_res
+        return {"ok": True, "start": start_res, "transfer": transfer_res, "finish": finish_res}
 
     except Exception as e:
-
         print("FB publish falló (no rompe):", str(e))
-
         return {"ok": False, "error": str(e)}
 
 

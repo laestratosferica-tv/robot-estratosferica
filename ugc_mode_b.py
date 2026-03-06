@@ -354,38 +354,103 @@ def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
 # FB publish
 # -------------------------
 
-def fb_publish_reel(video_url: str, caption: str) -> Optional[Dict[str, Any]]:
+def fb_api_post(path: str, data: Dict[str, Any], files=None) -> Dict[str, Any]:
+    url = f"{GRAPH_BASE}/{path.lstrip('/')}"
+    r = requests.post(url, data=data, files=files, timeout=HTTP_TIMEOUT)
+    if r.status_code >= 400:
+        raise RuntimeError(f"FB POST failed: {r.status_code} {r.text[:2000]}")
+    return r.json()
+
+
+def fb_start_reel_upload(file_size: int) -> Dict[str, Any]:
+    return fb_api_post(
+        f"{FB_PAGE_ID}/video_reels",
+        {
+            "upload_phase": "START",
+            "file_size": str(file_size),
+            "access_token": FB_PAGE_ACCESS_TOKEN,
+        },
+    )
+
+
+def fb_transfer_reel_bytes(upload_url: str, video_path: str, offset: int = 0) -> Dict[str, Any]:
+    with open(video_path, "rb") as f:
+        f.seek(offset)
+        chunk = f.read()
+
+    files = {
+        "video_file_chunk": ("chunk.mp4", chunk, "video/mp4"),
+    }
+
+    data = {
+        "access_token": FB_PAGE_ACCESS_TOKEN,
+        "start_offset": str(offset),
+    }
+
+    r = requests.post(upload_url, data=data, files=files, timeout=HTTP_TIMEOUT)
+
+    if r.status_code >= 400:
+        raise RuntimeError(f"FB TRANSFER failed: {r.status_code} {r.text[:2000]}")
+
+    return r.json()
+
+
+def fb_finish_reel_upload(video_id: str, caption: str) -> Dict[str, Any]:
+    return fb_api_post(
+        f"{FB_PAGE_ID}/video_reels",
+        {
+            "upload_phase": "FINISH",
+            "video_id": video_id,
+            "video_state": "PUBLISHED",
+            "description": caption,
+            "access_token": FB_PAGE_ACCESS_TOKEN,
+        },
+    )
+
+
+def fb_publish_reel(video_path: str, caption: str) -> Optional[Dict[str, Any]]:
+
     if not ENABLE_FB_PUBLISH:
-        print("FB publish skipped (disabled).")
+        print("FB publish skipped (disabled)")
         return None
 
     if not (FB_PAGE_ID and FB_PAGE_ACCESS_TOKEN):
-        print("FB publish skipped (faltan FB_PAGE_ID o FB_PAGE_ACCESS_TOKEN).")
-        return {"ok": False, "error": "missing_fb_page_credentials"}
+        print("FB publish skipped (missing credentials)")
+        return None
 
     try:
-        print("Creating FB reel")
-        url = f"{GRAPH_BASE}/{FB_PAGE_ID}/video_reels"
-        r = requests.post(
-            url,
-            data={
-                "video_url": video_url,
-                "description": caption,
-                "access_token": FB_PAGE_ACCESS_TOKEN,
-            },
-            timeout=HTTP_TIMEOUT,
-        )
 
-        if r.status_code >= 400:
-            raise RuntimeError(f"FB publish failed: {r.status_code} {r.text[:1500]}")
+        print("FB reel upload START")
 
-        j = r.json()
-        print("FB publish OK:", j)
-        return {"ok": True, "response": j}
+        file_size = os.path.getsize(video_path)
+
+        start_res = fb_start_reel_upload(file_size)
+
+        upload_url = start_res.get("upload_url")
+        video_id = start_res.get("video_id")
+
+        if not upload_url or not video_id:
+            raise RuntimeError(f"FB START inválido: {start_res}")
+
+        print("FB reel upload TRANSFER")
+
+        transfer_res = fb_transfer_reel_bytes(upload_url, video_path)
+
+        print("FB transfer:", transfer_res)
+
+        print("FB reel upload FINISH")
+
+        finish_res = fb_finish_reel_upload(video_id, caption)
+
+        print("FB publish OK:", finish_res)
+
+        return finish_res
 
     except Exception as e:
+
         print("FB publish falló (no rompe):", str(e))
-        return {"ok": False, "error": str(e), "video_url": video_url}
+
+        return {"ok": False, "error": str(e)}
 
 
 # -------------------------

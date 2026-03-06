@@ -24,9 +24,18 @@ on:
         required: false
         default: "true"
 
+# 🔒 Candado: evita que Mode A y Mode B publiquen al mismo tiempo
+concurrency:
+  group: robot-publisher
+  cancel-in-progress: false
+
 jobs:
   run-editorial:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -37,23 +46,26 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Install ffmpeg
+      - name: Install system deps (ffmpeg)
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           ffmpeg -version
 
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
       - name: Run robot (MODE A)
         env:
-
           RUN_MODE: "A"
 
           # -------------------
           # PUBLICATION FLAGS
           # -------------------
+          # En schedule: publica (siempre) a menos que DRY_RUN sea true (no lo es por default)
+          # En dispatch: depende de inputs
           DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run) || 'false' }}
 
           ENABLE_IG_PUBLISH: ${{ (github.event_name == 'schedule' && 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ig) || 'false' }}
@@ -63,6 +75,8 @@ jobs:
           # -------------------
           # RUNWAY CONTROL
           # -------------------
+          # Solo el cron de las 20:00 UTC (3pm Colombia) fuerza runway en schedule
+          # En dispatch lo controla el input runway_enabled
           RUNWAY_ENABLED: ${{ (github.event_name == 'schedule' && github.event.schedule == '0 20 * * *' && 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.runway_enabled) || 'false' }}
 
           EVENT_NAME: ${{ github.event_name }}

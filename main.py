@@ -168,7 +168,7 @@ FONT_BOLD = env_nonempty("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSa
 # Publish toggles
 DRY_RUN = env_bool("DRY_RUN", False)
 
-# Redes activas/inactivas fijas
+# Redes fijas
 ENABLE_THREADS_PUBLISH = True
 ENABLE_IG_PUBLISH = True
 ENABLE_FB_PUBLISH = True
@@ -181,16 +181,16 @@ IG_USER_ID = env_nonempty("IG_USER_ID")
 GRAPH_VERSION = env_nonempty("GRAPH_VERSION", "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
 
-# Facebook Page Reels (optional)
+# Facebook Page Reels
 FB_PAGE_ID = env_nonempty("FB_PAGE_ID")
 FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
 
-# YouTube Shorts (optional)
+# YouTube Shorts (apagado por toggle fijo)
 YOUTUBE_CLIENT_ID = env_nonempty("YOUTUBE_CLIENT_ID")
 YOUTUBE_CLIENT_SECRET = env_nonempty("YOUTUBE_CLIENT_SECRET")
 YOUTUBE_REFRESH_TOKEN = env_nonempty("YOUTUBE_REFRESH_TOKEN")
 
-# TikTok (optional)
+# TikTok (apagado por toggle fijo)
 TIKTOK_ACCESS_TOKEN = env_nonempty("TIKTOK_ACCESS_TOKEN")
 TIKTOK_OPEN_ID = env_nonempty("TIKTOK_OPEN_ID")
 
@@ -328,7 +328,12 @@ def _raise_meta_error(r: requests.Response, label: str = "HTTP") -> None:
         body = r.request.body
         if isinstance(body, bytes):
             body = body.decode("utf-8", errors="replace")
-        safe_body = body.replace(str(IG_ACCESS_TOKEN or ""), "***").replace(str(THREADS_USER_ACCESS_TOKEN or ""), "***").replace(str(FB_PAGE_ACCESS_TOKEN or ""), "***")
+        safe_body = (
+            body
+            .replace(str(IG_ACCESS_TOKEN or ""), "***")
+            .replace(str(THREADS_USER_ACCESS_TOKEN or ""), "***")
+            .replace(str(FB_PAGE_ACCESS_TOKEN or ""), "***")
+        )
         print("REQUEST BODY:", safe_body[:4000])
     print("STATUS:", r.status_code)
     print("RESPONSE TEXT:", (r.text or "")[:4000])
@@ -1360,48 +1365,98 @@ def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
     return res
 
 # =========================
-# Facebook Page Reels publish (optional)
+# Facebook Page Reels publish
 # =========================
 
 def fb_publish_reel(video_url: str, caption: str) -> Optional[Dict[str, Any]]:
+    """
+    Flujo oficial:
+    1) start
+    2) upload
+    3) finish
+    """
     if not ENABLE_FB_PUBLISH:
         return None
+
     if not (FB_PAGE_ID and FB_PAGE_ACCESS_TOKEN):
         print("FB: faltan FB_PAGE_ID o FB_PAGE_ACCESS_TOKEN. Saltando.")
         return {"ok": False, "error": "missing_fb_page_token_or_id"}
 
     try:
-        url = f"{GRAPH_BASE}/{FB_PAGE_ID}/video_reels"
-        r = requests.post(
-            url,
+        # STEP 1 — iniciar upload
+        start_url = f"{GRAPH_BASE}/{FB_PAGE_ID}/video_reels"
+        start_resp = requests.post(
+            start_url,
             data={
-                "video_url": video_url,
-                "description": caption,
+                "upload_phase": "start",
                 "access_token": FB_PAGE_ACCESS_TOKEN,
             },
             timeout=HTTP_TIMEOUT,
         )
-        _raise_meta_error(r, "FB REELS PUBLISH")
-        j = r.json()
-        print("FB publish OK:", j)
-        return {"ok": True, "response": j}
+        _raise_meta_error(start_resp, "FB REELS START")
+        start_json = start_resp.json()
+
+        video_id = start_json.get("video_id")
+        upload_url = start_json.get("upload_url")
+
+        if not video_id or not upload_url:
+            raise RuntimeError(f"FB REELS START inválido: {start_json}")
+
+        print("FB reels start OK:", start_json)
+
+        # STEP 2 — subir video desde URL pública
+        upload_resp = requests.post(
+            upload_url,
+            headers={
+                "Authorization": f"OAuth {FB_PAGE_ACCESS_TOKEN}",
+                "file_url": video_url,
+            },
+            timeout=HTTP_TIMEOUT,
+        )
+        _raise_meta_error(upload_resp, "FB REELS UPLOAD")
+
+        try:
+            upload_json = upload_resp.json()
+        except Exception:
+            upload_json = {"raw": upload_resp.text}
+
+        print("FB reels upload OK:", upload_json)
+
+        # STEP 3 — finalizar y publicar
+        finish_url = f"{GRAPH_BASE}/{FB_PAGE_ID}/video_reels"
+        finish_resp = requests.post(
+            finish_url,
+            data={
+                "access_token": FB_PAGE_ACCESS_TOKEN,
+                "video_id": video_id,
+                "upload_phase": "finish",
+                "video_state": "PUBLISHED",
+                "description": caption[:2200],
+            },
+            timeout=HTTP_TIMEOUT,
+        )
+        _raise_meta_error(finish_resp, "FB REELS FINISH")
+
+        finish_json = finish_resp.json()
+        print("FB publish OK:", finish_json)
+
+        return {
+            "ok": True,
+            "video_id": video_id,
+            "start": start_json,
+            "upload": upload_json,
+            "response": finish_json,
+        }
+
     except Exception as e:
         print("FB publish falló (no rompe):", str(e))
         return {"ok": False, "error": str(e), "video_url": video_url}
 
 # =========================
-# YouTube Shorts publish (optional)
+# YouTube Shorts publish (optional, apagado)
 # =========================
 
 def youtube_upload_short(video_path: str, title: str, description: str) -> Optional[Dict[str, Any]]:
-    """
-    Requiere:
-      google-api-python-client
-      google-auth
-      google-auth-oauthlib
-    y env:
-      YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET / YOUTUBE_REFRESH_TOKEN
-    """
     if not ENABLE_YT_PUBLISH:
         return None
     if not (YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET and YOUTUBE_REFRESH_TOKEN):
@@ -1452,14 +1507,10 @@ def youtube_upload_short(video_path: str, title: str, description: str) -> Optio
         return {"ok": False, "error": str(e)}
 
 # =========================
-# TikTok publish (optional, best effort)
+# TikTok publish (optional, apagado)
 # =========================
 
 def tiktok_publish_video_from_url(video_url: str, caption: str) -> Optional[Dict[str, Any]]:
-    """
-    Requiere Content Posting API habilitada.
-    Env: TIKTOK_ACCESS_TOKEN, TIKTOK_OPEN_ID
-    """
     if not ENABLE_TIKTOK_PUBLISH:
         return None
     if not (TIKTOK_ACCESS_TOKEN and TIKTOK_OPEN_ID):

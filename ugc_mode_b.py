@@ -64,6 +64,7 @@ R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev
 
 UGC_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
 UGC_OUTPUT_PREFIX = (env_nonempty("UGC_OUTPUT_PREFIX", "ugc/outputs/reels") or "ugc/outputs/reels").strip().strip("/")
+UGC_INVALID_PREFIX = (env_nonempty("UGC_INVALID_PREFIX", f"{UGC_INBOX_PREFIX}_invalid") or f"{UGC_INBOX_PREFIX}_invalid").strip().strip("/")
 
 REEL_W = env_int("REEL_W", 1080)
 REEL_H = env_int("REEL_H", 1920)
@@ -71,11 +72,11 @@ REEL_SECONDS = env_int("REEL_SECONDS", 12)
 
 HUD_DIR = env_nonempty("HUD_DIR", "assets") or "assets"
 HUD_PREFIX = env_nonempty("HUD_PREFIX", "hud_") or "hud_"
-HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.25)
+HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.0)   # diagnóstico seguro por default
 HUD_OPACITY = env_float("HUD_OPACITY", 0.18)
 
 MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
-MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.20)
+MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.0)  # diagnóstico seguro por default
 MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.30)
 
 GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
@@ -97,6 +98,12 @@ DEBUG_REEL_NAME = env_nonempty("DEBUG_REEL_NAME", "debug_last_reel.mp4") or "deb
 DEBUG_INPUT_NAME = env_nonempty("DEBUG_INPUT_NAME", "debug_input.mp4") or "debug_input.mp4"
 
 MAX_START_OFFSET_SECONDS = env_float("MAX_START_OFFSET_SECONDS", 8.0)
+
+MIN_INPUT_SIZE_BYTES = env_int("MIN_INPUT_SIZE_BYTES", 200_000)
+MIN_INPUT_DURATION_SEC = env_float("MIN_INPUT_DURATION_SEC", 1.0)
+
+MIN_OUTPUT_SIZE_BYTES = env_int("MIN_OUTPUT_SIZE_BYTES", 200_000)
+MIN_OUTPUT_DURATION_SEC = env_float("MIN_OUTPUT_DURATION_SEC", 1.0)
 
 
 # -------------------------
@@ -281,6 +288,31 @@ def get_video_duration_seconds(path: str) -> float:
         return float(info.get("format", {}).get("duration", 0.0) or 0.0)
     except Exception:
         return 0.0
+
+
+def get_file_size_bytes(path: str) -> int:
+    try:
+        return os.path.getsize(path)
+    except Exception:
+        return 0
+
+
+def is_video_usable(path: str, min_size_bytes: int, min_duration_sec: float) -> bool:
+    size = get_file_size_bytes(path)
+    duration = get_video_duration_seconds(path)
+
+    print("VIDEO FILE SIZE:", size)
+    print("VIDEO DURATION:", duration)
+
+    if size < min_size_bytes:
+        print("Video descartado por tamaño muy pequeño.")
+        return False
+
+    if duration < min_duration_sec:
+        print("Video descartado por duración muy corta.")
+        return False
+
+    return True
 
 
 def choose_start_offset(input_video: str) -> float:
@@ -532,6 +564,7 @@ def run_mode_b():
     print(" - R2_PUBLIC_BASE_URL set:", bool(R2_PUBLIC_BASE_URL))
     print(" - UGC_INBOX_PREFIX:", UGC_INBOX_PREFIX)
     print(" - UGC_OUTPUT_PREFIX:", UGC_OUTPUT_PREFIX)
+    print(" - UGC_INVALID_PREFIX:", UGC_INVALID_PREFIX)
     print(" - ENABLE_IG_PUBLISH:", ENABLE_IG_PUBLISH)
     print(" - ENABLE_FB_PUBLISH:", ENABLE_FB_PUBLISH)
 
@@ -574,6 +607,22 @@ def run_mode_b():
                 copy_file(in_path, debug_input_path)
                 print("Saved debug input:", debug_input_path)
 
+            if not is_video_usable(in_path, MIN_INPUT_SIZE_BYTES, MIN_INPUT_DURATION_SEC):
+                print("SKIP invalid input video:", key)
+
+                invalid_key = key.replace(
+                    f"{UGC_INBOX_PREFIX}/",
+                    f"{UGC_INVALID_PREFIX}/",
+                    1,
+                )
+
+                if DRY_RUN:
+                    print("[DRY_RUN] Movería input inválido a:", invalid_key)
+                else:
+                    r2_move_object(key, invalid_key)
+                    print("Moved invalid input to:", invalid_key)
+                continue
+
             hud = pick_hud_overlay()
             music = pick_music()
 
@@ -586,6 +635,28 @@ def run_mode_b():
                 debug_path = os.path.join(os.getcwd(), DEBUG_REEL_NAME)
                 copy_file(out_path, debug_path)
                 print("Saved debug reel:", debug_path)
+
+            out_size = get_file_size_bytes(out_path)
+            out_duration = get_video_duration_seconds(out_path)
+
+            print("OUTPUT FILE SIZE:", out_size)
+            print("OUTPUT DURATION:", out_duration)
+
+            if out_size < MIN_OUTPUT_SIZE_BYTES or out_duration < MIN_OUTPUT_DURATION_SEC:
+                print("SKIP invalid rendered reel:", key)
+
+                invalid_key = key.replace(
+                    f"{UGC_INBOX_PREFIX}/",
+                    f"{UGC_INVALID_PREFIX}/",
+                    1,
+                )
+
+                if DRY_RUN:
+                    print("[DRY_RUN] Movería source problemático a:", invalid_key)
+                else:
+                    r2_move_object(key, invalid_key)
+                    print("Moved bad source to:", invalid_key)
+                continue
 
             with open(out_path, "rb") as f:
                 h = hashlib.sha1(f.read()).hexdigest()[:10]

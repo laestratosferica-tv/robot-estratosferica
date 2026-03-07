@@ -1,10 +1,11 @@
 import os
 import time
+import json
 import random
 import hashlib
 import tempfile
 import subprocess
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 import requests
 import boto3
@@ -70,19 +71,12 @@ REEL_SECONDS = env_int("REEL_SECONDS", 12)
 
 HUD_DIR = env_nonempty("HUD_DIR", "assets") or "assets"
 HUD_PREFIX = env_nonempty("HUD_PREFIX", "hud_") or "hud_"
-HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.85)
-HUD_OPACITY = env_float("HUD_OPACITY", 0.28)
+HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.35)
+HUD_OPACITY = env_float("HUD_OPACITY", 0.22)
 
 MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
-MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.65)
+MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.35)
 MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.35)
-
-# cuánto saltar como máximo para no usar siempre el segundo 0
-MAX_START_OFFSET_SECONDS = env_int("MAX_START_OFFSET_SECONDS", 8)
-
-# debug local
-SAVE_DEBUG_REEL = env_bool("SAVE_DEBUG_REEL", True)
-DEBUG_REEL_NAME = env_nonempty("DEBUG_REEL_NAME", "debug_last_reel.mp4") or "debug_last_reel.mp4"
 
 GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
@@ -97,6 +91,16 @@ FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
 
 DRY_RUN = env_bool("DRY_RUN", False)
 MAX_ITEMS_PER_RUN = env_int("UGC_MAX_ITEMS", 6)
+
+SAVE_DEBUG_REEL = env_bool("SAVE_DEBUG_REEL", True)
+DEBUG_REEL_NAME = env_nonempty("DEBUG_REEL_NAME", "debug_last_reel.mp4") or "debug_last_reel.mp4"
+
+MAX_START_OFFSET_SECONDS = env_float("MAX_START_OFFSET_SECONDS", 8.0)
+
+# Análisis para elegir mejor tramo del video
+MOTION_SCAN_STEP = env_float("MOTION_SCAN_STEP", 2.0)      # cada cuántos segundos evaluar
+MOTION_SCAN_WINDOW = env_float("MOTION_SCAN_WINDOW", 1.5)  # cuántos segundos mirar por muestra
+MOTION_MIN_OFFSET = env_float("MOTION_MIN_OFFSET", 0.75)   # evita empezar en 0 exacto
 
 
 # -------------------------
@@ -115,12 +119,30 @@ def r2_client():
 
 def r2_list_keys(prefix: str) -> List[str]:
     s3 = r2_client()
-    resp = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
-    keys = []
-    for obj in resp.get("Contents", []):
-        k = obj["Key"]
-        if not k.endswith("/"):
-            keys.append(k)
+    keys: List[str] = []
+    continuation_token = None
+
+    while True:
+        kwargs = {
+            "Bucket": BUCKET_NAME,
+            "Prefix": prefix,
+            "MaxKeys": 200,
+        }
+        if continuation_token:
+            kwargs["ContinuationToken"] = continuation_token
+
+        resp = s3.list_objects_v2(**kwargs)
+
+        for obj in resp.get("Contents", []):
+            k = obj["Key"]
+            if not k.endswith("/"):
+                keys.append(k)
+
+        if resp.get("IsTruncated"):
+            continuation_token = resp.get("NextContinuationToken")
+        else:
+            break
+
     return keys
 
 
@@ -158,16 +180,31 @@ def pick_hud_overlay():
     for f in os.listdir(HUD_DIR):
         name = f.lower()
 
-        if not f.startswith(HUD_PREFIX):
+        if not name.startswith(HUD_PREFIX.lower()):
             continue
+
         if not name.endswith(".png"):
             continue
 
-        # evita overlays tipo guía que hacen que parezca imagen estática
-        if "safearea" in name or "guide" in name or "guides" in name or "template" in name:
+        if (
+            "safearea" in name
+            or "guide" in name
+            or "guides" in name
+            or "template" in name
+            or "layout" in name
+            or "grid" in name
+        ):
             continue
 
-        files.append(os.path.join(HUD_DIR, f))
+        path = os.path.join(HUD_DIR, f)
+
+        try:
+            if os.path.getsize(path) < 5000:
+                continue
+        except Exception:
+            continue
+
+        files.append(path)
 
     if not files:
         return None
@@ -193,7 +230,18 @@ def pick_music():
     if not candidates:
         return None
 
-    return random.choice(candidates)
+    good = []
+    for c in candidates:
+        try:
+            if os.path.getsize(c) > 50_000:
+                good.append(c)
+        except Exception:
+            pass
+
+    if not good:
+        return None
+
+    return random.choice(good)
 
 
 # -------------------------
@@ -210,21 +258,83 @@ def run_cmd(cmd):
         )
 
 
-def get_video_duration_seconds(path: str) -> float:
+def ffprobe_json(path: str) -> dict:
     cmd = [
         "ffprobe",
         "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
+        "-print_format", "json",
+        "-show_format",
+        "-show_streams",
         path,
     ]
     p = subprocess.run(cmd, capture_output=True, text=True)
     if p.returncode != 0:
-        return 0.0
+        return {}
     try:
-        return float((p.stdout or "").strip())
+        return json.loads(p.stdout or "{}")
+    except Exception:
+        return {}
+
+
+def get_video_duration_seconds(path: str) -> float:
+    info = ffprobe_json(path)
+    try:
+        return float(info.get("format", {}).get("duration", 0.0) or 0.0)
     except Exception:
         return 0.0
+
+
+def get_motion_score_for_window(path: str, start_sec: float, window_sec: float) -> float:
+    """
+    Usa blackframe como señal barata para detectar ventanas malas / planas.
+    Mientras menos blackframes y más cambio visual, mejor.
+    Además usa framemd5-ish simplificado por scene para tener algo de movimiento.
+    """
+    cmd = [
+        "ffmpeg",
+        "-v", "info",
+        "-ss", str(start_sec),
+        "-t", str(window_sec),
+        "-i", path,
+        "-vf", "blackframe=amount=98:threshold=32,metadata=print:file=-",
+        "-an",
+        "-f", "null",
+        "-",
+    ]
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    text = (p.stderr or "") + "\n" + (p.stdout or "")
+
+    black_hits = text.lower().count("blackframe")
+
+    # Penaliza ventanas negras/congeladas/intro quieta
+    score = -5.0 * black_hits
+
+    # Pequeño componente aleatorio para romper empates
+    score += random.uniform(0.0, 0.25)
+
+    return score
+
+
+def candidate_offsets(duration: float) -> List[float]:
+    usable = duration - float(REEL_SECONDS)
+    if usable <= 0:
+        return [0.0]
+
+    max_offset = min(float(MAX_START_OFFSET_SECONDS), usable)
+
+    if max_offset <= MOTION_MIN_OFFSET:
+        return [0.0]
+
+    offsets = []
+    cur = MOTION_MIN_OFFSET
+    while cur <= max_offset:
+        offsets.append(round(cur, 3))
+        cur += max(0.5, MOTION_SCAN_STEP)
+
+    if not offsets:
+        offsets = [0.0]
+
+    return offsets
 
 
 def choose_start_offset(input_video: str) -> float:
@@ -234,20 +344,34 @@ def choose_start_offset(input_video: str) -> float:
         return 0.0
 
     usable = duration - float(REEL_SECONDS)
-
     if usable <= 0:
         return 0.0
 
-    max_offset = min(float(MAX_START_OFFSET_SECONDS), usable)
+    offsets = candidate_offsets(duration)
 
-    if max_offset <= 0:
-        return 0.0
+    best_offset = 0.0
+    best_score = float("-inf")
 
-    # evita arrancar exactamente en 0 siempre
-    if max_offset < 1:
-        return 0.0
+    for off in offsets:
+        try:
+            score = get_motion_score_for_window(
+                input_video,
+                start_sec=off,
+                window_sec=min(MOTION_SCAN_WINDOW, REEL_SECONDS),
+            )
+            print(f"MOTION CANDIDATE offset={off} score={score}")
+            if score > best_score:
+                best_score = score
+                best_offset = off
+        except Exception as e:
+            print("MOTION SCAN ERROR:", str(e))
 
-    return round(random.uniform(0.75, max_offset), 3)
+    if best_offset <= 0.0:
+        fallback_max = min(float(MAX_START_OFFSET_SECONDS), usable)
+        if fallback_max > MOTION_MIN_OFFSET:
+            return round(random.uniform(MOTION_MIN_OFFSET, fallback_max), 3)
+
+    return round(best_offset, 3)
 
 
 def build_reel(input_video, output_video, hud_png, music_mp3):
@@ -562,3 +686,7 @@ def run_mode_b():
         processed += 1
 
     print("UGC MODE B DONE")
+
+
+if __name__ == "__main__":
+    run_mode_b()

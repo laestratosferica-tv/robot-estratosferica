@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Simular (no publica Threads ni IG)"
+        description: "Simular (no publica en redes)"
         required: false
         default: "false"
       publish_ig:
@@ -24,7 +24,6 @@ on:
         required: false
         default: "true"
 
-# 🔒 Candado: evita que Mode A y Mode B publiquen al mismo tiempo
 concurrency:
   group: robot-publisher
   cancel-in-progress: false
@@ -32,7 +31,7 @@ concurrency:
 jobs:
   run-editorial:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
 
     permissions:
       contents: read
@@ -64,19 +63,19 @@ jobs:
           # -------------------
           # PUBLICATION FLAGS
           # -------------------
-          # En schedule: publica (siempre) a menos que DRY_RUN sea true (no lo es por default)
-          # En dispatch: depende de inputs
           DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run) || 'false' }}
 
           ENABLE_IG_PUBLISH: ${{ (github.event_name == 'schedule' && 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ig) || 'false' }}
-
           ENABLE_THREADS_PUBLISH: ${{ (github.event_name == 'schedule' && 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_threads) || 'false' }}
+
+          # EXTRA CHANNELS
+          ENABLE_FB_PUBLISH: "true"
+          ENABLE_YT_PUBLISH: "false"
+          ENABLE_TIKTOK_PUBLISH: "false"
 
           # -------------------
           # RUNWAY CONTROL
           # -------------------
-          # Solo el cron de las 20:00 UTC (3pm Colombia) fuerza runway en schedule
-          # En dispatch lo controla el input runway_enabled
           RUNWAY_ENABLED: ${{ (github.event_name == 'schedule' && github.event.schedule == '0 20 * * *' && 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.runway_enabled) || 'false' }}
 
           EVENT_NAME: ${{ github.event_name }}
@@ -127,6 +126,25 @@ jobs:
           GRAPH_VERSION: "v25.0"
 
           # -------------------
+          # FACEBOOK
+          # -------------------
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+
+          # -------------------
+          # YOUTUBE (apagado)
+          # -------------------
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+
+          # -------------------
+          # TIKTOK (apagado)
+          # -------------------
+          TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+          TIKTOK_OPEN_ID: ${{ secrets.TIKTOK_OPEN_ID }}
+
+          # -------------------
           # REEL SETTINGS
           # -------------------
           ENABLE_REELS: "true"
@@ -144,6 +162,9 @@ jobs:
           echo "DRY_RUN=$DRY_RUN"
           echo "ENABLE_IG_PUBLISH=$ENABLE_IG_PUBLISH"
           echo "ENABLE_THREADS_PUBLISH=$ENABLE_THREADS_PUBLISH"
+          echo "ENABLE_FB_PUBLISH=$ENABLE_FB_PUBLISH"
+          echo "ENABLE_YT_PUBLISH=$ENABLE_YT_PUBLISH"
+          echo "ENABLE_TIKTOK_PUBLISH=$ENABLE_TIKTOK_PUBLISH"
           echo "RUNWAY_ENABLED=$RUNWAY_ENABLED"
           echo "================="
           python -u main.py

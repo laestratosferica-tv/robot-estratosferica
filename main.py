@@ -951,7 +951,8 @@ def generate_reel_from_image(
     music_ok = bool(music_path) and os.path.exists(music_path)
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 
-    n_lines = max(1, headline_wrapped.count("\n") + 1)
+    n_lines = max(1, headline_wrapped.count("
+") + 1)
     title_size = 88 if n_lines == 1 else 76 if n_lines == 2 else 64
 
     with tempfile.TemporaryDirectory() as td:
@@ -969,7 +970,8 @@ def generate_reel_from_image(
 
         cmd = [
             "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-            "-loop", "1", "-t", str(int(seconds)), "-i", news_image_path,
+            "-f", "lavfi", "-i", f"color=c=black:s={REEL_W}x{REEL_H}:r=30:d={int(seconds)}",
+            "-i", news_image_path,
         ]
 
         if logo_ok:
@@ -977,13 +979,13 @@ def generate_reel_from_image(
         if music_ok:
             cmd += ["-i", music_path]
 
-        logo_input = 1 if logo_ok else None
-        music_input = 2 if logo_ok and music_ok else 1 if music_ok else None
+        logo_input = 2 if logo_ok else None
+        music_input = 3 if logo_ok and music_ok else 2 if music_ok else None
 
         vf_parts = []
 
         vf_parts.append(
-            f"[0:v]"
+            f"[1:v]"
             f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
             f"crop={REEL_W}:{REEL_H},"
             f"zoompan=z='min(zoom+0.0009,1.10)':"
@@ -997,7 +999,11 @@ def generate_reel_from_image(
         )
 
         vf_parts.append(
-            f"[bg]"
+            f"[0:v][bg]overlay=0:0:format=auto[bgbase];"
+        )
+
+        vf_parts.append(
+            f"[bgbase]"
             f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=black@0.34:t=fill,"
             f"drawbox=x=0:y=1180:w={REEL_W}:h=740:color=black@0.22:t=fill"
             f"[bg2];"
@@ -1010,7 +1016,7 @@ def generate_reel_from_image(
         )
 
         vf_parts.append(
-            f"[0:v]"
+            f"[1:v]"
             f"scale=896:896:force_original_aspect_ratio=decrease,"
             f"pad=896:896:(ow-iw)/2:(oh-ih)/2:color=black@0,"
             f"eq=contrast=1.06:saturation=1.08,"
@@ -1122,7 +1128,9 @@ def generate_reel_from_image(
             check=False
         )
         if p.returncode != 0:
-            raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
+            raise RuntimeError(f"ffmpeg falló:
+STDERR:
+{(p.stderr or '')[:4000]}")
 
         with open(out_mp4, "rb") as f:
             return f.read()

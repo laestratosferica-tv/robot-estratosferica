@@ -73,7 +73,6 @@ IDEAS_PREFIX = (env_nonempty("VIRAL_IDEAS_PREFIX", "ugc/ideas/") or "ugc/ideas/"
 if not IDEAS_PREFIX.endswith("/"):
     IDEAS_PREFIX += "/"
 
-# NUEVO: metadata separada del inbox para no contaminar modo B
 UGC_META_PREFIX = (env_nonempty("UGC_META_PREFIX", "ugc/meta/") or "ugc/meta/").strip()
 if not UGC_META_PREFIX.endswith("/"):
     UGC_META_PREFIX += "/"
@@ -85,6 +84,10 @@ TWITCH_MAX_CLIPS_PER_RUN = env_int("TWITCH_MAX_CLIPS_PER_RUN", 3)
 TWITCH_LOOKBACK_HOURS = env_int("TWITCH_LOOKBACK_HOURS", 24)
 TWITCH_MIN_VIEWS = env_int("TWITCH_MIN_VIEWS", 2500)
 TWITCH_TOP_GAMES = env_int("TWITCH_TOP_GAMES", 10)
+
+# NUEVO: validación de archivos descargados
+TWITCH_MIN_VIDEO_BYTES = env_int("TWITCH_MIN_VIDEO_BYTES", 200_000)
+STRICT_VIDEO_CONTENT_TYPE = env_bool("STRICT_VIDEO_CONTENT_TYPE", False)
 
 # Reddit
 REDDIT_ENABLED = env_bool("REDDIT_ENABLED", True)
@@ -104,6 +107,11 @@ OPENAI_API_KEY = env_nonempty("OPENAI_API_KEY")
 OPENAI_MODEL = env_nonempty("OPENAI_MODEL", "gpt-4.1-mini")
 
 DRY_RUN = env_bool("DRY_RUN", False)
+
+USER_AGENT = env_nonempty(
+    "HTTP_USER_AGENT",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36"
+) or "Mozilla/5.0"
 
 
 # -------------------------
@@ -131,6 +139,23 @@ def sanitize_filename(name: str) -> str:
 
 def safe_json_dumps(obj: Any) -> bytes:
     return json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def is_probably_mp4_bytes(data: bytes) -> bool:
+    """
+    Validación barata de firma MP4.
+    Normalmente 'ftyp' aparece cerca del inicio.
+    """
+    if not data or len(data) < 32:
+        return False
+
+    head = data[:256]
+    return b"ftyp" in head
+
+
+def content_type_looks_video(content_type: str) -> bool:
+    ct = (content_type or "").lower()
+    return ("video/" in ct) or ("mp4" in ct) or ("octet-stream" in ct)
 
 
 # -------------------------
@@ -271,10 +296,42 @@ def twitch_clip_mp4_url(clip: Dict[str, Any]) -> str:
     return thumb.split("-preview")[0] + ".mp4"
 
 
-def download_bytes(url: str) -> bytes:
-    r = requests.get(url, timeout=HTTP_TIMEOUT)
+def download_video_candidate(url: str) -> Tuple[bytes, str, int]:
+    """
+    Descarga y devuelve:
+    (bytes, content_type, content_length)
+    """
+    headers = {"User-Agent": USER_AGENT}
+    r = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT, allow_redirects=True)
     r.raise_for_status()
-    return r.content
+
+    content_type = (r.headers.get("Content-Type") or "").strip()
+    content_length = 0
+    try:
+        content_length = int(r.headers.get("Content-Length") or 0)
+    except Exception:
+        content_length = 0
+
+    return r.content, content_type, content_length
+
+
+def validate_downloaded_clip(data: bytes, content_type: str, declared_length: int) -> Tuple[bool, str]:
+    size = len(data)
+
+    if size < TWITCH_MIN_VIDEO_BYTES:
+        return False, f"too_small:{size}"
+
+    if STRICT_VIDEO_CONTENT_TYPE and not content_type_looks_video(content_type):
+        return False, f"bad_content_type:{content_type}"
+
+    if not is_probably_mp4_bytes(data):
+        return False, "missing_ftyp"
+
+    # si vino content-length y no coincide brutalmente, mala señal
+    if declared_length > 0 and abs(declared_length - size) > max(1024, int(declared_length * 0.20)):
+        return False, f"length_mismatch:{declared_length}!={size}"
+
+    return True, "ok"
 
 
 # -------------------------
@@ -369,6 +426,8 @@ def run_mode_f():
     print("UGC_INBOX_PREFIX:", UGC_INBOX_PREFIX)
     print("UGC_META_PREFIX:", UGC_META_PREFIX)
     print("IDEAS_PREFIX:", IDEAS_PREFIX)
+    print("TWITCH_MIN_VIDEO_BYTES:", TWITCH_MIN_VIDEO_BYTES)
+    print("STRICT_VIDEO_CONTENT_TYPE:", STRICT_VIDEO_CONTENT_TYPE)
 
     state = load_state()
 
@@ -413,7 +472,7 @@ def run_mode_f():
         mp4_url = twitch_clip_mp4_url(clip)
 
         key_name = sanitize_filename(clip.get("title") or f"clip_{clip_id}") + ".mp4"
-        timestamp = now_utc().strftime('%Y-%m-%d__%H%M%S')
+        timestamp = now_utc().strftime("%Y-%m-%d__%H%M%S")
         r2_key = f"{UGC_INBOX_PREFIX}{timestamp}__twitch__{clip_id}__{key_name}"
 
         meta = {
@@ -432,25 +491,38 @@ def run_mode_f():
         }
 
         print("Selected Twitch clip:", clip.get("title"), "| score:", round(score, 2), "| views:", clip.get("view_count"))
+        print("Candidate mp4_url:", mp4_url)
 
         if DRY_RUN:
             print("[DRY_RUN] Subiría clip a:", r2_key)
-        else:
-            try:
-                data = download_bytes(mp4_url)
-                s3_put_bytes(r2_key, data, "video/mp4")
+            continue
 
-                meta_base = os.path.basename(r2_key).rsplit(".", 1)[0] + ".json"
-                meta_key = f"{UGC_META_PREFIX}{meta_base}"
-                s3_put_json(meta_key, meta)
+        try:
+            data, content_type, declared_length = download_video_candidate(mp4_url)
 
-                state["processed_twitch_clip_ids"].append(clip_id)
-                state["processed_twitch_clip_ids"] = state["processed_twitch_clip_ids"][-1000:]
+            print("Downloaded bytes:", len(data))
+            print("Content-Type:", content_type or "(none)")
+            print("Content-Length header:", declared_length)
 
-                print("Queued to inbox:", r2_key)
-                print("Saved meta:", meta_key)
-            except Exception as e:
-                print("No se pudo subir clip Twitch:", str(e))
+            ok, reason = validate_downloaded_clip(data, content_type, declared_length)
+            if not ok:
+                print("Clip descartado:", reason)
+                continue
+
+            s3_put_bytes(r2_key, data, "video/mp4")
+
+            meta_base = os.path.basename(r2_key).rsplit(".", 1)[0] + ".json"
+            meta_key = f"{UGC_META_PREFIX}{meta_base}"
+            s3_put_json(meta_key, meta)
+
+            state["processed_twitch_clip_ids"].append(clip_id)
+            state["processed_twitch_clip_ids"] = state["processed_twitch_clip_ids"][-1000:]
+
+            print("Queued to inbox:", r2_key)
+            print("Saved meta:", meta_key)
+
+        except Exception as e:
+            print("No se pudo subir clip Twitch:", str(e))
 
     # -------- Reddit gamer trends --------
     if REDDIT_ENABLED and REDDIT_SUBS:

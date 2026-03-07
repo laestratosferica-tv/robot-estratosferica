@@ -130,7 +130,7 @@ jobs:
           # REEL SETTINGS
           # -------------------
           ENABLE_REELS: "true"
-          REEL_SECONDS: "5"
+          REEL_SECONDS: "8"
           REEL_W: "1080"
           REEL_H: "1920"
           ASSET_BG: "assets/bg.jpg"

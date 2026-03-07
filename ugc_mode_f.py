@@ -23,11 +23,13 @@ def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
     v = v.strip()
     return v if v else default
 
+
 def env_bool(name: str, default: bool = False) -> bool:
     v = os.getenv(name)
     if v is None:
         return default
     return v.strip().lower() in ("1", "true", "yes", "y", "on")
+
 
 def env_int(name: str, default: int) -> int:
     v = os.getenv(name)
@@ -37,6 +39,7 @@ def env_int(name: str, default: int) -> int:
         return int(v.strip())
     except Exception:
         return default
+
 
 def env_float(name: str, default: float) -> float:
     v = os.getenv(name)
@@ -65,9 +68,15 @@ if not UGC_INBOX_PREFIX.endswith("/"):
     UGC_INBOX_PREFIX += "/"
 
 STATE_KEY = env_nonempty("VIRAL_STATE_KEY", "ugc/state/viral_state.json")
+
 IDEAS_PREFIX = (env_nonempty("VIRAL_IDEAS_PREFIX", "ugc/ideas/") or "ugc/ideas/").strip()
 if not IDEAS_PREFIX.endswith("/"):
     IDEAS_PREFIX += "/"
+
+# NUEVO: metadata separada del inbox para no contaminar modo B
+UGC_META_PREFIX = (env_nonempty("UGC_META_PREFIX", "ugc/meta/") or "ugc/meta/").strip()
+if not UGC_META_PREFIX.endswith("/"):
+    UGC_META_PREFIX += "/"
 
 # Twitch
 TWITCH_CLIENT_ID = env_nonempty("TWITCH_CLIENT_ID")
@@ -79,7 +88,15 @@ TWITCH_TOP_GAMES = env_int("TWITCH_TOP_GAMES", 10)
 
 # Reddit
 REDDIT_ENABLED = env_bool("REDDIT_ENABLED", True)
-REDDIT_SUBS = [s.strip() for s in (env_nonempty("REDDIT_SUBS", "esports,leagueoflegends,GlobalOffensive,VALORANT,Competitiveoverwatch,gaming") or "").split(",") if s.strip()]
+REDDIT_SUBS = [
+    s.strip() for s in (
+        env_nonempty(
+            "REDDIT_SUBS",
+            "esports,leagueoflegends,GlobalOffensive,VALORANT,Competitiveoverwatch,gaming"
+        ) or ""
+    ).split(",")
+    if s.strip()
+]
 REDDIT_MIN_SCORE = env_int("REDDIT_MIN_SCORE", 400)
 
 # OpenAI optional for idea polishing
@@ -96,17 +113,21 @@ DRY_RUN = env_bool("DRY_RUN", False)
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
+
 def iso_now() -> str:
     return now_utc().isoformat()
 
+
 def short_hash(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()[:12]
+
 
 def sanitize_filename(name: str) -> str:
     name = (name or "clip").strip()
     name = re.sub(r"[^\w\-. ]+", "_", name)
     name = re.sub(r"\s+", "_", name)
     return name[:150] or "clip"
+
 
 def safe_json_dumps(obj: Any) -> bytes:
     return json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
@@ -127,6 +148,7 @@ def r2_client():
         region_name="auto",
     )
 
+
 def s3_put_bytes(key: str, data: bytes, content_type: str = "application/octet-stream"):
     r2_client().put_object(
         Bucket=BUCKET_NAME,
@@ -135,12 +157,14 @@ def s3_put_bytes(key: str, data: bytes, content_type: str = "application/octet-s
         ContentType=content_type,
     )
 
+
 def s3_get_json(key: str):
     try:
         obj = r2_client().get_object(Bucket=BUCKET_NAME, Key=key)
         return json.loads(obj["Body"].read().decode("utf-8"))
     except Exception:
         return None
+
 
 def s3_put_json(key: str, payload: Dict[str, Any]):
     s3_put_bytes(key, safe_json_dumps(payload), "application/json")
@@ -162,6 +186,7 @@ def load_state() -> Dict[str, Any]:
     st.setdefault("processed_reddit_posts", [])
     st.setdefault("last_run_at", None)
     return st
+
 
 def save_state(st: Dict[str, Any]):
     st["last_run_at"] = iso_now()
@@ -187,11 +212,13 @@ def twitch_get_app_token() -> str:
     r.raise_for_status()
     return r.json()["access_token"]
 
+
 def twitch_headers(token: str) -> Dict[str, str]:
     return {
         "Client-ID": TWITCH_CLIENT_ID,
         "Authorization": f"Bearer {token}",
     }
+
 
 def twitch_get_top_games(token: str) -> List[Dict[str, Any]]:
     r = requests.get(
@@ -202,6 +229,7 @@ def twitch_get_top_games(token: str) -> List[Dict[str, Any]]:
     )
     r.raise_for_status()
     return r.json().get("data", [])
+
 
 def twitch_get_clips_for_game(token: str, game_id: str) -> List[Dict[str, Any]]:
     start = now_utc() - timedelta(hours=TWITCH_LOOKBACK_HOURS)
@@ -217,6 +245,7 @@ def twitch_get_clips_for_game(token: str, game_id: str) -> List[Dict[str, Any]]:
     )
     r.raise_for_status()
     return r.json().get("data", [])
+
 
 def twitch_score_clip(clip: Dict[str, Any]) -> float:
     views = int(clip.get("view_count", 0))
@@ -234,13 +263,13 @@ def twitch_score_clip(clip: Dict[str, Any]) -> float:
         if w in title:
             bonus += 200
 
-    # vistas pesan más, pero recencia también
     return (views * 0.75) + (1200 / (1 + age_hours)) + bonus
 
+
 def twitch_clip_mp4_url(clip: Dict[str, Any]) -> str:
-    # método típico de twitch clips
     thumb = clip["thumbnail_url"]
     return thumb.split("-preview")[0] + ".mp4"
+
 
 def download_bytes(url: str) -> bytes:
     r = requests.get(url, timeout=HTTP_TIMEOUT)
@@ -275,6 +304,7 @@ def reddit_fetch_hot(sub: str) -> List[Dict[str, Any]]:
             })
     return out
 
+
 def openai_text(prompt: str) -> str:
     if not OPENAI_API_KEY:
         raise RuntimeError("Falta OPENAI_API_KEY")
@@ -298,6 +328,7 @@ def openai_text(prompt: str) -> str:
             if part.get("type") == "output_text" and part.get("text"):
                 texts.append(part["text"])
     return "\n".join(texts).strip()
+
 
 def build_reddit_idea(post: Dict[str, Any]) -> Dict[str, Any]:
     prompt = f"""
@@ -335,6 +366,9 @@ Score: {post['score']}
 def run_mode_f():
     print("===== MODE F VIRAL GAMER BRAIN =====")
     print("DRY_RUN:", DRY_RUN)
+    print("UGC_INBOX_PREFIX:", UGC_INBOX_PREFIX)
+    print("UGC_META_PREFIX:", UGC_META_PREFIX)
+    print("IDEAS_PREFIX:", IDEAS_PREFIX)
 
     state = load_state()
 
@@ -379,7 +413,8 @@ def run_mode_f():
         mp4_url = twitch_clip_mp4_url(clip)
 
         key_name = sanitize_filename(clip.get("title") or f"clip_{clip_id}") + ".mp4"
-        r2_key = f"{UGC_INBOX_PREFIX}{now_utc().strftime('%Y-%m-%d__%H%M%S')}__twitch__{clip_id}__{key_name}"
+        timestamp = now_utc().strftime('%Y-%m-%d__%H%M%S')
+        r2_key = f"{UGC_INBOX_PREFIX}{timestamp}__twitch__{clip_id}__{key_name}"
 
         meta = {
             "source": "twitch",
@@ -388,6 +423,7 @@ def run_mode_f():
             "view_count": clip.get("view_count"),
             "created_at": clip.get("created_at"),
             "url": clip.get("url"),
+            "video_url": mp4_url,
             "broadcaster_name": clip.get("broadcaster_name"),
             "game_name": game_name,
             "score": score,
@@ -403,11 +439,16 @@ def run_mode_f():
             try:
                 data = download_bytes(mp4_url)
                 s3_put_bytes(r2_key, data, "video/mp4")
-                meta_key = r2_key.rsplit(".", 1)[0] + ".json"
+
+                meta_base = os.path.basename(r2_key).rsplit(".", 1)[0] + ".json"
+                meta_key = f"{UGC_META_PREFIX}{meta_base}"
                 s3_put_json(meta_key, meta)
+
                 state["processed_twitch_clip_ids"].append(clip_id)
                 state["processed_twitch_clip_ids"] = state["processed_twitch_clip_ids"][-1000:]
+
                 print("Queued to inbox:", r2_key)
+                print("Saved meta:", meta_key)
             except Exception as e:
                 print("No se pudo subir clip Twitch:", str(e))
 
@@ -444,3 +485,7 @@ def run_mode_f():
 
     save_state(state)
     print("===== MODE F DONE =====")
+
+
+if __name__ == "__main__":
+    run_mode_f()

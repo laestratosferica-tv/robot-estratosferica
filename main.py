@@ -1,3 +1,6 @@
+main.py antes de cambio estético editorial a 
+
+
 import os
 import re
 import json
@@ -103,7 +106,7 @@ if RUN_MODE in ("E", "MODE_E"):
     from ugc_mode_e import run_mode_e
     run_mode_e()
     raise SystemExit(0)
-
+    
 # MODE F
 if RUN_MODE in ("F", "MODE_F"):
     print(">>> RUN_MODE F - VIRAL ANALYTICS")
@@ -156,7 +159,7 @@ CONTAINER_POLL_INTERVAL = env_float("CONTAINER_POLL_INTERVAL", 2.0)
 
 # Reels generation
 ENABLE_REELS = env_bool("ENABLE_REELS", True)
-REEL_SECONDS = env_int("REEL_SECONDS", 8)
+REEL_SECONDS = env_int("REEL_SECONDS", 15)
 REEL_W = env_int("REEL_W", 1080)
 REEL_H = env_int("REEL_H", 1920)
 
@@ -167,7 +170,7 @@ FONT_BOLD = env_nonempty("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSa
 
 # Publish toggles
 DRY_RUN = env_bool("DRY_RUN", False)
-ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", True)
+ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", False)
 ENABLE_THREADS_PUBLISH = env_bool("ENABLE_THREADS_PUBLISH", True)
 
 # Instagram publish (Graph API)
@@ -177,7 +180,7 @@ GRAPH_VERSION = env_nonempty("GRAPH_VERSION", "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
 
 # Facebook Page Reels (optional)
-ENABLE_FB_PUBLISH = env_bool("ENABLE_FB_PUBLISH", True)
+ENABLE_FB_PUBLISH = env_bool("ENABLE_FB_PUBLISH", False)
 FB_PAGE_ID = env_nonempty("FB_PAGE_ID")
 FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
 
@@ -193,7 +196,7 @@ TIKTOK_ACCESS_TOKEN = env_nonempty("TIKTOK_ACCESS_TOKEN")
 TIKTOK_OPEN_ID = env_nonempty("TIKTOK_OPEN_ID")
 
 # Runway (optional)
-RUNWAY_ENABLED = env_bool("RUNWAY_ENABLED", True)
+RUNWAY_ENABLED = env_bool("RUNWAY_ENABLED", False)
 RUNWAY_API_KEY = env_nonempty("RUNWAY_API_KEY")
 RUNWAY_VERSION = env_nonempty("RUNWAY_VERSION", "2024-11-06")
 RUNWAY_BASE = env_nonempty("RUNWAY_BASE", "https://api.dev.runwayml.com").rstrip("/")
@@ -205,8 +208,8 @@ RUNWAY_MP4_RETRIES = env_int("RUNWAY_MP4_RETRIES", 3)
 RUNWAY_PROBABILITY = env_float("RUNWAY_PROBABILITY", 0.55)
 
 # Autonomy / randomness
-MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.75)
-LOGO_PROBABILITY = env_float("LOGO_PROBABILITY", 0.85)
+MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.75)  # 0..1
+LOGO_PROBABILITY = env_float("LOGO_PROBABILITY", 0.85)    # 0..1
 MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
 
 print("ENV CHECK:")
@@ -326,6 +329,7 @@ def _raise_meta_error(r: requests.Response, label: str = "HTTP") -> None:
         body = r.request.body
         if isinstance(body, bytes):
             body = body.decode("utf-8", errors="replace")
+        # No imprimimos tokens
         safe_body = body.replace(str(IG_ACCESS_TOKEN or ""), "***").replace(str(THREADS_USER_ACCESS_TOKEN or ""), "***").replace(str(FB_PAGE_ACCESS_TOKEN or ""), "***")
         print("REQUEST BODY:", safe_body[:4000])
     print("STATUS:", r.status_code)
@@ -426,6 +430,7 @@ def upload_bytes_to_r2_public(file_bytes: bytes, ext: str, prefix: str, content_
     s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=file_bytes, ContentType=content_type)
     url = f"{base}/{key}"
 
+    # best-effort check
     try:
         head = requests.head(url, timeout=10, allow_redirects=True)
         if head.status_code != 200:
@@ -619,35 +624,6 @@ Objetivo: retención + comentarios.
 Título: {title}
 """
 
-VIDEO_HOOK_PROMPT = """
-Convierte este titular en un hook corto para un reel gamer en español LATAM.
-
-Reglas:
-- 3 a 7 palabras
-- tono gamer, cool, entretenido y vendedor
-- no formal
-- debe sonar bien en Instagram
-- debe provocar curiosidad o debate
-- sin emojis
-- puede ir en mayúsculas
-- devuelve solo el hook final
-
-Titular: {title}
-"""
-
-GAMER_CTAS = [
-    "¿W o basura?",
-    "¿Lo juegas o pasas?",
-    "¿Te gusta o no?",
-    "¿Humazo o joya?",
-    "¿Riot cocinó?",
-    "¿Lo comprarías?",
-    "¿Qué opinas?",
-    "Te leo abajo",
-    "¿Esto mejora algo?",
-    "¿Se viene roto?"
-]
-
 def build_threads_text(item: Dict[str, Any], mode: str = "new") -> str:
     title = item.get("title", "")
     link = item.get("link", "")
@@ -666,20 +642,6 @@ def build_instagram_caption(item: Dict[str, Any], link: str) -> str:
     if "Fuente:" not in text:
         text = f"{text}\n\nFuente: {link}"
     return text.strip()
-
-def build_video_hook(title: str) -> str:
-    prompt = VIDEO_HOOK_PROMPT.format(title=(title or "").strip())
-    try:
-        text = openai_text(prompt).strip()
-        text = text.replace('"', "").replace("'", "").strip()
-        return text[:80] if text else (title or "")[:80]
-    except Exception:
-        return (title or "")[:80]
-
-def pick_gamer_cta(default_cta: Optional[str] = None) -> str:
-    if default_cta and default_cta.strip() and default_cta.strip().lower() != "sigue para más":
-        return default_cta.strip()
-    return random.choice(GAMER_CTAS)
 
 # =========================
 # Threads length guard (<= 500)
@@ -936,169 +898,70 @@ def generate_reel_from_image(
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
 ) -> bytes:
+    _require_file(bg_path, "ASSET_BG")
     if not os.path.exists(news_image_path):
         raise RuntimeError(f"Falta news image local: {news_image_path}")
     if not os.path.exists(FONT_BOLD):
         raise RuntimeError(f"Falta FONT_BOLD en runner: {FONT_BOLD}")
 
-    headline_clean = (headline or "").strip().upper()
-    headline_wrapped = wrap_text_lines(headline_clean[:90], max_chars_per_line=18, max_lines=3)
-    cta = (cta_text or "¿W o humazo?").strip()
-
-    label_options = ["HOT", "UPDATE", "DRAMA", "META", "OJO", "TOP"]
-    badge_text = random.choice(label_options)
+    headline_wrapped = wrap_text_lines((headline or "")[:220], max_chars_per_line=30, max_lines=3)
+    cta = (cta_text or "Sigue para más").strip()
 
     music_ok = bool(music_path) and os.path.exists(music_path)
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 
     n_lines = max(1, headline_wrapped.count("\n") + 1)
-    title_size = 88 if n_lines == 1 else 76 if n_lines == 2 else 64
+    title_size = 54 if n_lines == 1 else 50 if n_lines == 2 else 44
 
     with tempfile.TemporaryDirectory() as td:
         out_mp4 = os.path.join(td, "reel.mp4")
         title_txt = os.path.join(td, "title.txt")
         cta_txt = os.path.join(td, "cta.txt")
-        badge_txt = os.path.join(td, "badge.txt")
 
         with open(title_txt, "w", encoding="utf-8") as f:
             f.write(headline_wrapped)
         with open(cta_txt, "w", encoding="utf-8") as f:
             f.write(cta)
-        with open(badge_txt, "w", encoding="utf-8") as f:
-            f.write(badge_text)
 
         cmd = [
             "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-            "-loop", "1", "-t", str(int(seconds)), "-i", news_image_path,
+            "-f", "lavfi", "-i", f"color=c=black:s={REEL_W}x{REEL_H}:r=30:d={int(seconds)}",
+            "-i", bg_path,
+            "-i", news_image_path,
         ]
-
         if logo_ok:
             cmd += ["-i", logo_path]
         if music_ok:
             cmd += ["-i", music_path]
 
-        logo_input = 1 if logo_ok else None
-        music_input = 2 if logo_ok and music_ok else 1 if music_ok else None
-
         vf_parts = []
+        vf_parts.append(f"[1:v]scale={REEL_W}:{REEL_H},format=rgba[bg];")
+        vf_parts.append(f"[0:v][bg]overlay=0:0:format=auto[v1];")
+        vf_parts.append(f"[2:v]scale={REEL_W-120}:-1,format=rgba[news];")
+        vf_parts.append(f"[v1][news]overlay=(W-w)/2:520:format=auto[v2];")
+
+        if logo_ok:
+            vf_parts.append(f"[3:v]scale=700:-1,format=rgba[logo];")
+            vf_parts.append(f"[v2][logo]overlay=(W-w)/2:170:format=auto[v3];")
+            base_label = "[v3]"
+        else:
+            base_label = "[v2]"
 
         vf_parts.append(
-            f"[0:v]"
-            f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
-            f"crop={REEL_W}:{REEL_H},"
-            f"zoompan=z='min(zoom+0.0009,1.10)':"
-            f"d={int(seconds)*30}:"
-            f"x='iw/2-(iw/zoom/2)':"
-            f"y='ih/2-(ih/zoom/2)':"
-            f"s={REEL_W}x{REEL_H}:fps=30,"
-            f"gblur=sigma=20,"
-            f"eq=contrast=1.08:brightness=-0.10:saturation=1.15,"
-            f"format=rgba[bg];"
-        )
-
-        vf_parts.append(
-            f"[bg]"
-            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=black@0.34:t=fill,"
-            f"drawbox=x=0:y=1180:w={REEL_W}:h=740:color=black@0.22:t=fill"
-            f"[bg2];"
-        )
-
-        vf_parts.append(
-            f"[bg2]"
-            f"drawbox=x=92:y=260:w=896:h=896:color=black@0.28:t=fill"
-            f"[shadow];"
-        )
-
-        vf_parts.append(
-            f"[0:v]"
-            f"scale=896:896:force_original_aspect_ratio=decrease,"
-            f"pad=896:896:(ow-iw)/2:(oh-ih)/2:color=black@0,"
-            f"eq=contrast=1.06:saturation=1.08,"
-            f"format=rgba[card];"
-        )
-
-        vf_parts.append(
-            f"[shadow][card]overlay=92:260:format=auto[main];"
-        )
-
-        current = "[main]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=92:y=260:w=896:h=10:color=white@0.92:t=fill,"
-            f"drawbox=x=92:y=1146:w=896:h=10:color=white@0.92:t=fill"
-            f"[accent];"
-        )
-        current = "[accent]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=92:y=110:w=220:h=74:color=white@0.96:t=fill,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={badge_txt}:"
-            f"x=126:y=128:fontsize=34:fontcolor=black"
-            f"[badge];"
-        )
-        current = "[badge]"
-
-        if logo_ok and logo_input is not None:
-            vf_parts.append(
-                f"[{logo_input}:v]scale=140:-1,format=rgba,colorchannelmixer=aa=0.95[logo];"
-            )
-            vf_parts.append(
-                f"{current}[logo]overlay=W-w-52:74:format=auto[withlogo];"
-            )
-            current = "[withlogo]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=64:y=1240:w=952:h=350:color=black@0.18:t=fill"
-            f"[textbase];"
-        )
-        current = "[textbase]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
-            f"x=76:y=1280:"
-            f"fontsize={title_size}:"
-            f"line_spacing=10:"
-            f"fontcolor=white:"
-            f"shadowcolor=black@0.65:"
-            f"shadowx=0:shadowy=5"
-            f"[title];"
-        )
-        current = "[title]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=78:y=1228:w=150:h=8:color=white@0.92:t=fill"
-            f"[line];"
-        )
-        current = "[line]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
-            f"x=78:y=1685:"
-            f"fontsize=40:"
-            f"fontcolor=white@0.86:"
-            f"shadowcolor=black@0.55:"
-            f"shadowx=0:shadowy=4,"
-            f"fade=t=in:st=0:d=0.35,"
-            f"fade=t=out:st={max(0, int(seconds)-1)}:d=0.75"
+            f"{base_label}"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:x=60:y=1280:"
+            f"fontsize={title_size}:line_spacing=10:fontcolor=white:"
+            f"box=1:boxcolor=black@0.45:boxborderw=24,"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:x=60:y=1560:"
+            f"fontsize=44:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18"
             f"[vout]"
         )
 
         cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
 
-        if music_ok and music_input is not None:
-            cmd += [
-                "-map", f"{music_input}:a",
-                "-filter:a",
-                f"volume=0.32,afade=t=in:st=0:d=0.7,afade=t=out:st={max(0, int(seconds)-1)}:d=1.0",
-                "-c:a", "aac",
-                "-b:a", "128k"
-            ]
+        if music_ok:
+            audio_index = 3 if not logo_ok else 4
+            cmd += ["-map", f"{audio_index}:a", "-filter:a", "volume=0.35", "-c:a", "aac", "-b:a", "128k"]
         else:
             cmd += ["-an"]
 
@@ -1106,21 +969,14 @@ def generate_reel_from_image(
             "-t", str(int(seconds)),
             "-r", "30",
             "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "20",
+            "-preset", "veryfast",
             "-pix_fmt", "yuv420p",
             "-movflags", "+faststart",
+            "-shortest",
             out_mp4
         ]
 
-        p = subprocess.run(
-            cmd,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=300,
-            check=False
-        )
+        p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300, check=False)
         if p.returncode != 0:
             raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
@@ -1140,141 +996,61 @@ def generate_reel_from_video_bg(
     if not os.path.exists(FONT_BOLD):
         raise RuntimeError(f"Falta FONT_BOLD en runner: {FONT_BOLD}")
 
-    headline_clean = (headline or "").strip().upper()
-    headline_wrapped = wrap_text_lines(headline_clean[:90], max_chars_per_line=18, max_lines=3)
-    cta = (cta_text or "¿W o humazo?").strip()
-
-    label_options = ["HOT", "UPDATE", "DRAMA", "META", "OJO", "TOP"]
-    badge_text = random.choice(label_options)
+    headline_wrapped = wrap_text_lines((headline or "")[:220], max_chars_per_line=30, max_lines=3)
+    cta = (cta_text or "Sigue para más").strip()
 
     music_ok = bool(music_path) and os.path.exists(music_path)
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 
     n_lines = max(1, headline_wrapped.count("\n") + 1)
-    title_size = 88 if n_lines == 1 else 76 if n_lines == 2 else 64
+    title_size = 56 if n_lines == 1 else 50 if n_lines == 2 else 44
 
     with tempfile.TemporaryDirectory() as td:
         out_mp4 = os.path.join(td, "reel.mp4")
         title_txt = os.path.join(td, "title.txt")
         cta_txt = os.path.join(td, "cta.txt")
-        badge_txt = os.path.join(td, "badge.txt")
 
         with open(title_txt, "w", encoding="utf-8") as f:
             f.write(headline_wrapped)
         with open(cta_txt, "w", encoding="utf-8") as f:
             f.write(cta)
-        with open(badge_txt, "w", encoding="utf-8") as f:
-            f.write(badge_text)
 
         cmd = [
             "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
-            "-stream_loop", "-1", "-i", bg_video_path,
+            "-i", bg_video_path,
         ]
-
         if logo_ok:
             cmd += ["-i", logo_path]
         if music_ok:
             cmd += ["-i", music_path]
 
-        logo_input = 1 if logo_ok else None
-        music_input = 2 if logo_ok and music_ok else 1 if music_ok else None
-
         vf_parts = []
-
         vf_parts.append(
-            f"[0:v]"
-            f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
-            f"crop={REEL_W}:{REEL_H},"
-            f"fps=30,"
-            f"eq=contrast=1.08:brightness=-0.08:saturation=1.18,"
-            f"format=rgba[bg];"
+            f"[0:v]scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+            f"crop={REEL_W}:{REEL_H},fps=30,format=rgba[v0];"
         )
+        if logo_ok:
+            vf_parts.append(f"[1:v]scale=520:-1,format=rgba[logo];")
+            vf_parts.append(f"[v0][logo]overlay=40:60:format=auto[v1];")
+            base_label = "[v1]"
+        else:
+            base_label = "[v0]"
 
         vf_parts.append(
-            f"[bg]"
-            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=black@0.30:t=fill,"
-            f"drawbox=x=0:y=1180:w={REEL_W}:h=740:color=black@0.22:t=fill"
-            f"[bg2];"
-        )
-
-        current = "[bg2]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=70:y=220:w=940:h=6:color=white@0.90:t=fill,"
-            f"drawbox=x=70:y=1160:w=940:h=6:color=white@0.90:t=fill"
-            f"[accent];"
-        )
-        current = "[accent]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=78:y=108:w=220:h=74:color=white@0.96:t=fill,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={badge_txt}:"
-            f"x=112:y=126:fontsize=34:fontcolor=black"
-            f"[badge];"
-        )
-        current = "[badge]"
-
-        if logo_ok and logo_input is not None:
-            vf_parts.append(
-                f"[{logo_input}:v]scale=140:-1,format=rgba,colorchannelmixer=aa=0.95[logo];"
-            )
-            vf_parts.append(
-                f"{current}[logo]overlay=W-w-52:72:format=auto[withlogo];"
-            )
-            current = "[withlogo]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=58:y=1230:w=964:h=360:color=black@0.18:t=fill"
-            f"[textbase];"
-        )
-        current = "[textbase]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=78:y=1210:w=160:h=8:color=white@0.92:t=fill"
-            f"[line];"
-        )
-        current = "[line]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
-            f"x=76:y=1270:"
-            f"fontsize={title_size}:"
-            f"line_spacing=10:"
-            f"fontcolor=white:"
-            f"shadowcolor=black@0.68:"
-            f"shadowx=0:shadowy=5"
-            f"[title];"
-        )
-        current = "[title]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
-            f"x=78:y=1685:"
-            f"fontsize=40:"
-            f"fontcolor=white@0.86:"
-            f"shadowcolor=black@0.55:"
-            f"shadowx=0:shadowy=4,"
-            f"fade=t=in:st=0:d=0.35,"
-            f"fade=t=out:st={max(0, int(seconds)-1)}:d=0.75"
+            f"{base_label}"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:x=60:y=1280:"
+            f"fontsize={title_size}:line_spacing=10:fontcolor=white:"
+            f"box=1:boxcolor=black@0.45:boxborderw=24,"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:x=60:y=1560:"
+            f"fontsize=44:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=18"
             f"[vout]"
         )
 
         cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
 
-        if music_ok and music_input is not None:
-            cmd += [
-                "-map", f"{music_input}:a",
-                "-filter:a",
-                f"volume=0.32,afade=t=in:st=0:d=0.7,afade=t=out:st={max(0, int(seconds)-1)}:d=1.0",
-                "-c:a", "aac",
-                "-b:a", "128k"
-            ]
+        if music_ok:
+            audio_index = 2 if logo_ok else 1
+            cmd += ["-map", f"{audio_index}:a", "-filter:a", "volume=0.35", "-c:a", "aac", "-b:a", "128k"]
         else:
             cmd += ["-an"]
 
@@ -1282,21 +1058,14 @@ def generate_reel_from_video_bg(
             "-t", str(int(seconds)),
             "-r", "30",
             "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "20",
+            "-preset", "veryfast",
             "-pix_fmt", "yuv420p",
             "-movflags", "+faststart",
+            "-shortest",
             out_mp4
         ]
 
-        p = subprocess.run(
-            cmd,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=480,
-            check=False
-        )
+        p = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=480, check=False)
         if p.returncode != 0:
             raise RuntimeError(f"ffmpeg (video bg) falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
@@ -1392,6 +1161,14 @@ def fb_publish_reel(video_url: str, caption: str) -> Optional[Dict[str, Any]]:
 # =========================
 
 def youtube_upload_short(video_path: str, title: str, description: str) -> Optional[Dict[str, Any]]:
+    """
+    Requiere:
+      google-api-python-client
+      google-auth
+      google-auth-oauthlib
+    y env:
+      YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET / YOUTUBE_REFRESH_TOKEN
+    """
     if not ENABLE_YT_PUBLISH:
         return None
     if not (YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET and YOUTUBE_REFRESH_TOKEN):
@@ -1446,6 +1223,10 @@ def youtube_upload_short(video_path: str, title: str, description: str) -> Optio
 # =========================
 
 def tiktok_publish_video_from_url(video_url: str, caption: str) -> Optional[Dict[str, Any]]:
+    """
+    Requiere Content Posting API habilitada.
+    Env: TIKTOK_ACCESS_TOKEN, TIKTOK_OPEN_ID
+    """
     if not ENABLE_TIKTOK_PUBLISH:
         return None
     if not (TIKTOK_ACCESS_TOKEN and TIKTOK_OPEN_ID):
@@ -1595,6 +1376,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         label = "NUEVO" if mode == "new" else "REPOST"
         print(f"Seleccionado ({label}): {link}")
 
+        # text
         try:
             threads_text = build_threads_text(item, mode=mode)
         except Exception as e:
@@ -1602,6 +1384,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             processed = [x for x in processed if x.get("link") != link]
             continue
 
+        # image candidates
         img_candidates = extract_best_images(link, max_images=5)
         if not img_candidates:
             print("No se encontró imagen. Se omite.")
@@ -1622,6 +1405,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             processed = [x for x in processed if x.get("link") != link]
             continue
 
+        # Threads publish
         threads_res = None
         try:
             threads_res = threads_publish_text_image(
@@ -1636,6 +1420,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             print("Threads falló (no rompe todo):", str(e))
             threads_res = {"ok": False, "error": str(e)}
 
+        # Reel generation
         reel_url = None
         reel_bytes = None
         if ENABLE_REELS:
@@ -1646,8 +1431,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
                 chosen_music = pick_music_path()
                 chosen_logo = pick_logo_path(asset_logo_default)
-                video_hook = build_video_hook(item.get("title", ""))
-                video_cta = pick_gamer_cta(cta_text)
 
                 with tempfile.TemporaryDirectory() as td:
                     local_img = os.path.join(td, f"news{img_ext}")
@@ -1674,33 +1457,33 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                                 f.write(mp4_bytes)
 
                             reel_bytes = generate_reel_from_video_bg(
-                                headline=video_hook,
+                                headline=item.get("title", "")[:220],
                                 bg_video_path=bg_vid,
                                 logo_path=chosen_logo,
                                 seconds=REEL_SECONDS,
                                 music_path=chosen_music,
-                                cta_text=video_cta,
+                                cta_text=cta_text,
                             )
                         except Exception as e:
                             print("Runway falló (fallback a reel normal):", str(e))
                             reel_bytes = generate_reel_from_image(
-                                headline=video_hook,
+                                headline=item.get("title", "")[:220],
                                 news_image_path=local_img,
                                 logo_path=chosen_logo,
                                 bg_path=asset_bg,
                                 seconds=REEL_SECONDS,
                                 music_path=chosen_music,
-                                cta_text=video_cta,
+                                cta_text=cta_text,
                             )
                     else:
                         reel_bytes = generate_reel_from_image(
-                            headline=video_hook,
+                            headline=item.get("title", "")[:220],
                             news_image_path=local_img,
                             logo_path=chosen_logo,
                             bg_path=asset_bg,
                             seconds=REEL_SECONDS,
                             music_path=chosen_music,
-                            cta_text=video_cta,
+                            cta_text=cta_text,
                         )
 
                 reel_url = upload_video_mp4_to_r2_public(reel_bytes, prefix=reels_prefix)
@@ -1708,6 +1491,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as e:
                 print("Reel generation falló (no rompe):", str(e))
 
+        # IG publish
         ig_res = None
         if reel_url:
             if ENABLE_IG_PUBLISH and (not acct_dry_run):
@@ -1722,15 +1506,18 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 print("[DRY_RUN] IG disabled or dry_run, no publico.")
                 ig_res = {"video_url": reel_url, "published": False}
 
+        # FB publish
         fb_res = None
         if reel_url and (not acct_dry_run):
             fb_res = fb_publish_reel(reel_url, build_instagram_caption(item, link))
 
+        # YouTube publish (needs local file)
         yt_res = None
         if reel_url and (not acct_dry_run) and ENABLE_YT_PUBLISH:
             try:
                 with tempfile.TemporaryDirectory() as td:
                     p = os.path.join(td, "reel.mp4")
+                    # descargar desde R2
                     rr = _get_with_retries(reel_url, timeout=90, label="R2 DOWNLOAD REEL", retries=2)
                     with open(p, "wb") as f:
                         f.write(rr.content)
@@ -1742,10 +1529,12 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 print("YT publish falló (no rompe):", str(e))
                 yt_res = {"ok": False, "error": str(e)}
 
+        # TikTok publish
         tt_res = None
         if reel_url and (not acct_dry_run):
             tt_res = tiktok_publish_video_from_url(reel_url, build_instagram_caption(item, link))
 
+        # state
         if threads_res and threads_res.get("ok") and not threads_res.get("dry_run"):
             mark_posted(state, link)
             save_threads_state(state_key, state)
@@ -1815,3 +1604,4 @@ if __name__ == "__main__":
 
     print("\n===== SUMMARY =====")
     print(json.dumps({"runs": all_results}, ensure_ascii=False, indent=2))
+    

@@ -167,7 +167,7 @@ FONT_BOLD = env_nonempty("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSa
 
 # Publish toggles
 DRY_RUN = env_bool("DRY_RUN", False)
-ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", False)
+ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", True)
 ENABLE_THREADS_PUBLISH = env_bool("ENABLE_THREADS_PUBLISH", True)
 
 # Instagram publish (Graph API)
@@ -177,7 +177,7 @@ GRAPH_VERSION = env_nonempty("GRAPH_VERSION", "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
 
 # Facebook Page Reels (optional)
-ENABLE_FB_PUBLISH = env_bool("ENABLE_FB_PUBLISH", False)
+ENABLE_FB_PUBLISH = env_bool("ENABLE_FB_PUBLISH", True)
 FB_PAGE_ID = env_nonempty("FB_PAGE_ID")
 FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
 
@@ -193,7 +193,7 @@ TIKTOK_ACCESS_TOKEN = env_nonempty("TIKTOK_ACCESS_TOKEN")
 TIKTOK_OPEN_ID = env_nonempty("TIKTOK_OPEN_ID")
 
 # Runway (optional)
-RUNWAY_ENABLED = env_bool("RUNWAY_ENABLED", False)
+RUNWAY_ENABLED = env_bool("RUNWAY_ENABLED", True)
 RUNWAY_API_KEY = env_nonempty("RUNWAY_API_KEY")
 RUNWAY_VERSION = env_nonempty("RUNWAY_VERSION", "2024-11-06")
 RUNWAY_BASE = env_nonempty("RUNWAY_BASE", "https://api.dev.runwayml.com").rstrip("/")

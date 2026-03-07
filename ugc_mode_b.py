@@ -1,11 +1,12 @@
 import os
+import re
 import time
 import json
 import random
 import hashlib
 import tempfile
 import subprocess
-from typing import Optional, List, Tuple
+from typing import Optional, List, Dict, Any
 
 import requests
 import boto3
@@ -71,12 +72,12 @@ REEL_SECONDS = env_int("REEL_SECONDS", 12)
 
 HUD_DIR = env_nonempty("HUD_DIR", "assets") or "assets"
 HUD_PREFIX = env_nonempty("HUD_PREFIX", "hud_") or "hud_"
-HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.35)
-HUD_OPACITY = env_float("HUD_OPACITY", 0.22)
+HUD_PROBABILITY = env_float("HUD_PROBABILITY", 0.25)
+HUD_OPACITY = env_float("HUD_OPACITY", 0.18)
 
 MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
-MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.35)
-MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.35)
+MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.20)
+MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.30)
 
 GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
 GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
@@ -94,13 +95,14 @@ MAX_ITEMS_PER_RUN = env_int("UGC_MAX_ITEMS", 6)
 
 SAVE_DEBUG_REEL = env_bool("SAVE_DEBUG_REEL", True)
 DEBUG_REEL_NAME = env_nonempty("DEBUG_REEL_NAME", "debug_last_reel.mp4") or "debug_last_reel.mp4"
+DEBUG_INPUT_NAME = env_nonempty("DEBUG_INPUT_NAME", "debug_input.mp4") or "debug_input.mp4"
 
 MAX_START_OFFSET_SECONDS = env_float("MAX_START_OFFSET_SECONDS", 8.0)
 
-# Análisis para elegir mejor tramo del video
-MOTION_SCAN_STEP = env_float("MOTION_SCAN_STEP", 2.0)      # cada cuántos segundos evaluar
-MOTION_SCAN_WINDOW = env_float("MOTION_SCAN_WINDOW", 1.5)  # cuántos segundos mirar por muestra
-MOTION_MIN_OFFSET = env_float("MOTION_MIN_OFFSET", 0.75)   # evita empezar en 0 exacto
+USER_AGENT = env_nonempty(
+    "HTTP_USER_AGENT",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36"
+) or "Mozilla/5.0"
 
 
 # -------------------------
@@ -147,8 +149,14 @@ def r2_list_keys(prefix: str) -> List[str]:
 
 
 def r2_download_to_file(key: str, dst_path: str):
+    r2_client().download_file(BUCKET_NAME, key, dst_path)
+
+
+def r2_download_json(key: str) -> Dict[str, Any]:
     s3 = r2_client()
-    s3.download_file(BUCKET_NAME, key, dst_path)
+    obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
+    raw = obj["Body"].read().decode("utf-8", errors="replace")
+    return json.loads(raw)
 
 
 def r2_upload_file_public(local_path: str, key: str):
@@ -182,7 +190,6 @@ def pick_hud_overlay():
 
         if not name.startswith(HUD_PREFIX.lower()):
             continue
-
         if not name.endswith(".png"):
             continue
 
@@ -245,8 +252,13 @@ def pick_music():
 
 
 # -------------------------
-# FFmpeg / media helpers
+# General helpers
 # -------------------------
+
+def copy_file(src: str, dst: str):
+    with open(src, "rb") as fsrc, open(dst, "wb") as fdst:
+        fdst.write(fsrc.read())
+
 
 def run_cmd(cmd):
     p = subprocess.run(cmd, capture_output=True, text=True)
@@ -284,123 +296,141 @@ def get_video_duration_seconds(path: str) -> float:
         return 0.0
 
 
-def get_motion_score_for_window(path: str, start_sec: float, window_sec: float) -> float:
-    """
-    Usa blackframe como señal barata para detectar ventanas malas / planas.
-    Mientras menos blackframes y más cambio visual, mejor.
-    Además usa framemd5-ish simplificado por scene para tener algo de movimiento.
-    """
-    cmd = [
-        "ffmpeg",
-        "-v", "info",
-        "-ss", str(start_sec),
-        "-t", str(window_sec),
-        "-i", path,
-        "-vf", "blackframe=amount=98:threshold=32,metadata=print:file=-",
-        "-an",
-        "-f", "null",
-        "-",
-    ]
-    p = subprocess.run(cmd, capture_output=True, text=True)
-    text = (p.stderr or "") + "\n" + (p.stdout or "")
-
-    black_hits = text.lower().count("blackframe")
-
-    # Penaliza ventanas negras/congeladas/intro quieta
-    score = -5.0 * black_hits
-
-    # Pequeño componente aleatorio para romper empates
-    score += random.uniform(0.0, 0.25)
-
-    return score
-
-
-def candidate_offsets(duration: float) -> List[float]:
+def choose_start_offset(input_video: str) -> float:
+    duration = get_video_duration_seconds(input_video)
     usable = duration - float(REEL_SECONDS)
+
     if usable <= 0:
-        return [0.0]
+        return 0.0
 
     max_offset = min(float(MAX_START_OFFSET_SECONDS), usable)
 
-    if max_offset <= MOTION_MIN_OFFSET:
-        return [0.0]
-
-    offsets = []
-    cur = MOTION_MIN_OFFSET
-    while cur <= max_offset:
-        offsets.append(round(cur, 3))
-        cur += max(0.5, MOTION_SCAN_STEP)
-
-    if not offsets:
-        offsets = [0.0]
-
-    return offsets
-
-
-def choose_start_offset(input_video: str) -> float:
-    duration = get_video_duration_seconds(input_video)
-
-    if duration <= 0:
+    if max_offset <= 1.0:
         return 0.0
 
-    usable = duration - float(REEL_SECONDS)
-    if usable <= 0:
-        return 0.0
+    return round(random.uniform(1.5, max_offset), 3)
 
-    offsets = candidate_offsets(duration)
 
-    best_offset = 0.0
-    best_score = float("-inf")
+# -------------------------
+# Resolve input video
+# -------------------------
 
-    for off in offsets:
-        try:
-            score = get_motion_score_for_window(
-                input_video,
-                start_sec=off,
-                window_sec=min(MOTION_SCAN_WINDOW, REEL_SECONDS),
+def requests_session() -> requests.Session:
+    s = requests.Session()
+    s.headers.update({"User-Agent": USER_AGENT})
+    return s
+
+
+def download_http_file(url: str, dst_path: str, timeout: float = HTTP_TIMEOUT):
+    s = requests_session()
+    with s.get(url, stream=True, timeout=timeout, allow_redirects=True) as r:
+        if r.status_code >= 400:
+            raise RuntimeError(f"Download failed {r.status_code}: {url}")
+
+        with open(dst_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024 * 256):
+                if chunk:
+                    f.write(chunk)
+
+
+def extract_direct_video_url_from_twitch_page(page_url: str) -> Optional[str]:
+    s = requests_session()
+    r = s.get(page_url, timeout=HTTP_TIMEOUT, allow_redirects=True)
+
+    if r.status_code >= 400:
+        raise RuntimeError(f"Twitch page fetch failed: {r.status_code} {page_url}")
+
+    html = r.text or ""
+
+    patterns = [
+        r'https://[^"\']+clips-media-assets[^"\']+\.mp4[^"\']*',
+        r'https://[^"\']+cloudfront\.net/[^"\']+\.mp4[^"\']*',
+        r'https://[^"\']+\.mp4[^"\']*',
+    ]
+
+    for pat in patterns:
+        m = re.search(pat, html)
+        if m:
+            return m.group(0).replace("\\u002F", "/").replace("\\/", "/")
+
+    og_video = re.search(r'<meta[^>]+property=["\']og:video["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
+    if og_video:
+        candidate = og_video.group(1).replace("\\u002F", "/").replace("\\/", "/")
+        if ".mp4" in candidate:
+            return candidate
+
+    twitter_player_stream = re.search(r'"videoQualities"\s*:\s*\[(.*?)\]', html, re.S)
+    if twitter_player_stream:
+        block = twitter_player_stream.group(1)
+        m2 = re.search(r'"sourceURL"\s*:\s*"([^"]+)"', block)
+        if m2:
+            candidate = m2.group(1).replace("\\u002F", "/").replace("\\/", "/")
+            if ".mp4" in candidate:
+                return candidate
+
+    return None
+
+
+def resolve_json_to_video_url(meta: Dict[str, Any]) -> Optional[str]:
+    for key in ("video_url", "mp4_url", "download_url", "direct_url"):
+        v = meta.get(key)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+
+    page_url = meta.get("url")
+    if isinstance(page_url, str) and page_url.strip():
+        return extract_direct_video_url_from_twitch_page(page_url.strip())
+
+    return None
+
+
+def prepare_input_video_from_key(src_key: str, dst_video_path: str) -> Dict[str, Any]:
+    """
+    Devuelve dict con info útil:
+    {
+      "src_type": "mp4" | "json",
+      "meta": {...} | None,
+      "resolved_video_url": "...optional..."
+    }
+    """
+    lower = src_key.lower()
+
+    if lower.endswith(".mp4"):
+        r2_download_to_file(src_key, dst_video_path)
+        return {
+            "src_type": "mp4",
+            "meta": None,
+            "resolved_video_url": None,
+        }
+
+    if lower.endswith(".json"):
+        meta = r2_download_json(src_key)
+        video_url = resolve_json_to_video_url(meta)
+
+        if not video_url:
+            raise RuntimeError(
+                f"No pude resolver video_url desde JSON: {src_key}. "
+                "Idealmente el JSON debe traer video_url o mp4_url."
             )
-            print(f"MOTION CANDIDATE offset={off} score={score}")
-            if score > best_score:
-                best_score = score
-                best_offset = off
-        except Exception as e:
-            print("MOTION SCAN ERROR:", str(e))
 
-    if best_offset <= 0.0:
-        fallback_max = min(float(MAX_START_OFFSET_SECONDS), usable)
-        if fallback_max > MOTION_MIN_OFFSET:
-            return round(random.uniform(MOTION_MIN_OFFSET, fallback_max), 3)
+        download_http_file(video_url, dst_video_path)
 
-    return round(best_offset, 3)
+        return {
+            "src_type": "json",
+            "meta": meta,
+            "resolved_video_url": video_url,
+        }
 
+    raise RuntimeError(f"Formato no soportado en inbox: {src_key}")
+
+
+# -------------------------
+# FFmpeg builder
+# -------------------------
 
 def build_reel(input_video, output_video, hud_png, music_mp3):
     start_offset = choose_start_offset(input_video)
     print("VIDEO START OFFSET:", start_offset)
-
-    vf_parts = []
-
-    vf_parts.append(
-        f"[0:v]"
-        f"fps=30,"
-        f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
-        f"crop={REEL_W}:{REEL_H},"
-        f"setsar=1,"
-        f"format=rgba[v0];"
-    )
-
-    if hud_png:
-        vf_parts.append(
-            f"[1:v]"
-            f"scale={REEL_W}:{REEL_H},"
-            f"format=rgba,"
-            f"colorchannelmixer=aa={max(0.0, min(1.0, HUD_OPACITY))}[hud];"
-        )
-        vf_parts.append("[v0][hud]overlay=0:0:format=auto,format=yuv420p[vout]")
-        video_map = "[vout]"
-    else:
-        vf_parts.append("[v0]format=yuv420p[vout]")
-        video_map = "[vout]"
 
     cmd = [
         "ffmpeg",
@@ -412,8 +442,29 @@ def build_reel(input_video, output_video, hud_png, music_mp3):
         "-i", input_video,
     ]
 
+    vf_parts = []
+    vf_parts.append(
+        f"[0:v]"
+        f"fps=30,"
+        f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+        f"crop={REEL_W}:{REEL_H},"
+        f"setsar=1,"
+        f"format=rgba[v0];"
+    )
+
     if hud_png:
         cmd += ["-i", hud_png]
+        vf_parts.append(
+            f"[1:v]"
+            f"scale={REEL_W}:{REEL_H},"
+            f"format=rgba,"
+            f"colorchannelmixer=aa={max(0.0, min(1.0, HUD_OPACITY))}[hud];"
+        )
+        vf_parts.append("[v0][hud]overlay=0:0:format=auto,format=yuv420p[vout]")
+        video_map = "[vout]"
+    else:
+        vf_parts.append("[v0]format=yuv420p[vout]")
+        video_map = "[vout]"
 
     if music_mp3:
         cmd += ["-i", music_mp3]
@@ -586,9 +637,18 @@ def fb_publish_reel(public_video_url, local_video_path, caption):
 # caption
 # -------------------------
 
-def build_caption_for_clip(src_key):
-    base = os.path.basename(src_key)
+def build_caption_for_clip(src_key, meta: Optional[Dict[str, Any]] = None):
+    if meta:
+        title = str(meta.get("title") or "").strip()
+        if title:
+            return (
+                "🎮 Momento gamer del día 😳🔥\n"
+                f"{title}\n\n"
+                "¿Te ha pasado algo así jugando?\n\n"
+                "#gaming #esports #clips"
+            )
 
+    base = os.path.basename(src_key)
     return (
         "🎮 Momento gamer del día 😳🔥\n"
         "¿Te ha pasado algo así jugando?\n\n"
@@ -608,14 +668,19 @@ def run_mode_b():
     print(" - R2_PUBLIC_BASE_URL set:", bool(R2_PUBLIC_BASE_URL))
     print(" - UGC_INBOX_PREFIX:", UGC_INBOX_PREFIX)
     print(" - UGC_OUTPUT_PREFIX:", UGC_OUTPUT_PREFIX)
-    print(" - HUD_DIR:", HUD_DIR)
     print(" - ENABLE_IG_PUBLISH:", ENABLE_IG_PUBLISH)
     print(" - ENABLE_FB_PUBLISH:", ENABLE_FB_PUBLISH)
 
     inbox_prefix = f"{UGC_INBOX_PREFIX}/"
     keys = r2_list_keys(inbox_prefix)
-    keys = [k for k in keys if k.lower().endswith(".mp4")]
+
+    # ahora acepta mp4 y json
+    keys = [k for k in keys if k.lower().endswith(".mp4") or k.lower().endswith(".json")]
     keys.sort()
+
+    print("INBOX ITEMS FOUND:", len(keys))
+    for preview_key in keys[:10]:
+        print(" -", preview_key)
 
     if not keys:
         print("Inbox vacío")
@@ -633,7 +698,18 @@ def run_mode_b():
             in_path = os.path.join(td, "in.mp4")
             out_path = os.path.join(td, "reel.mp4")
 
-            r2_download_to_file(key, in_path)
+            info = prepare_input_video_from_key(key, in_path)
+            meta = info.get("meta")
+            resolved_video_url = info.get("resolved_video_url")
+
+            print("SRC TYPE:", info.get("src_type"))
+            if resolved_video_url:
+                print("RESOLVED VIDEO URL:", resolved_video_url)
+
+            if SAVE_DEBUG_REEL:
+                debug_input_path = os.path.join(os.getcwd(), DEBUG_INPUT_NAME)
+                copy_file(in_path, debug_input_path)
+                print("Saved debug input:", debug_input_path)
 
             hud = pick_hud_overlay()
             music = pick_music()
@@ -645,8 +721,7 @@ def run_mode_b():
 
             if SAVE_DEBUG_REEL:
                 debug_path = os.path.join(os.getcwd(), DEBUG_REEL_NAME)
-                with open(out_path, "rb") as src, open(debug_path, "wb") as dst:
-                    dst.write(src.read())
+                copy_file(out_path, debug_path)
                 print("Saved debug reel:", debug_path)
 
             with open(out_path, "rb") as f:
@@ -656,8 +731,9 @@ def run_mode_b():
             out_url = r2_upload_file_public(out_path, out_key)
 
             print("Uploaded reel:", out_url)
+            print("Uploaded reel size bytes:", os.path.getsize(out_path))
 
-            caption = build_caption_for_clip(key)
+            caption = build_caption_for_clip(key, meta)
 
             if DRY_RUN:
                 print("[DRY_RUN] No publica ni mueve archivo.")

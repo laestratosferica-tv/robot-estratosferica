@@ -1,12 +1,11 @@
 import os
-import re
 import time
 import json
 import random
 import hashlib
 import tempfile
 import subprocess
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 
 import requests
 import boto3
@@ -99,11 +98,6 @@ DEBUG_INPUT_NAME = env_nonempty("DEBUG_INPUT_NAME", "debug_input.mp4") or "debug
 
 MAX_START_OFFSET_SECONDS = env_float("MAX_START_OFFSET_SECONDS", 8.0)
 
-USER_AGENT = env_nonempty(
-    "HTTP_USER_AGENT",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36"
-) or "Mozilla/5.0"
-
 
 # -------------------------
 # R2 helpers
@@ -150,13 +144,6 @@ def r2_list_keys(prefix: str) -> List[str]:
 
 def r2_download_to_file(key: str, dst_path: str):
     r2_client().download_file(BUCKET_NAME, key, dst_path)
-
-
-def r2_download_json(key: str) -> Dict[str, Any]:
-    s3 = r2_client()
-    obj = s3.get_object(Bucket=BUCKET_NAME, Key=key)
-    raw = obj["Body"].read().decode("utf-8", errors="replace")
-    return json.loads(raw)
 
 
 def r2_upload_file_public(local_path: str, key: str):
@@ -309,119 +296,6 @@ def choose_start_offset(input_video: str) -> float:
         return 0.0
 
     return round(random.uniform(1.5, max_offset), 3)
-
-
-# -------------------------
-# Resolve input video
-# -------------------------
-
-def requests_session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({"User-Agent": USER_AGENT})
-    return s
-
-
-def download_http_file(url: str, dst_path: str, timeout: float = HTTP_TIMEOUT):
-    s = requests_session()
-    with s.get(url, stream=True, timeout=timeout, allow_redirects=True) as r:
-        if r.status_code >= 400:
-            raise RuntimeError(f"Download failed {r.status_code}: {url}")
-
-        with open(dst_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024 * 256):
-                if chunk:
-                    f.write(chunk)
-
-
-def extract_direct_video_url_from_twitch_page(page_url: str) -> Optional[str]:
-    s = requests_session()
-    r = s.get(page_url, timeout=HTTP_TIMEOUT, allow_redirects=True)
-
-    if r.status_code >= 400:
-        raise RuntimeError(f"Twitch page fetch failed: {r.status_code} {page_url}")
-
-    html = r.text or ""
-
-    patterns = [
-        r'https://[^"\']+clips-media-assets[^"\']+\.mp4[^"\']*',
-        r'https://[^"\']+cloudfront\.net/[^"\']+\.mp4[^"\']*',
-        r'https://[^"\']+\.mp4[^"\']*',
-    ]
-
-    for pat in patterns:
-        m = re.search(pat, html)
-        if m:
-            return m.group(0).replace("\\u002F", "/").replace("\\/", "/")
-
-    og_video = re.search(r'<meta[^>]+property=["\']og:video["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
-    if og_video:
-        candidate = og_video.group(1).replace("\\u002F", "/").replace("\\/", "/")
-        if ".mp4" in candidate:
-            return candidate
-
-    twitter_player_stream = re.search(r'"videoQualities"\s*:\s*\[(.*?)\]', html, re.S)
-    if twitter_player_stream:
-        block = twitter_player_stream.group(1)
-        m2 = re.search(r'"sourceURL"\s*:\s*"([^"]+)"', block)
-        if m2:
-            candidate = m2.group(1).replace("\\u002F", "/").replace("\\/", "/")
-            if ".mp4" in candidate:
-                return candidate
-
-    return None
-
-
-def resolve_json_to_video_url(meta: Dict[str, Any]) -> Optional[str]:
-    for key in ("video_url", "mp4_url", "download_url", "direct_url"):
-        v = meta.get(key)
-        if isinstance(v, str) and v.strip():
-            return v.strip()
-
-    page_url = meta.get("url")
-    if isinstance(page_url, str) and page_url.strip():
-        return extract_direct_video_url_from_twitch_page(page_url.strip())
-
-    return None
-
-
-def prepare_input_video_from_key(src_key: str, dst_video_path: str) -> Dict[str, Any]:
-    """
-    Devuelve dict con info útil:
-    {
-      "src_type": "mp4" | "json",
-      "meta": {...} | None,
-      "resolved_video_url": "...optional..."
-    }
-    """
-    lower = src_key.lower()
-
-    if lower.endswith(".mp4"):
-        r2_download_to_file(src_key, dst_video_path)
-        return {
-            "src_type": "mp4",
-            "meta": None,
-            "resolved_video_url": None,
-        }
-
-    if lower.endswith(".json"):
-        meta = r2_download_json(src_key)
-        video_url = resolve_json_to_video_url(meta)
-
-        if not video_url:
-            raise RuntimeError(
-                f"No pude resolver video_url desde JSON: {src_key}. "
-                "Idealmente el JSON debe traer video_url o mp4_url."
-            )
-
-        download_http_file(video_url, dst_video_path)
-
-        return {
-            "src_type": "json",
-            "meta": meta,
-            "resolved_video_url": video_url,
-        }
-
-    raise RuntimeError(f"Formato no soportado en inbox: {src_key}")
 
 
 # -------------------------
@@ -637,17 +511,7 @@ def fb_publish_reel(public_video_url, local_video_path, caption):
 # caption
 # -------------------------
 
-def build_caption_for_clip(src_key, meta: Optional[Dict[str, Any]] = None):
-    if meta:
-        title = str(meta.get("title") or "").strip()
-        if title:
-            return (
-                "🎮 Momento gamer del día 😳🔥\n"
-                f"{title}\n\n"
-                "¿Te ha pasado algo así jugando?\n\n"
-                "#gaming #esports #clips"
-            )
-
+def build_caption_for_clip(src_key):
     base = os.path.basename(src_key)
     return (
         "🎮 Momento gamer del día 😳🔥\n"
@@ -672,18 +536,23 @@ def run_mode_b():
     print(" - ENABLE_FB_PUBLISH:", ENABLE_FB_PUBLISH)
 
     inbox_prefix = f"{UGC_INBOX_PREFIX}/"
-    keys = r2_list_keys(inbox_prefix)
+    all_keys = r2_list_keys(inbox_prefix)
 
-    # ahora acepta mp4 y json
-    keys = [k for k in keys if k.lower().endswith(".mp4") or k.lower().endswith(".json")]
+    mp4_keys = [k for k in all_keys if k.lower().endswith(".mp4")]
+    json_keys = [k for k in all_keys if k.lower().endswith(".json")]
+
+    print("INBOX TOTAL:", len(all_keys))
+    print("INBOX MP4:", len(mp4_keys))
+    print("INBOX JSON:", len(json_keys))
+
+    keys = mp4_keys
     keys.sort()
 
-    print("INBOX ITEMS FOUND:", len(keys))
     for preview_key in keys[:10]:
         print(" -", preview_key)
 
     if not keys:
-        print("Inbox vacío")
+        print("Inbox vacío o solo contiene JSON. Nada que procesar ✅")
         return
 
     processed = 0
@@ -698,13 +567,7 @@ def run_mode_b():
             in_path = os.path.join(td, "in.mp4")
             out_path = os.path.join(td, "reel.mp4")
 
-            info = prepare_input_video_from_key(key, in_path)
-            meta = info.get("meta")
-            resolved_video_url = info.get("resolved_video_url")
-
-            print("SRC TYPE:", info.get("src_type"))
-            if resolved_video_url:
-                print("RESOLVED VIDEO URL:", resolved_video_url)
+            r2_download_to_file(key, in_path)
 
             if SAVE_DEBUG_REEL:
                 debug_input_path = os.path.join(os.getcwd(), DEBUG_INPUT_NAME)
@@ -733,7 +596,7 @@ def run_mode_b():
             print("Uploaded reel:", out_url)
             print("Uploaded reel size bytes:", os.path.getsize(out_path))
 
-            caption = build_caption_for_clip(key, meta)
+            caption = build_caption_for_clip(key)
 
             if DRY_RUN:
                 print("[DRY_RUN] No publica ni mueve archivo.")

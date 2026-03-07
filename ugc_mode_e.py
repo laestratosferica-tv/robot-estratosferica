@@ -62,10 +62,10 @@ TWITCH_GAMES = env_nonempty(
     "Just Chatting,League of Legends,Counter-Strike,Grand Theft Auto V,Minecraft,VALORANT,Apex Legends"
 )
 
-TWITCH_CLIPS_PER_GAME = env_int("TWITCH_CLIPS_PER_GAME", 10)
+TWITCH_CLIPS_PER_GAME = env_int("TWITCH_CLIPS_PER_GAME", 20)
 TWITCH_PICK_TOTAL = env_int("TWITCH_PICK_TOTAL", 5)
-TWITCH_MIN_VIEWS = env_int("TWITCH_MIN_VIEWS", 800)
-TWITCH_PERIOD_DAYS = env_int("TWITCH_PERIOD_DAYS", 7)
+TWITCH_MIN_VIEWS = env_int("TWITCH_MIN_VIEWS", 100)
+TWITCH_PERIOD_DAYS = env_int("TWITCH_PERIOD_DAYS", 14)
 
 HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
 USER_AGENT = env_nonempty(
@@ -335,9 +335,15 @@ def run_mode_e() -> None:
     print("===== MODE E (TWITCH VIRAL) -> R2 INBOX =====")
     print("TWITCH_MIN_VIDEO_BYTES:", TWITCH_MIN_VIDEO_BYTES)
     print("STRICT_VIDEO_CONTENT_TYPE:", STRICT_VIDEO_CONTENT_TYPE)
+    print("TWITCH_CLIPS_PER_GAME:", TWITCH_CLIPS_PER_GAME)
+    print("TWITCH_PICK_TOTAL:", TWITCH_PICK_TOTAL)
+    print("TWITCH_MIN_VIEWS:", TWITCH_MIN_VIEWS)
+    print("TWITCH_PERIOD_DAYS:", TWITCH_PERIOD_DAYS)
+    print("STATE_KEY:", STATE_KEY)
 
     state = load_state()
     processed_ids = set(state.get("processed_clip_ids", []))
+    print("Processed clip ids in state:", len(processed_ids))
 
     token = twitch_app_token()
 
@@ -357,28 +363,41 @@ def run_mode_e() -> None:
             continue
 
         clips = twitch_get_clips(token, gid, first=TWITCH_CLIPS_PER_GAME, started_at_iso=started_at)
+        print(f"Found {len(clips)} clips for game {g}")
+
         for c in clips:
             clip_id = c.get("id")
-            if not clip_id or clip_id in processed_ids:
-                continue
-
+            title = c.get("title") or ""
             views = int(c.get("view_count") or 0)
             thumb = c.get("thumbnail_url") or ""
             mp4 = clip_mp4_from_thumbnail(thumb)
 
-            if not mp4:
+            if not clip_id:
+                print("SKIP no clip_id:", title[:100])
                 continue
+
+            if clip_id in processed_ids:
+                print("SKIP already processed:", clip_id, "|", title[:100])
+                continue
+
+            if not mp4:
+                print("SKIP no mp4 from thumbnail:", title[:100], "| thumb:", thumb[:160])
+                continue
+
             if views < TWITCH_MIN_VIEWS:
+                print("SKIP low views:", views, "|", title[:100])
                 continue
 
             score = twitch_score_clip(c, g)
+
+            print("CANDIDATE:", clip_id, "| views:", views, "| score:", round(score, 2), "|", title[:100])
 
             all_candidates.append((
                 score,
                 {
                     "game": g,
                     "id": clip_id,
-                    "title": c.get("title") or "",
+                    "title": title,
                     "creator": c.get("creator_name") or "",
                     "views": views,
                     "mp4": mp4,
@@ -396,7 +415,6 @@ def run_mode_e() -> None:
 
     all_candidates.sort(key=lambda x: x[0], reverse=True)
 
-    # mezcla un poco para no ser demasiado robótico, pero sin perder calidad
     top_pool = all_candidates[:max(TWITCH_PICK_TOTAL * 3, TWITCH_PICK_TOTAL)]
     random.shuffle(top_pool)
     top_pool.sort(key=lambda x: x[0], reverse=True)
@@ -434,7 +452,7 @@ def run_mode_e() -> None:
         key = f"{R2_INBOX_PREFIX}/{iso_now()}__twitch__{clip_id}__{safe_slug(title)}__{h}.mp4"
 
         print("Uploading to R2 inbox:", key)
-        upload_bytes_to_r2(key, data, "video/mp4")
+        s3_put_bytes(key, data, "video/mp4")
 
         meta = {
             "source": "twitch",

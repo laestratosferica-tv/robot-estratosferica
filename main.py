@@ -1,6 +1,3 @@
-main.py antes de cambio estético editorial a 
-
-
 import os
 import re
 import json

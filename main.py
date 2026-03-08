@@ -1313,10 +1313,18 @@ def generate_reel_from_image(
             "30",
             "-c:v",
             "libx264",
+            "-profile:v",
+            "high",
+            "-level",
+            "4.1",
             "-preset",
             "medium",
             "-crf",
             "20",
+            "-g",
+            "60",
+            "-bf",
+            "0",
             "-pix_fmt",
             "yuv420p",
             "-movflags",
@@ -1389,6 +1397,8 @@ def generate_reel_from_video_bg(
             "-hide_banner",
             "-loglevel",
             "error",
+            "-ss",
+            "0.5",
             "-stream_loop",
             "-1",
             "-i",
@@ -1410,6 +1420,8 @@ def generate_reel_from_video_bg(
             f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
             f"crop={REEL_W}:{REEL_H},"
             f"fps=30,"
+            f"trim=duration={int(seconds)},"
+            f"setpts=PTS-STARTPTS,"
             f"eq=contrast=1.08:brightness=-0.08:saturation=1.18,"
             f"format=rgba[bg];"
         )
@@ -1512,10 +1524,18 @@ def generate_reel_from_video_bg(
             "30",
             "-c:v",
             "libx264",
+            "-profile:v",
+            "high",
+            "-level",
+            "4.1",
             "-preset",
             "medium",
             "-crf",
             "20",
+            "-g",
+            "60",
+            "-bf",
+            "0",
             "-pix_fmt",
             "yuv420p",
             "-movflags",
@@ -1540,6 +1560,9 @@ def generate_reel_from_video_bg(
             return f.read()
 
 
+# =========================
+# Instagram Graph API publish
+# =========================
 # =========================
 # Instagram Graph API publish
 # =========================

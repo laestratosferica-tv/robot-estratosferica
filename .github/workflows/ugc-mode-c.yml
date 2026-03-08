@@ -3,7 +3,7 @@ name: Robot Clip Generator (Modo C)
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "30 */4 * * *"   # cada 4 horas
+    - cron: "30 */4 * * *"
 
 concurrency:
   group: robot-clip-generator
@@ -48,7 +48,7 @@ jobs:
 
           # --- Mode C paths/state ---
           UGC_MODE_C_STATE_KEY: ugc/state/mode_c_state.json
-          UGC_LIBRARY_PREFIX: ugc/library/raw/
+          UGC_LIBRARY_PREFIX: ugc/inbox/
           UGC_CLIPS_PREFIX: ugc/library/clips/
           UGC_META_PREFIX: ugc/meta/
 
@@ -73,6 +73,10 @@ jobs:
           # --- Facebook publish ---
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+
+          # --- OpenAI captions ---
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-4.1-mini
 
           # --- Shared ---
           DRY_RUN: "false"

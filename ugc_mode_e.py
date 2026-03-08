@@ -66,10 +66,10 @@ TWITCH_GAMES = env_nonempty(
     "Just Chatting,League of Legends,Counter-Strike,Grand Theft Auto V,Minecraft,VALORANT,Apex Legends"
 )
 
-TWITCH_CLIPS_PER_GAME = env_int("TWITCH_CLIPS_PER_GAME", 20)
-TWITCH_PICK_TOTAL = env_int("TWITCH_PICK_TOTAL", 5)
-TWITCH_MIN_VIEWS = env_int("TWITCH_MIN_VIEWS", 100)
-TWITCH_PERIOD_DAYS = env_int("TWITCH_PERIOD_DAYS", 14)
+TWITCH_CLIPS_PER_GAME = env_int("TWITCH_CLIPS_PER_GAME", 8)
+TWITCH_PICK_TOTAL = env_int("TWITCH_PICK_TOTAL", 3)
+TWITCH_MIN_VIEWS = env_int("TWITCH_MIN_VIEWS", 800)
+TWITCH_PERIOD_DAYS = env_int("TWITCH_PERIOD_DAYS", 7)
 
 HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
 USER_AGENT = env_nonempty(
@@ -77,17 +77,15 @@ USER_AGENT = env_nonempty(
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36"
 ) or "Mozilla/5.0"
 
-# validación de archivo real
 TWITCH_MIN_VIDEO_BYTES = env_int("TWITCH_MIN_VIDEO_BYTES", 200_000)
 STRICT_VIDEO_CONTENT_TYPE = env_bool("STRICT_VIDEO_CONTENT_TYPE", False)
 
-# R2 meta/state
 STATE_KEY = env_nonempty("TWITCH_MODE_E_STATE_KEY", "ugc/state/mode_e_state.json")
 R2_META_PREFIX = (env_nonempty("UGC_META_PREFIX", "ugc/meta/") or "ugc/meta/").strip()
 if not R2_META_PREFIX.endswith("/"):
     R2_META_PREFIX += "/"
 
-# Fallback viejo: ...-preview-480x272.jpg -> ...mp4
+# Patrones de thumbnail Twitch -> mp4
 CLIP_PREVIEW_RE = re.compile(r"-preview-\d+x\d+\.jpg($|\?)", re.IGNORECASE)
 
 
@@ -101,7 +99,7 @@ R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
 
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
-R2_INBOX_PREFIX = (env_nonempty("R2_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
+R2_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
 
 
 # =========================
@@ -251,44 +249,12 @@ def twitch_get_clips(token: str, game_id: str, first: int, started_at_iso: str) 
     return (r.json() or {}).get("data") or []
 
 
-def clip_mp4_from_thumbnail(thumbnail_url: str) -> Optional[str]:
-    if not thumbnail_url:
-        return None
-    u = thumbnail_url.strip()
-    if not u.startswith("http"):
-        return None
-    if CLIP_PREVIEW_RE.search(u):
-        u2 = CLIP_PREVIEW_RE.sub(".mp4", u)
-        return u2.split("?")[0]
-    if u.lower().endswith(".mp4"):
-        return u
-    return None
-
-
 def twitch_get_clip_download_url(clip_id: str) -> Optional[str]:
     """
-    Usa el endpoint oficial:
-    GET https://api.twitch.tv/helix/clips/downloads
-
-    Requiere:
-    - TWITCH_USER_ACCESS_TOKEN
-    - TWITCH_BROADCASTER_ID
-    - scope channel:manage:clips o editor:manage:clips
-
-    Docs oficiales:
-    - Get Clips Download
-    - query params: editor_id, broadcaster_id, clip_id
-    - devuelve landscape_download_url / portrait_download_url
+    Intenta primero el endpoint oficial.
+    Si Twitch no devuelve data, devolvemos None y dejamos que el fallback haga su trabajo.
     """
-    if not TWITCH_USER_ACCESS_TOKEN:
-        print("OFFICIAL DOWNLOAD skip: falta TWITCH_USER_ACCESS_TOKEN")
-        return None
-
-    if not TWITCH_BROADCASTER_ID:
-        print("OFFICIAL DOWNLOAD skip: falta TWITCH_BROADCASTER_ID")
-        return None
-
-    if not clip_id:
+    if not TWITCH_USER_ACCESS_TOKEN or not TWITCH_BROADCASTER_ID or not clip_id:
         return None
 
     url = "https://api.twitch.tv/helix/clips/downloads"
@@ -298,32 +264,69 @@ def twitch_get_clip_download_url(clip_id: str) -> Optional[str]:
         "clip_id": clip_id,
     }
 
-    r = requests.get(url, headers=twitch_headers(TWITCH_USER_ACCESS_TOKEN), params=params, timeout=HTTP_TIMEOUT)
+    r = requests.get(
+        url,
+        headers=twitch_headers(TWITCH_USER_ACCESS_TOKEN),
+        params=params,
+        timeout=HTTP_TIMEOUT,
+    )
 
-    if r.status_code == 401:
-        print("OFFICIAL DOWNLOAD 401: token inválido o sin scope correcto")
-        return None
-
-    if r.status_code == 403:
-        print("OFFICIAL DOWNLOAD 403: el usuario no tiene permiso como editor/broadcaster")
-        return None
-
-    if r.status_code == 400:
-        print("OFFICIAL DOWNLOAD 400:", r.text[:300])
+    if r.status_code in (400, 401, 403, 404):
         return None
 
     r.raise_for_status()
 
     data = (r.json() or {}).get("data") or []
     if not data:
-        print("OFFICIAL DOWNLOAD: Twitch no devolvió URLs para clip", clip_id)
         return None
 
     item = data[0] or {}
-    landscape = item.get("landscape_download_url")
-    portrait = item.get("portrait_download_url")
+    return item.get("landscape_download_url") or item.get("portrait_download_url")
 
-    return landscape or portrait
+
+# =========================
+# Thumbnail fallback
+# =========================
+
+def clip_mp4_candidates_from_thumbnail(thumbnail_url: str) -> List[str]:
+    """
+    Twitch thumbnails suelen permitir derivar URLs públicas de video.
+    Probamos varias variantes para maximizar compatibilidad.
+    """
+    if not thumbnail_url:
+        return []
+
+    u = thumbnail_url.strip()
+    if not u.startswith("http"):
+        return []
+
+    no_query = u.split("?", 1)[0]
+    candidates: List[str] = []
+
+    # Caso estándar: ...-preview-480x272.jpg -> ... .mp4
+    if CLIP_PREVIEW_RE.search(no_query):
+        base = CLIP_PREVIEW_RE.sub(".mp4", no_query)
+        candidates.append(base)
+
+    # Variante muy común: cortar todo desde "-preview"
+    if "-preview" in no_query:
+        base2 = no_query.split("-preview", 1)[0] + ".mp4"
+        if base2 not in candidates:
+            candidates.append(base2)
+
+    # Si ya termina en mp4
+    if no_query.lower().endswith(".mp4") and no_query not in candidates:
+        candidates.append(no_query)
+
+    # Dedup conservando orden
+    out = []
+    seen = set()
+    for c in candidates:
+        if c and c not in seen:
+            seen.add(c)
+            out.append(c)
+
+    return out
 
 
 # =========================
@@ -342,10 +345,9 @@ def twitch_score_clip(clip: Dict[str, Any], game_name: str) -> float:
         age_hours = 72.0
 
     bonus = 0
-
     hot_words = [
         "clutch", "ace", "insane", "rage", "crazy", "1v", "1vs", "penta", "record",
-        "headshot", "outplay", "faint", "fails", "final", "retake", "noscope"
+        "headshot", "outplay", "fails", "final", "retake", "noscope"
     ]
     for w in hot_words:
         if w in title:
@@ -355,7 +357,6 @@ def twitch_score_clip(clip: Dict[str, Any], game_name: str) -> float:
         bonus += 100
 
     recency = 1500 / (1 + age_hours)
-
     return (views * 0.8) + recency + bonus
 
 
@@ -395,6 +396,29 @@ def validate_downloaded_clip(data: bytes, content_type: str, declared_length: in
     return True, "ok"
 
 
+def resolve_clip_download(clip_id: str, thumbnail_url: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Devuelve (video_url, method)
+    method puede ser:
+    - official_api
+    - thumbnail_fallback
+    - None
+    """
+    # 1) Oficial
+    if TWITCH_USE_OFFICIAL_DOWNLOAD:
+        official = twitch_get_clip_download_url(clip_id)
+        if official:
+            return official, "official_api"
+        print("OFFICIAL DOWNLOAD: Twitch no devolvió URLs para clip", clip_id)
+
+    # 2) Fallbacks derivados del thumbnail
+    thumb_candidates = clip_mp4_candidates_from_thumbnail(thumbnail_url)
+    for c in thumb_candidates:
+        return c, "thumbnail_fallback"
+
+    return None, None
+
+
 # =========================
 # Main
 # =========================
@@ -409,16 +433,6 @@ def run_mode_e() -> None:
     print("TWITCH_MIN_VIEWS:", TWITCH_MIN_VIEWS)
     print("TWITCH_PERIOD_DAYS:", TWITCH_PERIOD_DAYS)
     print("STATE_KEY:", STATE_KEY)
-
-    if TWITCH_USE_OFFICIAL_DOWNLOAD:
-        if not TWITCH_USER_ACCESS_TOKEN:
-            raise RuntimeError(
-                "TWITCH_USE_OFFICIAL_DOWNLOAD=true pero falta TWITCH_USER_ACCESS_TOKEN"
-            )
-        if not TWITCH_BROADCASTER_ID:
-            raise RuntimeError(
-                "TWITCH_USE_OFFICIAL_DOWNLOAD=true pero falta TWITCH_BROADCASTER_ID"
-            )
 
     state = load_state()
     processed_ids = set(state.get("processed_clip_ids", []))
@@ -502,22 +516,12 @@ def run_mode_e() -> None:
         clip_id = c.get("id", "unknown")
         thumb = c.get("thumbnail_url", "")
 
-        video_url = None
-        download_method = None
-
         try:
-            if TWITCH_USE_OFFICIAL_DOWNLOAD:
-                video_url = twitch_get_clip_download_url(clip_id)
-                download_method = "official_api"
-                if not video_url:
-                    print("Clip descartado: no official download url para", clip_id)
-                    continue
-            else:
-                video_url = clip_mp4_from_thumbnail(thumb)
-                download_method = "thumbnail_fallback"
-                if not video_url:
-                    print("Clip descartado: no mp4 derivado de thumbnail para", clip_id)
-                    continue
+            video_url, download_method = resolve_clip_download(clip_id, thumb)
+
+            if not video_url:
+                print("Clip descartado: no official download url ni fallback thumbnail para", clip_id)
+                continue
 
             print("Downloading:", video_url)
             print("Download method:", download_method)

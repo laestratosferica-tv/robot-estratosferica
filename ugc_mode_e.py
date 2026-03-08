@@ -57,6 +57,10 @@ def env_bool(name: str, default: bool = False) -> bool:
 TWITCH_CLIENT_ID = env_nonempty("TWITCH_CLIENT_ID")
 TWITCH_CLIENT_SECRET = env_nonempty("TWITCH_CLIENT_SECRET")
 
+TWITCH_USER_ACCESS_TOKEN = env_nonempty("TWITCH_USER_ACCESS_TOKEN")
+TWITCH_BROADCASTER_ID = env_nonempty("TWITCH_BROADCASTER_ID")
+TWITCH_USE_OFFICIAL_DOWNLOAD = env_bool("TWITCH_USE_OFFICIAL_DOWNLOAD", False)
+
 TWITCH_GAMES = env_nonempty(
     "TWITCH_GAMES",
     "Just Chatting,League of Legends,Counter-Strike,Grand Theft Auto V,Minecraft,VALORANT,Apex Legends"
@@ -83,7 +87,7 @@ R2_META_PREFIX = (env_nonempty("UGC_META_PREFIX", "ugc/meta/") or "ugc/meta/").s
 if not R2_META_PREFIX.endswith("/"):
     R2_META_PREFIX += "/"
 
-# Twitch clip thumbnails: ...-preview-480x272.jpg  -> mp4 real: ... .mp4
+# Fallback viejo: ...-preview-480x272.jpg -> ...mp4
 CLIP_PREVIEW_RE = re.compile(r"-preview-\d+x\d+\.jpg($|\?)", re.IGNORECASE)
 
 
@@ -147,7 +151,10 @@ def content_type_looks_video(content_type: str) -> bool:
 
 def r2_client():
     if not (R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and BUCKET_NAME):
-        raise RuntimeError("Faltan credenciales R2/S3 (R2_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME)")
+        raise RuntimeError(
+            "Faltan credenciales R2/S3 "
+            "(R2_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME)"
+        )
     return boto3.client(
         "s3",
         endpoint_url=R2_ENDPOINT_URL,
@@ -216,7 +223,7 @@ def twitch_app_token() -> str:
 
 def twitch_headers(token: str) -> Dict[str, str]:
     return {
-        "Client-ID": TWITCH_CLIENT_ID or "",
+        "Client-Id": TWITCH_CLIENT_ID or "",
         "Authorization": f"Bearer {token}",
         "User-Agent": USER_AGENT,
     }
@@ -256,6 +263,67 @@ def clip_mp4_from_thumbnail(thumbnail_url: str) -> Optional[str]:
     if u.lower().endswith(".mp4"):
         return u
     return None
+
+
+def twitch_get_clip_download_url(clip_id: str) -> Optional[str]:
+    """
+    Usa el endpoint oficial:
+    GET https://api.twitch.tv/helix/clips/downloads
+
+    Requiere:
+    - TWITCH_USER_ACCESS_TOKEN
+    - TWITCH_BROADCASTER_ID
+    - scope channel:manage:clips o editor:manage:clips
+
+    Docs oficiales:
+    - Get Clips Download
+    - query params: editor_id, broadcaster_id, clip_id
+    - devuelve landscape_download_url / portrait_download_url
+    """
+    if not TWITCH_USER_ACCESS_TOKEN:
+        print("OFFICIAL DOWNLOAD skip: falta TWITCH_USER_ACCESS_TOKEN")
+        return None
+
+    if not TWITCH_BROADCASTER_ID:
+        print("OFFICIAL DOWNLOAD skip: falta TWITCH_BROADCASTER_ID")
+        return None
+
+    if not clip_id:
+        return None
+
+    url = "https://api.twitch.tv/helix/clips/downloads"
+    params = {
+        "editor_id": TWITCH_BROADCASTER_ID,
+        "broadcaster_id": TWITCH_BROADCASTER_ID,
+        "clip_id": clip_id,
+    }
+
+    r = requests.get(url, headers=twitch_headers(TWITCH_USER_ACCESS_TOKEN), params=params, timeout=HTTP_TIMEOUT)
+
+    if r.status_code == 401:
+        print("OFFICIAL DOWNLOAD 401: token inválido o sin scope correcto")
+        return None
+
+    if r.status_code == 403:
+        print("OFFICIAL DOWNLOAD 403: el usuario no tiene permiso como editor/broadcaster")
+        return None
+
+    if r.status_code == 400:
+        print("OFFICIAL DOWNLOAD 400:", r.text[:300])
+        return None
+
+    r.raise_for_status()
+
+    data = (r.json() or {}).get("data") or []
+    if not data:
+        print("OFFICIAL DOWNLOAD: Twitch no devolvió URLs para clip", clip_id)
+        return None
+
+    item = data[0] or {}
+    landscape = item.get("landscape_download_url")
+    portrait = item.get("portrait_download_url")
+
+    return landscape or portrait
 
 
 # =========================
@@ -333,6 +401,7 @@ def validate_downloaded_clip(data: bytes, content_type: str, declared_length: in
 
 def run_mode_e() -> None:
     print("===== MODE E (TWITCH VIRAL) -> R2 INBOX =====")
+    print("TWITCH_USE_OFFICIAL_DOWNLOAD:", TWITCH_USE_OFFICIAL_DOWNLOAD)
     print("TWITCH_MIN_VIDEO_BYTES:", TWITCH_MIN_VIDEO_BYTES)
     print("STRICT_VIDEO_CONTENT_TYPE:", STRICT_VIDEO_CONTENT_TYPE)
     print("TWITCH_CLIPS_PER_GAME:", TWITCH_CLIPS_PER_GAME)
@@ -341,12 +410,21 @@ def run_mode_e() -> None:
     print("TWITCH_PERIOD_DAYS:", TWITCH_PERIOD_DAYS)
     print("STATE_KEY:", STATE_KEY)
 
+    if TWITCH_USE_OFFICIAL_DOWNLOAD:
+        if not TWITCH_USER_ACCESS_TOKEN:
+            raise RuntimeError(
+                "TWITCH_USE_OFFICIAL_DOWNLOAD=true pero falta TWITCH_USER_ACCESS_TOKEN"
+            )
+        if not TWITCH_BROADCASTER_ID:
+            raise RuntimeError(
+                "TWITCH_USE_OFFICIAL_DOWNLOAD=true pero falta TWITCH_BROADCASTER_ID"
+            )
+
     state = load_state()
     processed_ids = set(state.get("processed_clip_ids", []))
     print("Processed clip ids in state:", len(processed_ids))
 
     token = twitch_app_token()
-
     started_at = (now_utc() - timedelta(days=TWITCH_PERIOD_DAYS)).isoformat().replace("+00:00", "Z")
 
     game_names = [x.strip() for x in (TWITCH_GAMES or "").split(",") if x.strip()]
@@ -370,7 +448,6 @@ def run_mode_e() -> None:
             title = c.get("title") or ""
             views = int(c.get("view_count") or 0)
             thumb = c.get("thumbnail_url") or ""
-            mp4 = clip_mp4_from_thumbnail(thumb)
 
             if not clip_id:
                 print("SKIP no clip_id:", title[:100])
@@ -378,10 +455,6 @@ def run_mode_e() -> None:
 
             if clip_id in processed_ids:
                 print("SKIP already processed:", clip_id, "|", title[:100])
-                continue
-
-            if not mp4:
-                print("SKIP no mp4 from thumbnail:", title[:100], "| thumb:", thumb[:160])
                 continue
 
             if views < TWITCH_MIN_VIEWS:
@@ -400,7 +473,6 @@ def run_mode_e() -> None:
                     "title": title,
                     "creator": c.get("creator_name") or "",
                     "views": views,
-                    "mp4": mp4,
                     "url": c.get("url") or "",
                     "created_at": c.get("created_at") or "",
                     "broadcaster_name": c.get("broadcaster_name") or "",
@@ -425,15 +497,32 @@ def run_mode_e() -> None:
     uploaded_count = 0
 
     for score, c in picked:
-        mp4_url = c["mp4"]
         views = c.get("views", 0)
         title = c.get("title", "")
         clip_id = c.get("id", "unknown")
+        thumb = c.get("thumbnail_url", "")
 
-        print("Downloading:", mp4_url)
+        video_url = None
+        download_method = None
 
         try:
-            data, content_type, declared_length = download_video_candidate(mp4_url)
+            if TWITCH_USE_OFFICIAL_DOWNLOAD:
+                video_url = twitch_get_clip_download_url(clip_id)
+                download_method = "official_api"
+                if not video_url:
+                    print("Clip descartado: no official download url para", clip_id)
+                    continue
+            else:
+                video_url = clip_mp4_from_thumbnail(thumb)
+                download_method = "thumbnail_fallback"
+                if not video_url:
+                    print("Clip descartado: no mp4 derivado de thumbnail para", clip_id)
+                    continue
+
+            print("Downloading:", video_url)
+            print("Download method:", download_method)
+
+            data, content_type, declared_length = download_video_candidate(video_url)
 
             print("Downloaded bytes:", len(data))
             print("Content-Type:", content_type or "(none)")
@@ -461,7 +550,8 @@ def run_mode_e() -> None:
             "creator": c.get("creator"),
             "views": views,
             "url": c.get("url"),
-            "video_url": mp4_url,
+            "video_url": video_url,
+            "download_method": download_method,
             "game_name": c.get("game"),
             "broadcaster_name": c.get("broadcaster_name"),
             "thumbnail_url": c.get("thumbnail_url"),

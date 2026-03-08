@@ -1063,27 +1063,14 @@ def generate_reel_from_image(
         )
         current = "[textbase]"
 
-        vf_parts.append(
-            f"{current}"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
-            f"x=76:y=1280:"
-            f"fontsize={title_size}:"
-            f"line_spacing=10:"
-            f"fontcolor=white:"
-            f"shadowcolor=black@0.65:"
-            f"shadowx=0:shadowy=5"
-            f"[title];"
-        )
-        current = "[title]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=78:y=1228:w=150:h=8:color=white@0.92:t=fill"
-            f"[line];"
-        )
-        current = "[line]"
-
        vf_parts.append(
+    f"{current}"
+    f"drawbox=x=78:y=1228:w=150:h=8:color=white@0.92:t=fill"
+    f"[line];"
+)
+current = "[line]"
+
+vf_parts.append(
     f"{current}"
     f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
     f"x=78:y=1685:"
@@ -1095,9 +1082,9 @@ def generate_reel_from_image(
     f"[vout]"
 )
 
-        cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
+cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
 
-        if music_ok and music_input is not None:
+if music_ok and music_input is not None:
             cmd += [
                 "-map", f"{music_input}:a",
                 "-filter:a",

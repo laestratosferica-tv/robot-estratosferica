@@ -1,9 +1,7 @@
 # ugc_mode_f.py
 import os
-import io
 import re
 import json
-import time
 import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple
@@ -80,12 +78,16 @@ if not UGC_META_PREFIX.endswith("/"):
 # Twitch
 TWITCH_CLIENT_ID = env_nonempty("TWITCH_CLIENT_ID")
 TWITCH_CLIENT_SECRET = env_nonempty("TWITCH_CLIENT_SECRET")
+TWITCH_USER_ACCESS_TOKEN = env_nonempty("TWITCH_USER_ACCESS_TOKEN")
+TWITCH_BROADCASTER_ID = env_nonempty("TWITCH_BROADCASTER_ID")
+TWITCH_USE_OFFICIAL_DOWNLOAD = env_bool("TWITCH_USE_OFFICIAL_DOWNLOAD", False)
+
 TWITCH_MAX_CLIPS_PER_RUN = env_int("TWITCH_MAX_CLIPS_PER_RUN", 3)
 TWITCH_LOOKBACK_HOURS = env_int("TWITCH_LOOKBACK_HOURS", 24)
 TWITCH_MIN_VIEWS = env_int("TWITCH_MIN_VIEWS", 2500)
 TWITCH_TOP_GAMES = env_int("TWITCH_TOP_GAMES", 10)
 
-# NUEVO: validación de archivos descargados
+# validación de archivos descargados
 TWITCH_MIN_VIDEO_BYTES = env_int("TWITCH_MIN_VIDEO_BYTES", 200_000)
 STRICT_VIDEO_CONTENT_TYPE = env_bool("STRICT_VIDEO_CONTENT_TYPE", False)
 
@@ -112,6 +114,9 @@ USER_AGENT = env_nonempty(
     "HTTP_USER_AGENT",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36"
 ) or "Mozilla/5.0"
+
+# fallback viejo thumbnail -> mp4
+CLIP_PREVIEW_RE = re.compile(r"-preview-\d+x\d+\.jpg($|\?)", re.IGNORECASE)
 
 
 # -------------------------
@@ -142,13 +147,8 @@ def safe_json_dumps(obj: Any) -> bytes:
 
 
 def is_probably_mp4_bytes(data: bytes) -> bool:
-    """
-    Validación barata de firma MP4.
-    Normalmente 'ftyp' aparece cerca del inicio.
-    """
     if not data or len(data) < 32:
         return False
-
     head = data[:256]
     return b"ftyp" in head
 
@@ -240,8 +240,9 @@ def twitch_get_app_token() -> str:
 
 def twitch_headers(token: str) -> Dict[str, str]:
     return {
-        "Client-ID": TWITCH_CLIENT_ID,
+        "Client-Id": TWITCH_CLIENT_ID or "",
         "Authorization": f"Bearer {token}",
+        "User-Agent": USER_AGENT,
     }
 
 
@@ -291,16 +292,67 @@ def twitch_score_clip(clip: Dict[str, Any]) -> float:
     return (views * 0.75) + (1200 / (1 + age_hours)) + bonus
 
 
-def twitch_clip_mp4_url(clip: Dict[str, Any]) -> str:
-    thumb = clip["thumbnail_url"]
-    return thumb.split("-preview")[0] + ".mp4"
+def twitch_clip_mp4_url(clip: Dict[str, Any]) -> Optional[str]:
+    thumb = (clip.get("thumbnail_url") or "").strip()
+    if not thumb:
+        return None
+    if CLIP_PREVIEW_RE.search(thumb):
+        return CLIP_PREVIEW_RE.sub(".mp4", thumb).split("?")[0]
+    if thumb.lower().endswith(".mp4"):
+        return thumb
+    return None
+
+
+def twitch_get_clip_download_url(clip_id: str) -> Optional[str]:
+    if not TWITCH_USER_ACCESS_TOKEN:
+        print("OFFICIAL DOWNLOAD skip: falta TWITCH_USER_ACCESS_TOKEN")
+        return None
+
+    if not TWITCH_BROADCASTER_ID:
+        print("OFFICIAL DOWNLOAD skip: falta TWITCH_BROADCASTER_ID")
+        return None
+
+    if not clip_id:
+        return None
+
+    url = "https://api.twitch.tv/helix/clips/downloads"
+    params = {
+        "editor_id": TWITCH_BROADCASTER_ID,
+        "broadcaster_id": TWITCH_BROADCASTER_ID,
+        "clip_id": clip_id,
+    }
+
+    r = requests.get(
+        url,
+        headers=twitch_headers(TWITCH_USER_ACCESS_TOKEN),
+        params=params,
+        timeout=HTTP_TIMEOUT,
+    )
+
+    if r.status_code == 401:
+        print("OFFICIAL DOWNLOAD 401: token inválido o expirado")
+        return None
+
+    if r.status_code == 403:
+        print("OFFICIAL DOWNLOAD 403: sin permisos para descargar clip", clip_id)
+        return None
+
+    if r.status_code == 400:
+        print("OFFICIAL DOWNLOAD 400:", r.text[:300])
+        return None
+
+    r.raise_for_status()
+
+    data = (r.json() or {}).get("data") or []
+    if not data:
+        print("OFFICIAL DOWNLOAD: Twitch no devolvió URL para clip", clip_id)
+        return None
+
+    item = data[0] or {}
+    return item.get("landscape_download_url") or item.get("portrait_download_url")
 
 
 def download_video_candidate(url: str) -> Tuple[bytes, str, int]:
-    """
-    Descarga y devuelve:
-    (bytes, content_type, content_length)
-    """
     headers = {"User-Agent": USER_AGENT}
     r = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT, allow_redirects=True)
     r.raise_for_status()
@@ -327,7 +379,6 @@ def validate_downloaded_clip(data: bytes, content_type: str, declared_length: in
     if not is_probably_mp4_bytes(data):
         return False, "missing_ftyp"
 
-    # si vino content-length y no coincide brutalmente, mala señal
     if declared_length > 0 and abs(declared_length - size) > max(1024, int(declared_length * 0.20)):
         return False, f"length_mismatch:{declared_length}!={size}"
 
@@ -426,8 +477,15 @@ def run_mode_f():
     print("UGC_INBOX_PREFIX:", UGC_INBOX_PREFIX)
     print("UGC_META_PREFIX:", UGC_META_PREFIX)
     print("IDEAS_PREFIX:", IDEAS_PREFIX)
+    print("TWITCH_USE_OFFICIAL_DOWNLOAD:", TWITCH_USE_OFFICIAL_DOWNLOAD)
     print("TWITCH_MIN_VIDEO_BYTES:", TWITCH_MIN_VIDEO_BYTES)
     print("STRICT_VIDEO_CONTENT_TYPE:", STRICT_VIDEO_CONTENT_TYPE)
+
+    if TWITCH_USE_OFFICIAL_DOWNLOAD:
+        if not TWITCH_USER_ACCESS_TOKEN:
+            raise RuntimeError("TWITCH_USE_OFFICIAL_DOWNLOAD=true pero falta TWITCH_USER_ACCESS_TOKEN")
+        if not TWITCH_BROADCASTER_ID:
+            raise RuntimeError("TWITCH_USE_OFFICIAL_DOWNLOAD=true pero falta TWITCH_BROADCASTER_ID")
 
     state = load_state()
 
@@ -469,36 +527,54 @@ def run_mode_f():
 
     for score, clip, game_name in chosen:
         clip_id = clip["id"]
-        mp4_url = twitch_clip_mp4_url(clip)
+        title = clip.get("title") or f"clip_{clip_id}"
 
-        key_name = sanitize_filename(clip.get("title") or f"clip_{clip_id}") + ".mp4"
+        key_name = sanitize_filename(title) + ".mp4"
         timestamp = now_utc().strftime("%Y-%m-%d__%H%M%S")
         r2_key = f"{UGC_INBOX_PREFIX}{timestamp}__twitch__{clip_id}__{key_name}"
 
-        meta = {
-            "source": "twitch",
-            "clip_id": clip_id,
-            "title": clip.get("title"),
-            "view_count": clip.get("view_count"),
-            "created_at": clip.get("created_at"),
-            "url": clip.get("url"),
-            "video_url": mp4_url,
-            "broadcaster_name": clip.get("broadcaster_name"),
-            "game_name": game_name,
-            "score": score,
-            "queued_at": iso_now(),
-            "r2_key": r2_key,
-        }
-
-        print("Selected Twitch clip:", clip.get("title"), "| score:", round(score, 2), "| views:", clip.get("view_count"))
-        print("Candidate mp4_url:", mp4_url)
-
-        if DRY_RUN:
-            print("[DRY_RUN] Subiría clip a:", r2_key)
-            continue
+        video_url = None
+        download_method = None
 
         try:
-            data, content_type, declared_length = download_video_candidate(mp4_url)
+            if TWITCH_USE_OFFICIAL_DOWNLOAD:
+                video_url = twitch_get_clip_download_url(clip_id)
+                download_method = "official_api"
+                if not video_url:
+                    print("Clip descartado: sin official download url:", clip_id)
+                    continue
+            else:
+                video_url = twitch_clip_mp4_url(clip)
+                download_method = "thumbnail_fallback"
+                if not video_url:
+                    print("Clip descartado: no se pudo derivar mp4 desde thumbnail:", clip_id)
+                    continue
+
+            meta = {
+                "source": "twitch",
+                "clip_id": clip_id,
+                "title": clip.get("title"),
+                "view_count": clip.get("view_count"),
+                "created_at": clip.get("created_at"),
+                "url": clip.get("url"),
+                "video_url": video_url,
+                "download_method": download_method,
+                "broadcaster_name": clip.get("broadcaster_name"),
+                "game_name": game_name,
+                "score": score,
+                "queued_at": iso_now(),
+                "r2_key": r2_key,
+            }
+
+            print("Selected Twitch clip:", clip.get("title"), "| score:", round(score, 2), "| views:", clip.get("view_count"))
+            print("Download method:", download_method)
+            print("Video URL:", video_url)
+
+            if DRY_RUN:
+                print("[DRY_RUN] Subiría clip a:", r2_key)
+                continue
+
+            data, content_type, declared_length = download_video_candidate(video_url)
 
             print("Downloaded bytes:", len(data))
             print("Content-Type:", content_type or "(none)")

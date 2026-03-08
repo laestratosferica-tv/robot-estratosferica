@@ -41,7 +41,7 @@ MODE_C_MAX_CLIPS_PER_VIDEO = int(os.getenv("MODE_C_MAX_CLIPS_PER_VIDEO", "3"))
 
 MODE_C_PUBLISH_IG = (os.getenv("MODE_C_PUBLISH_IG", "true").strip().lower() in ("1", "true", "yes", "on"))
 MODE_C_PUBLISH_FB = (os.getenv("MODE_C_PUBLISH_FB", "true").strip().lower() in ("1", "true", "yes", "on"))
-MODE_C_PUBLISH_TIKTOK = (os.getenv("MODE_C_PUBLISH_TIKTOK", "true").strip().lower() in ("1", "true", "yes", "on"))
+MODE_C_PUBLISH_TIKTOK = (os.getenv("MODE_C_PUBLISH_TIKTOK", "false").strip().lower() in ("1", "true", "yes", "on"))
 MODE_C_PUBLISH_YOUTUBE = (os.getenv("MODE_C_PUBLISH_YOUTUBE", "false").strip().lower() in ("1", "true", "yes", "on"))
 MODE_C_UPLOAD_ONLY = (os.getenv("MODE_C_UPLOAD_ONLY", "false").strip().lower() in ("1", "true", "yes", "on"))
 

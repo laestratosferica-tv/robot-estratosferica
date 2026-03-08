@@ -1320,14 +1320,13 @@ p = subprocess.run(
     timeout=300,
     check=False,
 )
-if p.returncode != 0:
+        if p.returncode != 0:
             raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
         with open(out_mp4, "rb") as f:
             video_bytes = f.read()
 
         return video_bytes
-
 
 def generate_reel_from_video_bg(
     headline: str,

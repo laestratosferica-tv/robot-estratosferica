@@ -86,7 +86,7 @@ if not R2_META_PREFIX.endswith("/"):
     R2_META_PREFIX += "/"
 
 CLIP_PREVIEW_RE = re.compile(r"-preview-\d+x\d+\.jpg($|\?)", re.IGNORECASE)
-MP4_URL_RE = re.compile(r'https?://[^"\']+?\.mp4[^"\']*', re.IGNORECASE)
+MP4_URL_RE = re.compile(r'https?://[^\s"\']*\.mp4[^\s"\']*', re.IGNORECASE)
 OG_VIDEO_RE = re.compile(
     r'<meta[^>]+property=["\']og:video["\'][^>]+content=["\']([^"\']+)["\']',
     re.IGNORECASE,
@@ -159,6 +159,13 @@ def unique_keep_order(items: List[str]) -> List[str]:
             seen.add(x)
             out.append(x)
     return out
+
+
+def public_headers() -> Dict[str, str]:
+    return {
+        "User-Agent": USER_AGENT,
+        "Accept": "*/*",
+    }
 
 
 # =========================
@@ -242,13 +249,6 @@ def twitch_headers(token: str) -> Dict[str, str]:
         "Client-Id": TWITCH_CLIENT_ID or "",
         "Authorization": f"Bearer {token}",
         "User-Agent": USER_AGENT,
-    }
-
-
-def public_headers() -> Dict[str, str]:
-    return {
-        "User-Agent": USER_AGENT,
-        "Accept": "*/*",
     }
 
 
@@ -346,7 +346,7 @@ def clip_mp4_candidates_from_page(clip_page_url: str) -> List[str]:
         if r.status_code >= 400:
             return []
 
-        html = r.text or ""
+        html = (r.text or "").replace("&amp;", "&")
         candidates: List[str] = []
 
         m = OG_VIDEO_RE.search(html)
@@ -358,9 +358,24 @@ def clip_mp4_candidates_from_page(clip_page_url: str) -> List[str]:
             candidates.append(m2.group(1).strip())
 
         for m3 in MP4_URL_RE.finditer(html):
-            candidates.append(m3.group(0).strip())
+            u = m3.group(0).strip()
+            if ".mp4" not in u.lower():
+                continue
+            if "embed?" in u.lower():
+                continue
+            candidates.append(u)
 
-        return unique_keep_order(candidates)
+        clean: List[str] = []
+        for u in unique_keep_order(candidates):
+            if not u.startswith("http"):
+                continue
+            if ".mp4" not in u.lower():
+                continue
+            if "clips.twitch.tv/embed" in u.lower():
+                continue
+            clean.append(u)
+
+        return clean
     except Exception:
         return []
 
@@ -449,19 +464,16 @@ def resolve_clip_download(
     - page_fallback
     - None
     """
-    # 1) Oficial
     if TWITCH_USE_OFFICIAL_DOWNLOAD:
         official = twitch_get_clip_download_url(clip_id)
         if official:
             return official, "official_api"
         print("OFFICIAL DOWNLOAD: Twitch no devolvió URLs para clip", clip_id)
 
-    # 2) Thumbnail fallback
     thumb_candidates = clip_mp4_candidates_from_thumbnail(thumbnail_url)
     for c in thumb_candidates:
         return c, "thumbnail_fallback"
 
-    # 3) Extraer mp4 desde la página del clip
     page_candidates = clip_mp4_candidates_from_page(clip_page_url)
     for c in page_candidates:
         return c, "page_fallback"

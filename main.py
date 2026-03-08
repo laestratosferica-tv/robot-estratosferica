@@ -88,14 +88,10 @@ if RUN_MODE in ("B", "UGC", "MODE_B", "MODEB"):
 # MODE C
 if RUN_MODE in ("C", "MODE_C"):
     print(">>> RUN_MODE C - CLIP GENERATOR")
-    try:
-        from ugc_mode_c import run_mode_c
-
-        run_mode_c()
-        raise SystemExit(0)
-    except Exception as e:
-        print("Modo C no disponible:", e)
-
+    from ugc_mode_c import run_mode_c
+    run_mode_c()
+    raise SystemExit(0)
+    
 # MODE D
 if RUN_MODE in ("D", "MODE_D"):
     print(">>> RUN_MODE D - VIRAL ENGINE")

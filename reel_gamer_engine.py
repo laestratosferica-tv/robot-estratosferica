@@ -81,7 +81,6 @@ STYLE_LIBRARY: List[Dict[str, Any]] = [
 ]
 
 def weighted_pick(items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    # simple uniform; you can add weights later
     return random.choice(items)
 
 # -------------------------
@@ -97,7 +96,6 @@ def openai_text(prompt: str) -> str:
     payload = {"model": model, "input": prompt}
     r = requests.post(url, headers=headers, json=payload, timeout=60)
     if r.status_code >= 400:
-        # fallback chat.completions
         url2 = "https://api.openai.com/v1/chat/completions"
         payload2 = {"model": model, "messages": [{"role": "user", "content": prompt}]}
         r2 = requests.post(url2, headers=headers, json=payload2, timeout=60)
@@ -122,9 +120,6 @@ def _clip(s: str, n: int) -> str:
     return s[:n].rstrip()
 
 def ai_viral_plan(title: str, link: str = "") -> Dict[str, str]:
-    """
-    Devuelve HOOK / BODY / CTA en español, MUY corto, polémico.
-    """
     prompt = f"""
 Eres editor viral GAMING/ESPORTS LATAM.
 Objetivo: comentarios. Sin insultos.
@@ -154,7 +149,6 @@ Link (referencia, no lo copies): {link}
         elif line.upper().startswith("CTA:"):
             cta = line.split(":", 1)[1].strip()
 
-    # fallbacks
     hook = _clip(hook or "ESPORTS DRAMA", MAX_HOOK_CHARS)
     body = _clip(body or _clip(title, MAX_BODY_CHARS), MAX_BODY_CHARS)
     cta  = _clip(cta  or "¿TÚ QUÉ OPINAS?", MAX_CTA_CHARS)
@@ -198,10 +192,6 @@ def render_gamer_reel_from_image_bytes(
     image_ext: str = ".jpg",
     seconds: Optional[int] = None,
 ) -> Tuple[bytes, Dict[str, Any]]:
-    """
-    FULLSCREEN: la foto es el recurso principal.
-    Anim: zoom + (glitch/hud/scanlines opcional) + textos cortos.
-    """
     if not os.path.exists(FONT_BOLD):
         raise RuntimeError(f"FONT_BOLD no existe: {FONT_BOLD}")
 
@@ -209,12 +199,10 @@ def render_gamer_reel_from_image_bytes(
     style = weighted_pick(STYLE_LIBRARY)
     plan = ai_viral_plan(headline, link)
 
-    # Random toggles
     enable_glitch = random.random() < GLITCH_PROB
     enable_hud = random.random() < HUD_PROB
     enable_scan = random.random() < SCANLINES_PROB
 
-    # Logo decision (menos institucional)
     logo_mode = (LOGO_MODE or "auto").lower()
     use_logo = False
     if logo_mode == "none":
@@ -225,8 +213,7 @@ def render_gamer_reel_from_image_bytes(
         use_logo = (random.random() < max(0.0, min(1.0, LOGO_PROB))) and os.path.exists(ASSET_LOGO)
         logo_mode = "small" if random.random() < 0.75 else "big"
 
-    # Text positions random (para que no se vea plantilla)
-    # top or mid-left
+    # Text positions random
     variant = random.choice(["top_left", "mid_left", "bottom_left"])
     if variant == "top_left":
         hook_y, body_y, cta_y = 280, 400, 1580
@@ -239,7 +226,6 @@ def render_gamer_reel_from_image_bytes(
     body = wrap_lines(plan["body"], max_chars_line=18, max_lines=TEXT_MAX_LINES)
     cta  = wrap_lines(plan["cta"],  max_chars_line=18, max_lines=1)
 
-    # Make video
     with tempfile.TemporaryDirectory() as td:
         img_path = os.path.join(td, f"img{image_ext if image_ext.startswith('.') else '.jpg'}")
         out_mp4 = os.path.join(td, "out.mp4")
@@ -256,16 +242,11 @@ def render_gamer_reel_from_image_bytes(
         with open(cta_txt, "w", encoding="utf-8") as f:
             f.write(cta)
 
-        # Zoompan tuning
-        # más punch con shake (muy leve)
         shake = float(style.get("shake", 0.0015))
         contrast = float(style.get("contrast", 1.10))
         sat = float(style.get("sat", 1.25))
         box_op = float(style.get("box_op", 0.42))
 
-        # Build filter_complex
-        # 0: image (loop)
-        # 1: logo (optional)
         cmd = [
             "ffmpeg", "-y", "-nostdin", "-hide_banner",
             "-loglevel", "error",
@@ -274,12 +255,12 @@ def render_gamer_reel_from_image_bytes(
         if use_logo:
             cmd += ["-i", ASSET_LOGO]
 
-        # Base fullscreen fill + cinematic zoom
         frames = seconds * REEL_FPS
-        # zoom increases slowly; crop stays centered but with tiny shake
-        zexpr = "min(1.22,1+0.0009*on)"
-        xexpr = f"(iw/2)-(iw/zoom/2)+{shake}*iw*sin(2*PI*on/17)"
-        yexpr = f"(ih/2)-(ih/zoom/2)+{shake}*ih*cos(2*PI*on/19)"
+
+        # Zoom / movimiento un poco más rápido
+        zexpr = "min(1.28,1+0.0014*on)"
+        xexpr = f"(iw/2)-(iw/zoom/2)+({shake}*1.35)*iw*sin(2*PI*on/12)"
+        yexpr = f"(ih/2)-(ih/zoom/2)+({shake}*1.35)*ih*cos(2*PI*on/14)"
 
         vf = []
         vf.append(
@@ -290,7 +271,6 @@ def render_gamer_reel_from_image_bytes(
             f"format=rgba[v0]"
         )
 
-        # Scanlines (light)
         if enable_scan:
             vf.append(
                 f"color=c=white@0.035:s={REEL_W}x{REEL_H}:r={REEL_FPS}:d={seconds}[sl];"
@@ -300,7 +280,6 @@ def render_gamer_reel_from_image_bytes(
         else:
             base = "[v0]"
 
-        # HUD overlay (cheap but effective)
         if enable_hud:
             vf.append(
                 f"{base}"
@@ -314,14 +293,12 @@ def render_gamer_reel_from_image_bytes(
         else:
             base2 = base
 
-        # Glitch tint occasionally (subtle)
         if enable_glitch:
             vf.append(f"{base2}hue=h=2:s=1.05,eq=contrast={contrast+0.03}:saturation={sat+0.08}[v3]")
             base3 = "[v3]"
         else:
             base3 = base2
 
-        # Logo overlay (top-right small / center big)
         if use_logo:
             if logo_mode == "big":
                 vf.append(f"[1:v]scale=560:-1,format=rgba[lg];{base3}[lg]overlay=(W-w)/2:120:format=auto[v4]")
@@ -332,33 +309,27 @@ def render_gamer_reel_from_image_bytes(
         else:
             base4 = base3
 
-        # Text overlays: hook, body, cta (entrada con fade)
-        # Hook BIG, body medium, CTA medium
+        # Cajas negras más suaves / más fundidas
         text = (
             f"{base4}"
             f"drawtext=fontfile={FONT_BOLD}:textfile={hook_txt}:"
             f"x=70:y={hook_y}:fontsize=86:fontcolor=white:"
             f"borderw=2:bordercolor=black@0.6:"
-            f"box=1:boxcolor=black@{box_op}:boxborderw=22:"
+            f"box=1:boxcolor=black@{max(0.18, box_op - 0.12)}:boxborderw=22:"
             f"alpha='if(lt(t,0.15),0, if(lt(t,0.40),(t-0.15)/0.25,1))',"
             f"drawtext=fontfile={FONT_BOLD}:textfile={body_txt}:"
             f"x=70:y={body_y}:fontsize=58:fontcolor=white:"
             f"borderw=2:bordercolor=black@0.5:"
-            f"box=1:boxcolor=black@{box_op-0.06}:boxborderw=20:"
+            f"box=1:boxcolor=black@{max(0.14, box_op - 0.16)}:boxborderw=20:"
             f"alpha='if(lt(t,0.35),0, if(lt(t,0.65),(t-0.35)/0.30,1))',"
             f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
             f"x=70:y={cta_y}:fontsize=56:fontcolor=white:"
             f"borderw=2:bordercolor=black@0.5:"
-            f"box=1:boxcolor=black@0.30:boxborderw=18:"
+            f"box=1:boxcolor=black@0.18:boxborderw=18:"
             f"alpha='if(lt(t,0.85),0, if(lt(t,1.10),(t-0.85)/0.25,1))'"
             f"[vout]"
         )
 
-        # Important: filter graph must be single string.
-        # We constructed vf parts; join with ';' except first already sets [v0]
-        # We'll build as:
-        # 1) first line produces [v0]
-        # 2) following lines reference [v0] or produce [v1],[v2]...
         parts = []
         parts.append(vf[0])
         for p in vf[1:]:
@@ -372,20 +343,15 @@ def render_gamer_reel_from_image_bytes(
             "-filter_complex", filter_complex,
             "-map", "[vout]",
             "-an",
-
             "-r", str(REEL_FPS),
-
             "-c:v", "libx264",
             "-profile:v", "high",
             "-level", "4.1",
-
             "-pix_fmt", "yuv420p",
             "-preset", "veryfast",
             "-crf", "20",
-
             "-g", str(REEL_FPS * 2),
             "-bf", "0",
-
             "-movflags", "+faststart",
             out_mp4,
         ]

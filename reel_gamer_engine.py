@@ -372,9 +372,20 @@ def render_gamer_reel_from_image_bytes(
             "-filter_complex", filter_complex,
             "-map", "[vout]",
             "-an",
+
+            "-r", str(REEL_FPS),
+
             "-c:v", "libx264",
+            "-profile:v", "high",
+            "-level", "4.1",
+
             "-pix_fmt", "yuv420p",
             "-preset", "veryfast",
+            "-crf", "20",
+
+            "-g", str(REEL_FPS * 2),
+            "-bf", "0",
+
             "-movflags", "+faststart",
             out_mp4,
         ]

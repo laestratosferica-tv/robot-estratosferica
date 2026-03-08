@@ -1250,76 +1250,92 @@ def generate_reel_from_image(
             vf_parts.append(
                 f"[{logo_input}:v]scale=140:-1,format=rgba,colorchannelmixer=aa=0.95[logo];"
             )
+            vf_parts.append(
+                f"{current}[logo]overlay=W-w-52:74:format=auto[withlogo];"
+            )
+            current = "[withlogo]"
 
+        vf_parts.append(
+            f"{current}"
+            f"drawbox=x=64:y=1240:w=952:h=350:color=black@0.18:t=fill"
+            f"[textbase];"
+        )
+        current = "[textbase]"
 
-vf_parts.append(f"{current}[logo]overlay=W-w-52:74:format=auto[withlogo];")
-current = "[withlogo]"
+        vf_parts.append(
+            f"{current}"
+            f"drawbox=x=78:y=1228:w=150:h=8:color=white@0.92:t=fill"
+            f"[line];"
+        )
+        current = "[line]"
 
-vf_parts.append(
-    f"{current}"
-    f"drawbox=x=64:y=1240:w=952:h=350:color=black@0.18:t=fill"
-    f"[textbase];"
-)
-current = "[textbase]"
+        vf_parts.append(
+            f"{current}"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
+            f"x=78:y=1280:"
+            f"fontsize={title_size}:"
+            f"line_spacing=10:"
+            f"fontcolor=white:"
+            f"shadowcolor=black@0.68:"
+            f"shadowx=0:shadowy=5"
+            f"[title];"
+        )
+        current = "[title]"
 
-vf_parts.append(
-    f"{current}" f"drawbox=x=78:y=1228:w=150:h=8:color=white@0.92:t=fill" f"[line];"
-)
-current = "[line]"
+        vf_parts.append(
+            f"{current}"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
+            f"x=78:y=1685:"
+            f"fontsize=40:"
+            f"fontcolor=white@0.86:"
+            f"shadowcolor=black@0.55:"
+            f"shadowx=0:shadowy=4,"
+            f"fade=t=out:st={max(0, int(seconds) - 1)}:d=0.75"
+            f"[vout]"
+        )
 
-vf_parts.append(
-    f"{current}"
-    f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
-    f"x=78:y=1685:"
-    f"fontsize=40:"
-    f"fontcolor=white@0.86:"
-    f"shadowcolor=black@0.55:"
-    f"shadowx=0:shadowy=4,"
-    f"fade=t=out:st={max(0, int(seconds)-1)}:d=0.75"
-    f"[vout]"
-)
+        cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
 
-cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
+        if music_ok and music_input is not None:
+            cmd += [
+                "-map",
+                f"{music_input}:a",
+                "-filter:a",
+                f"volume=0.32,afade=t=in:st=0:d=0.7,afade=t=out:st={max(0, int(seconds) - 1)}:d=1.0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+            ]
+        else:
+            cmd += ["-an"]
 
-if music_ok and music_input is not None:
-    cmd += [
-        "-map",
-        f"{music_input}:a",
-        "-filter:a",
-        f"volume=0.32,afade=t=in:st=0:d=0.7,afade=t=out:st={max(0, int(seconds)-1)}:d=1.0",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k",
-    ]
-else:
-    cmd += ["-an"]
+        cmd += [
+            "-t",
+            str(int(seconds)),
+            "-r",
+            "30",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "medium",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            out_mp4,
+        ]
 
-cmd += [
-    "-t",
-    str(int(seconds)),
-    "-r",
-    "30",
-    "-c:v",
-    "libx264",
-    "-preset",
-    "medium",
-    "-crf",
-    "20",
-    "-pix_fmt",
-    "yuv420p",
-    "-movflags",
-    "+faststart",
-    out_mp4,
-]
-p = subprocess.run(
-    cmd,
-    stdin=subprocess.DEVNULL,
-    capture_output=True,
-    text=True,
-    timeout=300,
-    check=False,
-)
+        p = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
         if p.returncode != 0:
             raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
@@ -1328,6 +1344,7 @@ p = subprocess.run(
 
         return video_bytes
 
+
 def generate_reel_from_video_bg(
     headline: str,
     bg_video_path: str,
@@ -1335,7 +1352,6 @@ def generate_reel_from_video_bg(
     seconds: int,
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
-):
 ) -> bytes:
     if not os.path.exists(bg_video_path):
         raise RuntimeError(f"Falta bg video local: {bg_video_path}")
@@ -1432,7 +1448,9 @@ def generate_reel_from_video_bg(
             vf_parts.append(
                 f"[{logo_input}:v]scale=140:-1,format=rgba,colorchannelmixer=aa=0.95[logo];"
             )
-            vf_parts.append(f"{current}[logo]overlay=W-w-52:72:format=auto[withlogo];")
+            vf_parts.append(
+                f"{current}[logo]overlay=W-w-52:72:format=auto[withlogo];"
+            )
             current = "[withlogo]"
 
         vf_parts.append(

@@ -1083,18 +1083,17 @@ def generate_reel_from_image(
         )
         current = "[line]"
 
-        vf_parts.append(
-            f"{current}"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
-            f"x=78:y=1685:"
-            f"fontsize=40:"
-            f"fontcolor=white@0.86:"
-            f"shadowcolor=black@0.55:"
-            f"shadowx=0:shadowy=4,"
-            f"fade=t=in:st=0:d=0.35,"
-            f"fade=t=out:st={max(0, int(seconds)-1)}:d=0.75"
-            f"[vout]"
-        )
+       vf_parts.append(
+    f"{current}"
+    f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
+    f"x=78:y=1685:"
+    f"fontsize=40:"
+    f"fontcolor=white@0.86:"
+    f"shadowcolor=black@0.55:"
+    f"shadowx=0:shadowy=4,"
+    f"fade=t=out:st={max(0, int(seconds)-1)}:d=0.75"
+    f"[vout]"
+)
 
         cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
 

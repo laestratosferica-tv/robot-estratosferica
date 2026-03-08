@@ -1198,7 +1198,7 @@ def generate_reel_from_video_bg(
 
         vf_parts.append(
             f"[bg]"
-            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=black@0.30:t=fill,"
+            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=black@0.18:t=fill,"
             f"drawbox=x=0:y=1180:w={REEL_W}:h=740:color=black@0.22:t=fill"
             f"[bg2];"
         )

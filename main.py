@@ -70,7 +70,7 @@ def env_float(name: str, default: float) -> float:
 
 
 # =========================
-# MODE ROUTER (A-G)
+# MODE ROUTER (A-G + Y)
 # =========================
 
 RUN_MODE = (env_nonempty("RUN_MODE", "A") or "A").strip().upper()
@@ -89,9 +89,10 @@ if RUN_MODE in ("B", "UGC", "MODE_B", "MODEB"):
 if RUN_MODE in ("C", "MODE_C"):
     print(">>> RUN_MODE C - CLIP GENERATOR")
     from ugc_mode_c import run_mode_c
+
     run_mode_c()
     raise SystemExit(0)
-    
+
 # MODE D
 if RUN_MODE in ("D", "MODE_D"):
     print(">>> RUN_MODE D - VIRAL ENGINE")
@@ -132,6 +133,14 @@ if RUN_MODE in ("G", "MODE_G"):
         raise SystemExit(0)
     except Exception as e:
         print("Modo G no disponible:", e)
+
+# MODE Y
+if RUN_MODE in ("Y", "MODE_Y"):
+    print(">>> RUN_MODE Y - YOUTUBE HARVESTER")
+    from ugc_mode_y import run_mode_y
+
+    run_mode_y()
+    raise SystemExit(0)
 
 print(">>> RUN_MODE A - EDITORIAL ENGINE")
 

@@ -1321,10 +1321,12 @@ p = subprocess.run(
     check=False,
 )
 if p.returncode != 0:
-    raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
+            raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
-with open(out_mp4, "rb") as f:
-    return f.read()
+        with open(out_mp4, "rb") as f:
+            video_bytes = f.read()
+
+        return video_bytes
 
 
 def generate_reel_from_video_bg(
@@ -1334,6 +1336,7 @@ def generate_reel_from_video_bg(
     seconds: int,
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
+):
 ) -> bytes:
     if not os.path.exists(bg_video_path):
         raise RuntimeError(f"Falta bg video local: {bg_video_path}")

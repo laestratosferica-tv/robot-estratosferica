@@ -1,48 +1,72 @@
 name: Twitch Harvester (Mode E)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   schedule:
-    - cron: "*/30 * * * *"  # cada 30 min (ajusta)
+    - cron: "0 */2 * * *"   # cada 2 horas
+
+concurrency:
+  group: twitch-harvester
+  cancel-in-progress: false
 
 jobs:
-  run:
+  twitch_mode_e:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
 
-      - name: Run Mode E
-        run: RUN_MODE=E python -u main.py
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Mode E (Twitch Harvester)
+        run: python -u main.py
         env:
-          # Twitch
+          RUN_MODE: E
+
+          # --- Twitch core ---
           TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
           TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+          TWITCH_USER_ACCESS_TOKEN: ${{ secrets.TWITCH_USER_ACCESS_TOKEN }}
+          TWITCH_BROADCASTER_ID: ${{ secrets.TWITCH_BROADCASTER_ID }}
+          TWITCH_USE_OFFICIAL_DOWNLOAD: "true"
 
-          # Ajustes de exploración
-          TWITCH_GAMES: "Just Chatting,League of Legends,Counter-Strike,Grand Theft Auto V,Minecraft,VALORANT"
+          # --- Twitch tuning ---
+          TWITCH_GAMES: "Just Chatting,League of Legends,Counter-Strike,Grand Theft Auto V,Minecraft,VALORANT,Apex Legends"
           TWITCH_CLIPS_PER_GAME: "8"
           TWITCH_PICK_TOTAL: "3"
           TWITCH_MIN_VIEWS: "800"
           TWITCH_PERIOD_DAYS: "7"
+          TWITCH_MIN_VIDEO_BYTES: "200000"
+          STRICT_VIDEO_CONTENT_TYPE: "false"
 
-          # R2
+          # --- R2 / S3 ---
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
-          # Inbox
-          R2_INBOX_PREFIX: "ugc/inbox"
+          # --- Paths / state ---
+          UGC_INBOX_PREFIX: ugc/inbox
+          UGC_META_PREFIX: ugc/meta/
+          TWITCH_MODE_E_STATE_KEY: ugc/state/mode_e_state.json
 
-          # Timeouts
+          # --- Shared ---
           HTTP_TIMEOUT: "30"
+          HTTP_USER_AGENT: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36"

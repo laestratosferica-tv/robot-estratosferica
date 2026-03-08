@@ -229,7 +229,7 @@ def render_gamer_reel_from_image_bytes(
     # top or mid-left
     variant = random.choice(["top_left", "mid_left", "bottom_left"])
     if variant == "top_left":
-        hook_y, body_y, cta_y = 220, 340, 1580
+        hook_y, body_y, cta_y = 280, 400, 1580
     elif variant == "mid_left":
         hook_y, body_y, cta_y = 740, 880, 1580
     else:

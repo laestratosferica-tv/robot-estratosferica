@@ -85,8 +85,16 @@ R2_META_PREFIX = (env_nonempty("UGC_META_PREFIX", "ugc/meta/") or "ugc/meta/").s
 if not R2_META_PREFIX.endswith("/"):
     R2_META_PREFIX += "/"
 
-# Patrones de thumbnail Twitch -> mp4
 CLIP_PREVIEW_RE = re.compile(r"-preview-\d+x\d+\.jpg($|\?)", re.IGNORECASE)
+MP4_URL_RE = re.compile(r'https?://[^"\']+?\.mp4[^"\']*', re.IGNORECASE)
+OG_VIDEO_RE = re.compile(
+    r'<meta[^>]+property=["\']og:video["\'][^>]+content=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+TWITTER_PLAYER_STREAM_RE = re.compile(
+    r'<meta[^>]+name=["\']twitter:player:stream["\'][^>]+content=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
 
 
 # =========================
@@ -141,6 +149,16 @@ def is_probably_mp4_bytes(data: bytes) -> bool:
 def content_type_looks_video(content_type: str) -> bool:
     ct = (content_type or "").lower()
     return ("video/" in ct) or ("mp4" in ct) or ("octet-stream" in ct)
+
+
+def unique_keep_order(items: List[str]) -> List[str]:
+    out = []
+    seen = set()
+    for x in items:
+        if x and x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
 
 
 # =========================
@@ -227,6 +245,13 @@ def twitch_headers(token: str) -> Dict[str, str]:
     }
 
 
+def public_headers() -> Dict[str, str]:
+    return {
+        "User-Agent": USER_AGENT,
+        "Accept": "*/*",
+    }
+
+
 def twitch_get_game_id(token: str, game_name: str) -> Optional[str]:
     url = "https://api.twitch.tv/helix/games"
     r = requests.get(url, headers=twitch_headers(token), params={"name": game_name}, timeout=HTTP_TIMEOUT)
@@ -250,10 +275,6 @@ def twitch_get_clips(token: str, game_id: str, first: int, started_at_iso: str) 
 
 
 def twitch_get_clip_download_url(clip_id: str) -> Optional[str]:
-    """
-    Intenta primero el endpoint oficial.
-    Si Twitch no devuelve data, devolvemos None y dejamos que el fallback haga su trabajo.
-    """
     if not TWITCH_USER_ACCESS_TOKEN or not TWITCH_BROADCASTER_ID or not clip_id:
         return None
 
@@ -285,14 +306,10 @@ def twitch_get_clip_download_url(clip_id: str) -> Optional[str]:
 
 
 # =========================
-# Thumbnail fallback
+# Fallbacks
 # =========================
 
 def clip_mp4_candidates_from_thumbnail(thumbnail_url: str) -> List[str]:
-    """
-    Twitch thumbnails suelen permitir derivar URLs públicas de video.
-    Probamos varias variantes para maximizar compatibilidad.
-    """
     if not thumbnail_url:
         return []
 
@@ -303,30 +320,49 @@ def clip_mp4_candidates_from_thumbnail(thumbnail_url: str) -> List[str]:
     no_query = u.split("?", 1)[0]
     candidates: List[str] = []
 
-    # Caso estándar: ...-preview-480x272.jpg -> ... .mp4
     if CLIP_PREVIEW_RE.search(no_query):
-        base = CLIP_PREVIEW_RE.sub(".mp4", no_query)
-        candidates.append(base)
+        candidates.append(CLIP_PREVIEW_RE.sub(".mp4", no_query))
 
-    # Variante muy común: cortar todo desde "-preview"
     if "-preview" in no_query:
-        base2 = no_query.split("-preview", 1)[0] + ".mp4"
-        if base2 not in candidates:
-            candidates.append(base2)
+        candidates.append(no_query.split("-preview", 1)[0] + ".mp4")
 
-    # Si ya termina en mp4
-    if no_query.lower().endswith(".mp4") and no_query not in candidates:
+    if no_query.lower().endswith(".mp4"):
         candidates.append(no_query)
 
-    # Dedup conservando orden
-    out = []
-    seen = set()
-    for c in candidates:
-        if c and c not in seen:
-            seen.add(c)
-            out.append(c)
+    return unique_keep_order(candidates)
 
-    return out
+
+def clip_mp4_candidates_from_page(clip_page_url: str) -> List[str]:
+    if not clip_page_url or not clip_page_url.startswith("http"):
+        return []
+
+    try:
+        r = requests.get(
+            clip_page_url,
+            headers=public_headers(),
+            timeout=HTTP_TIMEOUT,
+            allow_redirects=True,
+        )
+        if r.status_code >= 400:
+            return []
+
+        html = r.text or ""
+        candidates: List[str] = []
+
+        m = OG_VIDEO_RE.search(html)
+        if m:
+            candidates.append(m.group(1).strip())
+
+        m2 = TWITTER_PLAYER_STREAM_RE.search(html)
+        if m2:
+            candidates.append(m2.group(1).strip())
+
+        for m3 in MP4_URL_RE.finditer(html):
+            candidates.append(m3.group(0).strip())
+
+        return unique_keep_order(candidates)
+    except Exception:
+        return []
 
 
 # =========================
@@ -365,8 +401,12 @@ def twitch_score_clip(clip: Dict[str, Any], game_name: str) -> float:
 # =========================
 
 def download_video_candidate(url: str) -> Tuple[bytes, str, int]:
-    headers = {"User-Agent": USER_AGENT}
-    r = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT, allow_redirects=True)
+    r = requests.get(
+        url,
+        headers=public_headers(),
+        timeout=HTTP_TIMEOUT,
+        allow_redirects=True,
+    )
     r.raise_for_status()
 
     content_type = (r.headers.get("Content-Type") or "").strip()
@@ -396,12 +436,17 @@ def validate_downloaded_clip(data: bytes, content_type: str, declared_length: in
     return True, "ok"
 
 
-def resolve_clip_download(clip_id: str, thumbnail_url: str) -> Tuple[Optional[str], Optional[str]]:
+def resolve_clip_download(
+    clip_id: str,
+    clip_page_url: str,
+    thumbnail_url: str,
+) -> Tuple[Optional[str], Optional[str]]:
     """
     Devuelve (video_url, method)
     method puede ser:
     - official_api
     - thumbnail_fallback
+    - page_fallback
     - None
     """
     # 1) Oficial
@@ -411,10 +456,15 @@ def resolve_clip_download(clip_id: str, thumbnail_url: str) -> Tuple[Optional[st
             return official, "official_api"
         print("OFFICIAL DOWNLOAD: Twitch no devolvió URLs para clip", clip_id)
 
-    # 2) Fallbacks derivados del thumbnail
+    # 2) Thumbnail fallback
     thumb_candidates = clip_mp4_candidates_from_thumbnail(thumbnail_url)
     for c in thumb_candidates:
         return c, "thumbnail_fallback"
+
+    # 3) Extraer mp4 desde la página del clip
+    page_candidates = clip_mp4_candidates_from_page(clip_page_url)
+    for c in page_candidates:
+        return c, "page_fallback"
 
     return None, None
 
@@ -515,12 +565,17 @@ def run_mode_e() -> None:
         title = c.get("title", "")
         clip_id = c.get("id", "unknown")
         thumb = c.get("thumbnail_url", "")
+        clip_page_url = c.get("url", "")
 
         try:
-            video_url, download_method = resolve_clip_download(clip_id, thumb)
+            video_url, download_method = resolve_clip_download(
+                clip_id=clip_id,
+                clip_page_url=clip_page_url,
+                thumbnail_url=thumb,
+            )
 
             if not video_url:
-                print("Clip descartado: no official download url ni fallback thumbnail para", clip_id)
+                print("Clip descartado: no official, no thumbnail y no page fallback para", clip_id)
                 continue
 
             print("Downloading:", video_url)

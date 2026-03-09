@@ -67,19 +67,32 @@ def r2():
 # =========================
 
 def load_state():
+
     try:
-        obj = r2().get_object(Bucket=BUCKET_NAME, Key=STATE_KEY)
-        return json.loads(obj["Body"].read())
-    except:
-        return {"processed": []}
+        obj = r2().get_object(
+            Bucket=BUCKET_NAME,
+            Key=STATE_KEY
+        )
 
+        state = json.loads(
+            obj["Body"].read()
+        )
 
-def save_state(state):
-    r2().put_object(
-        Bucket=BUCKET_NAME,
-        Key=STATE_KEY,
-        Body=json.dumps(state).encode(),
-        ContentType="application/json",
+    except Exception:
+        state = {}
+
+    if not isinstance(state, dict):
+        state = {}
+
+    # asegurar clave correcta
+    if "processed" not in state:
+        state["processed"] = []
+
+    # compatibilidad con estados viejos
+    if not isinstance(state["processed"], list):
+        state["processed"] = []
+
+    return state
     )
 
 

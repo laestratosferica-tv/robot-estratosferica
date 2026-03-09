@@ -1,0 +1,697 @@
+# ugc_mode_h.py
+import os
+import re
+import json
+import math
+import random
+import hashlib
+import subprocess
+import tempfile
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any, List, Tuple
+
+import boto3
+
+
+# =========================
+# ENV helpers
+# =========================
+
+def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    v = v.strip()
+    return v if v else default
+
+
+def env_int(name: str, default: int) -> int:
+    v = os.getenv(name)
+    if not v or not v.strip():
+        return default
+    try:
+        return int(v.strip())
+    except Exception:
+        return default
+
+
+def env_float(name: str, default: float) -> float:
+    v = os.getenv(name)
+    if not v or not v.strip():
+        return default
+    try:
+        return float(v.strip())
+    except Exception:
+        return default
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    return v.strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+# =========================
+# CONFIG
+# =========================
+
+HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
+
+AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
+R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
+BUCKET_NAME = env_nonempty("BUCKET_NAME")
+R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
+
+MODE_H_INPUT_PREFIX = (env_nonempty("MODE_H_INPUT_PREFIX", "ugc/library/clips") or "ugc/library/clips").strip().strip("/")
+MODE_H_OUTPUT_PREFIX = (env_nonempty("MODE_H_OUTPUT_PREFIX", "ugc/final") or "ugc/final").strip().strip("/")
+MODE_H_META_PREFIX = (env_nonempty("MODE_H_META_PREFIX", "ugc/meta/final") or "ugc/meta/final").strip().strip("/")
+MODE_H_STATE_KEY = env_nonempty("MODE_H_STATE_KEY", "ugc/state/mode_h_state.json")
+
+MODE_H_MAX_ITEMS = env_int("MODE_H_MAX_ITEMS", 6)
+
+REEL_W = env_int("REEL_W", 1080)
+REEL_H = env_int("REEL_H", 1920)
+REEL_FPS = env_int("REEL_FPS", 30)
+
+FONT_BOLD = env_nonempty("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
+MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.85)
+MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.28)
+
+ENABLE_HUD = env_bool("ENABLE_HUD", True)
+HUD_DIR = env_nonempty("HUD_DIR", "assets") or "assets"
+HUD_PREFIX = env_nonempty("HUD_PREFIX", "hud_") or "hud_"
+HUD_OPACITY = env_float("HUD_OPACITY", 0.18)
+
+SAVE_DEBUG_FINAL = env_bool("SAVE_DEBUG_FINAL", True)
+DEBUG_FINAL_NAME = env_nonempty("DEBUG_FINAL_NAME", "debug_final_reel.mp4") or "debug_final_reel.mp4"
+
+
+# =========================
+# HOOKS / CTA / GAME BADGES
+# =========================
+
+GAME_BADGES = {
+    "valorant": "VALORANT",
+    "cs2": "CS2",
+    "counter-strike": "CS2",
+    "league of legends": "LOL",
+    "fortnite": "FORTNITE",
+    "warzone": "WARZONE",
+    "apex": "APEX",
+    "apex legends": "APEX",
+    "minecraft": "MINECRAFT",
+    "ea sports fc": "FC",
+    "f1": "F1",
+    "gran turismo": "GT",
+}
+
+GENERIC_HOOKS = [
+    "ESTO ES ABSURDO",
+    "NAH, MIRA ESTO",
+    "NO ES NORMAL",
+    "ESTÁ ROTÍSIMO",
+    "ESTO NO TIENE SENTIDO",
+    "OJO CON ESTA PLAY",
+    "ESTO FUE CINE",
+    "QUÉ ACABO DE VER",
+]
+
+GAME_HOOKS = {
+    "valorant": [
+        "ESTE CLUTCH ES ILEGAL",
+        "ESO FUE UN ACE GRATIS",
+        "VALORANT EN SU PEAK",
+    ],
+    "cs2": [
+        "CS2 ENFERMÍSIMO",
+        "ESTO ES PURO AIM",
+        "CLUTCH DE OTRO PLANETA",
+    ],
+    "league of legends": [
+        "ESTA TEAMFIGHT FUE CINE",
+        "LOL EN SU MEJOR MOMENTO",
+        "ESTO CAMBIA TODA LA PARTIDA",
+    ],
+    "fortnite": [
+        "EDITS DE OTRO MUNDO",
+        "FORTNITE ESTÁ ROTO",
+        "BUGHA MODE ACTIVADO",
+    ],
+    "warzone": [
+        "WARZONE ESTÁ LOQUÍSIMO",
+        "ESTO NO ERA GANABLE",
+        "QUÉ CIERRE TAN SUCIO",
+    ],
+    "apex legends": [
+        "APEX EN MODO BESTIA",
+        "FINAL CIRCLE DE LOCOS",
+        "ESTO ES PURO MOVEMENT",
+    ],
+    "minecraft": [
+        "MINECRAFT PERO ES CINE",
+        "ESTO ES MUY MALA SUERTE",
+        "NAH, QUÉ MOMENTO",
+    ],
+    "ea sports fc": [
+        "ESO ES GOLAZO",
+        "FC ESTÁ DEMENCIAL",
+        "ESTE GOL ES RIDÍCULO",
+    ],
+    "f1": [
+        "ADELANTAMIENTO DE CINE",
+        "ESO FUE PURO SKILL",
+        "F1 EN MODO BESTIA",
+    ],
+    "gran turismo": [
+        "ESTA ÚLTIMA VUELTA FUE CINE",
+        "GT ESTÁ HERMOSO",
+        "QUÉ FINAL TAN LIMPIO",
+    ],
+}
+
+CTAS = [
+    "¿TOP O HUMO?",
+    "¿SKILL O SUERTE?",
+    "¿TÚ LO SACABAS?",
+    "¿W O BASURA?",
+    "¿ESTO ES CINE O NO?",
+    "¿MEJOR JUGADA O NO?",
+    "¿SE LA COMEN O NO?",
+    "¿ESTO ES LEGAL?",
+]
+
+
+# =========================
+# HELPERS
+# =========================
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def iso_now_full() -> str:
+    return now_utc().isoformat()
+
+
+def safe_slug(s: str) -> str:
+    s = (s or "").strip()
+    s = re.sub(r"[^a-zA-Z0-9\-_]+", "_", s)[:140]
+    return s.strip("_") or "clip"
+
+
+def short_hash_bytes(data: bytes) -> str:
+    return hashlib.sha1(data).hexdigest()[:10]
+
+
+def safe_json_dumps(obj: Any) -> bytes:
+    return json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def list_mp3_files(search_dir: str) -> List[str]:
+    files: List[str] = []
+    if search_dir and os.path.isdir(search_dir):
+        for root, _, fnames in os.walk(search_dir):
+            for f in fnames:
+                if f.lower().endswith(".mp3"):
+                    files.append(os.path.join(root, f))
+    return files
+
+
+def pick_music() -> Optional[str]:
+    if random.random() > max(0.0, min(1.0, MUSIC_PROBABILITY)):
+        return None
+
+    candidates = list_mp3_files(MUSIC_SEARCH_DIR)
+    good = []
+    for c in candidates:
+        try:
+            if os.path.getsize(c) > 50_000:
+                good.append(c)
+        except Exception:
+            continue
+
+    if not good:
+        return None
+
+    return random.choice(good)
+
+
+def pick_hud_overlay() -> Optional[str]:
+    if not ENABLE_HUD:
+        return None
+    if not os.path.isdir(HUD_DIR):
+        return None
+
+    files = []
+    for f in os.listdir(HUD_DIR):
+        name = f.lower()
+        if not name.startswith(HUD_PREFIX.lower()):
+            continue
+        if not name.endswith(".png"):
+            continue
+        files.append(os.path.join(HUD_DIR, f))
+
+    if not files:
+        return None
+
+    return random.choice(files)
+
+
+def wrap_text(text: str, max_chars_per_line: int = 18, max_lines: int = 2) -> str:
+    t = (text or "").strip().replace("\n", " ")
+    words = t.split()
+    if not words:
+        return ""
+
+    lines: List[str] = []
+    cur = ""
+    for w in words:
+        if not cur:
+            cur = w
+            continue
+        if len(cur) + 1 + len(w) <= max_chars_per_line:
+            cur = cur + " " + w
+        else:
+            lines.append(cur)
+            cur = w
+            if len(lines) >= max_lines:
+                break
+
+    if len(lines) < max_lines and cur:
+        lines.append(cur)
+
+    if lines:
+        lines[-1] = lines[-1][:max_chars_per_line].rstrip()
+
+    return "\n".join(lines).strip()
+
+
+def ffprobe_json(path: str) -> dict:
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-print_format", "json",
+        "-show_format",
+        "-show_streams",
+        path,
+    ]
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    if p.returncode != 0:
+        return {}
+    try:
+        return json.loads(p.stdout or "{}")
+    except Exception:
+        return {}
+
+
+def get_video_duration(path: str) -> float:
+    info = ffprobe_json(path)
+    try:
+        return float(info.get("format", {}).get("duration", 0.0) or 0.0)
+    except Exception:
+        return 0.0
+
+
+def game_from_key(key: str) -> str:
+    k = (key or "").lower()
+
+    checks = [
+        "ea sports fc",
+        "gran turismo",
+        "league of legends",
+        "counter-strike",
+        "valorant",
+        "fortnite",
+        "warzone",
+        "apex legends",
+        "minecraft",
+        "f1",
+        "cs2",
+        "apex",
+    ]
+    for c in checks:
+        if c in k:
+            return c
+
+    return "generic"
+
+
+def pick_hook(game_name: str) -> str:
+    g = (game_name or "").lower()
+    options = GAME_HOOKS.get(g) or GENERIC_HOOKS
+    return random.choice(options)
+
+
+def pick_cta() -> str:
+    return random.choice(CTAS)
+
+
+def pick_badge(game_name: str) -> str:
+    g = (game_name or "").lower()
+    return GAME_BADGES.get(g, "GAMER")
+
+
+# =========================
+# R2
+# =========================
+
+def r2_client():
+    if not (R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and BUCKET_NAME):
+        raise RuntimeError("Faltan credenciales R2/S3")
+    return boto3.client(
+        "s3",
+        endpoint_url=R2_ENDPOINT_URL,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name="auto",
+    )
+
+
+def s3_put_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> str:
+    s3 = r2_client()
+    s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=data, ContentType=content_type)
+    if R2_PUBLIC_BASE_URL.startswith("http"):
+        return f"{R2_PUBLIC_BASE_URL}/{key}"
+    return key
+
+
+def s3_put_json(key: str, payload: Dict[str, Any]):
+    s3_put_bytes(key, safe_json_dumps(payload), "application/json")
+
+
+def s3_get_json(key: str):
+    try:
+        obj = r2_client().get_object(Bucket=BUCKET_NAME, Key=key)
+        return json.loads(obj["Body"].read().decode("utf-8"))
+    except Exception:
+        return None
+
+
+def r2_list_keys(prefix: str) -> List[str]:
+    s3 = r2_client()
+    keys: List[str] = []
+    continuation_token = None
+
+    while True:
+        kwargs = {
+            "Bucket": BUCKET_NAME,
+            "Prefix": prefix,
+            "MaxKeys": 200,
+        }
+        if continuation_token:
+            kwargs["ContinuationToken"] = continuation_token
+
+        resp = s3.list_objects_v2(**kwargs)
+
+        for obj in resp.get("Contents", []):
+            k = obj["Key"]
+            if not k.endswith("/"):
+                keys.append(k)
+
+        if resp.get("IsTruncated"):
+            continuation_token = resp.get("NextContinuationToken")
+        else:
+            break
+
+    return keys
+
+
+def r2_download_to_file(key: str, dst_path: str):
+    r2_client().download_file(BUCKET_NAME, key, dst_path)
+
+
+# =========================
+# STATE
+# =========================
+
+def load_state() -> Dict[str, Any]:
+    st = s3_get_json(MODE_H_STATE_KEY)
+    if not st:
+        st = {"processed_keys": [], "last_run_at": None}
+    st.setdefault("processed_keys", [])
+    st.setdefault("last_run_at", None)
+    return st
+
+
+def save_state(st: Dict[str, Any]):
+    st["last_run_at"] = iso_now_full()
+    s3_put_json(MODE_H_STATE_KEY, st)
+
+
+# =========================
+# RENDER
+# =========================
+
+def build_hype_reel(
+    input_video: str,
+    output_video: str,
+    hook_text: str,
+    badge_text: str,
+    cta_text: str,
+    music_mp3: Optional[str],
+    hud_png: Optional[str],
+):
+    if not FONT_BOLD or not os.path.exists(FONT_BOLD):
+        raise RuntimeError(f"No existe FONT_BOLD: {FONT_BOLD}")
+
+    hook_wrapped = wrap_text(hook_text.upper(), max_chars_per_line=14, max_lines=2)
+    cta_wrapped = wrap_text(cta_text.upper(), max_chars_per_line=18, max_lines=1)
+    badge_wrapped = wrap_text(badge_text.upper(), max_chars_per_line=12, max_lines=1)
+
+    with tempfile.TemporaryDirectory() as td:
+        hook_txt = os.path.join(td, "hook.txt")
+        cta_txt = os.path.join(td, "cta.txt")
+        badge_txt = os.path.join(td, "badge.txt")
+
+        with open(hook_txt, "w", encoding="utf-8") as f:
+            f.write(hook_wrapped)
+        with open(cta_txt, "w", encoding="utf-8") as f:
+            f.write(cta_wrapped)
+        with open(badge_txt, "w", encoding="utf-8") as f:
+            f.write(badge_wrapped)
+
+        duration = max(3.0, get_video_duration(input_video))
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel", "error",
+            "-i", input_video,
+        ]
+
+        hud_input_idx = None
+        if hud_png and os.path.exists(hud_png):
+            cmd += ["-i", hud_png]
+            hud_input_idx = 1
+
+        music_input_idx = None
+        if music_mp3 and os.path.exists(music_mp3):
+            cmd += ["-i", music_mp3]
+            music_input_idx = 2 if hud_input_idx is not None else 1
+
+        vf_parts = []
+
+        vf_parts.append(
+            f"[0:v]"
+            f"fps={REEL_FPS},"
+            f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+            f"crop={REEL_W}:{REEL_H},"
+            f"setsar=1,"
+            f"format=rgba[v0];"
+        )
+
+        current = "[v0]"
+
+        if hud_input_idx is not None:
+            vf_parts.append(
+                f"[{hud_input_idx}:v]"
+                f"scale={REEL_W}:{REEL_H},"
+                f"format=rgba,"
+                f"colorchannelmixer=aa={max(0.0, min(1.0, HUD_OPACITY))}[hud];"
+            )
+            vf_parts.append(
+                f"{current}[hud]overlay=0:0:format=auto[v1];"
+            )
+            current = "[v1]"
+
+        vf_parts.append(
+            f"{current}"
+            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=black@0.10:t=fill,"
+            f"drawbox=x=0:y=0:w={REEL_W}:h=210:color=black@0.18:t=fill,"
+            f"drawbox=x=0:y=1540:w={REEL_W}:h=380:color=black@0.20:t=fill"
+            f"[v2];"
+        )
+        current = "[v2]"
+
+        vf_parts.append(
+            f"{current}"
+            f"drawbox=x=60:y=70:w=250:h=78:color=white@0.92:t=fill,"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={badge_txt}:"
+            f"x=94:y=90:fontsize=38:fontcolor=black"
+            f"[v3];"
+        )
+        current = "[v3]"
+
+        vf_parts.append(
+            f"{current}"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={hook_txt}:"
+            f"x=64:y=230:"
+            f"fontsize=82:"
+            f"line_spacing=10:"
+            f"fontcolor=white:"
+            f"borderw=3:bordercolor=black@0.6:"
+            f"box=1:boxcolor=black@0.32:boxborderw=20"
+            f"[v4];"
+        )
+        current = "[v4]"
+
+        vf_parts.append(
+            f"{current}"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
+            f"x=64:y=1660:"
+            f"fontsize=48:"
+            f"fontcolor=white:"
+            f"borderw=2:bordercolor=black@0.5:"
+            f"box=1:boxcolor=black@0.28:boxborderw=16"
+            f"[vout]"
+        )
+
+        cmd += [
+            "-filter_complex", "".join(vf_parts),
+            "-map", "[vout]",
+        ]
+
+        if music_input_idx is not None:
+            fade_out_start = max(0.0, duration - 0.9)
+            cmd += [
+                "-map", f"{music_input_idx}:a",
+                "-filter:a", f"volume={MUSIC_VOLUME},afade=t=in:st=0:d=0.35,afade=t=out:st={fade_out_start}:d=0.8",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-shortest",
+            ]
+        else:
+            cmd += ["-an"]
+
+        cmd += [
+            "-c:v", "libx264",
+            "-preset", "veryfast",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            output_video,
+        ]
+
+        p = subprocess.run(cmd, capture_output=True, text=True)
+        if p.returncode != 0:
+            raise RuntimeError(f"ffmpeg falló:\n{(p.stderr or '')[:4000]}")
+
+
+# =========================
+# MAIN
+# =========================
+
+def run_mode_h():
+    print("===== MODE H (HYPE PACKER) START =====")
+    print("MODE_H_INPUT_PREFIX:", MODE_H_INPUT_PREFIX)
+    print("MODE_H_OUTPUT_PREFIX:", MODE_H_OUTPUT_PREFIX)
+    print("MODE_H_META_PREFIX:", MODE_H_META_PREFIX)
+    print("MODE_H_STATE_KEY:", MODE_H_STATE_KEY)
+    print("MODE_H_MAX_ITEMS:", MODE_H_MAX_ITEMS)
+
+    state = load_state()
+    processed = set(state.get("processed_keys", []))
+
+    source_keys = r2_list_keys(f"{MODE_H_INPUT_PREFIX}/")
+    clip_keys = [k for k in source_keys if k.lower().endswith(".mp4")]
+    clip_keys.sort()
+
+    print("Clips encontrados:", len(clip_keys))
+
+    processed_count = 0
+
+    for key in clip_keys:
+        if processed_count >= MODE_H_MAX_ITEMS:
+            break
+
+        if key in processed:
+            continue
+
+        print("Empacando:", key)
+
+        game_name = game_from_key(key)
+        hook = pick_hook(game_name)
+        cta = pick_cta()
+        badge = pick_badge(game_name)
+        music = pick_music()
+        hud = pick_hud_overlay()
+
+        print("GAME:", game_name)
+        print("HOOK:", hook)
+        print("CTA:", cta)
+        print("BADGE:", badge)
+        print("MUSIC:", music if music else "NONE")
+        print("HUD:", hud if hud else "NONE")
+
+        with tempfile.TemporaryDirectory() as td:
+            in_path = os.path.join(td, "in.mp4")
+            out_path = os.path.join(td, "out.mp4")
+
+            r2_download_to_file(key, in_path)
+
+            build_hype_reel(
+                input_video=in_path,
+                output_video=out_path,
+                hook_text=hook,
+                badge_text=badge,
+                cta_text=cta,
+                music_mp3=music,
+                hud_png=hud,
+            )
+
+            with open(out_path, "rb") as f:
+                data = f.read()
+
+            h = short_hash_bytes(data)
+            base = os.path.basename(key).rsplit(".", 1)[0]
+            out_key = f"{MODE_H_OUTPUT_PREFIX}/{base}__hype__{h}.mp4"
+
+            print("Uploading final reel:", out_key)
+            s3_put_bytes(out_key, data, "video/mp4")
+
+            meta = {
+                "source_clip_key": key,
+                "final_key": out_key,
+                "game_name": game_name,
+                "hook": hook,
+                "cta": cta,
+                "badge": badge,
+                "music": music,
+                "hud": hud,
+                "generated_at": iso_now_full(),
+            }
+
+            meta_key = f"{MODE_H_META_PREFIX}/{os.path.basename(out_key).rsplit('.', 1)[0]}.json"
+            s3_put_json(meta_key, meta)
+            print("Saved final meta:", meta_key)
+
+            if SAVE_DEBUG_FINAL:
+                with open(DEBUG_FINAL_NAME, "wb") as f:
+                    f.write(data)
+                print("Saved debug final:", DEBUG_FINAL_NAME)
+
+        processed.add(key)
+        processed_count += 1
+
+    state["processed_keys"] = list(processed)[-5000:]
+    save_state(state)
+
+    print("===== MODE H DONE =====")
+    print("Final reels creados:", processed_count)
+
+
+if __name__ == "__main__":
+    run_mode_h()

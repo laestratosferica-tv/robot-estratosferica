@@ -64,10 +64,8 @@ YOUTUBE_MAX_DOWNLOADS_PER_RUN = env_int("YOUTUBE_MAX_DOWNLOADS_PER_RUN", 3)
 YOUTUBE_SEARCH_DAYS = env_int("YOUTUBE_SEARCH_DAYS", 7)
 YOUTUBE_MIN_VIDEO_BYTES = env_int("YOUTUBE_MIN_VIDEO_BYTES", 500_000)
 YOUTUBE_MIN_DURATION_SEC = env_float("YOUTUBE_MIN_DURATION_SEC", 30.0)
-YOUTUBE_MAX_DURATION_SEC = env_float("YOUTUBE_MAX_DURATION_SEC", 14_400.0)  # 4h
+YOUTUBE_MAX_DURATION_SEC = env_float("YOUTUBE_MAX_DURATION_SEC", 14_400.0)
 YOUTUBE_ONLY_LIVE_REPLAYS = env_bool("YOUTUBE_ONLY_LIVE_REPLAYS", False)
-
-HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
 
 STATE_KEY = env_nonempty("YOUTUBE_MODE_Y_STATE_KEY", "ugc/state/mode_y_state.json")
 R2_META_PREFIX = (env_nonempty("UGC_META_PREFIX", "ugc/meta/") or "ugc/meta/").strip()
@@ -83,6 +81,7 @@ R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
 
 YT_DLP_BIN = env_nonempty("YT_DLP_BIN", "yt-dlp") or "yt-dlp"
+YT_DLP_COOKIES_FILE = env_nonempty("YT_DLP_COOKIES_FILE")
 
 
 # =========================
@@ -220,6 +219,16 @@ def save_state(st: Dict[str, Any]):
 # yt-dlp search / download
 # =========================
 
+def yt_dlp_base_args() -> List[str]:
+    args = [
+        YT_DLP_BIN,
+        "--remote-components", "ejs:github",
+    ]
+    if YT_DLP_COOKIES_FILE:
+        args += ["--cookies", YT_DLP_COOKIES_FILE]
+    return args
+
+
 def build_search_query(term: str) -> str:
     base = term.strip()
     if YOUTUBE_ONLY_LIVE_REPLAYS:
@@ -229,11 +238,9 @@ def build_search_query(term: str) -> str:
 
 def yt_dlp_search(term: str) -> List[Dict[str, Any]]:
     query = build_search_query(term)
-    cmd = [
-        YT_DLP_BIN,
+    cmd = yt_dlp_base_args() + [
         "--dump-single-json",
         "--skip-download",
-        "--remote-components", "ejs:github",
         "--dateafter", f"today-{YOUTUBE_SEARCH_DAYS}days",
         query,
     ]
@@ -266,10 +273,8 @@ def yt_dlp_search(term: str) -> List[Dict[str, Any]]:
 
         if not video_id or not webpage_url:
             continue
-
         if duration and duration < YOUTUBE_MIN_DURATION_SEC:
             continue
-
         if duration and duration > YOUTUBE_MAX_DURATION_SEC:
             continue
 
@@ -297,7 +302,6 @@ def youtube_score(item: Dict[str, Any]) -> float:
     search_term = (item.get("search_term") or "").lower()
 
     bonus = 0
-
     hot_words = [
         "highlights", "gameplay", "best moments", "clutch", "ace",
         "ranked", "pro", "esports", "insane", "final", "goals", "overtake"
@@ -308,21 +312,15 @@ def youtube_score(item: Dict[str, Any]) -> float:
 
     if "valorant" in search_term or "cs2" in search_term or "league of legends" in search_term:
         bonus += 80
-
     if "ea sports fc" in search_term or "f1" in search_term or "gran turismo" in search_term:
         bonus += 60
 
-    duration_bonus = 0
-    if 60 <= duration <= 1800:
-        duration_bonus = 100
-
+    duration_bonus = 100 if 60 <= duration <= 1800 else 0
     return (views * 0.05) + bonus + duration_bonus
 
 
 def yt_dlp_download_video(video_url: str, out_path: str) -> bool:
-    cmd = [
-        YT_DLP_BIN,
-        "--remote-components", "ejs:github",
+    cmd = yt_dlp_base_args() + [
         "-f", "mp4/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
         "--merge-output-format", "mp4",
         "-o", out_path,
@@ -349,13 +347,10 @@ def validate_downloaded_video(path: str) -> Tuple[bool, str]:
 
     if size < YOUTUBE_MIN_VIDEO_BYTES:
         return False, f"too_small:{size}"
-
     if duration < YOUTUBE_MIN_DURATION_SEC:
         return False, f"too_short:{duration}"
-
     if duration > YOUTUBE_MAX_DURATION_SEC:
         return False, f"too_long:{duration}"
-
     if not is_probably_mp4_file(path):
         return False, "missing_ftyp"
 
@@ -376,6 +371,7 @@ def run_mode_y() -> None:
     print("YOUTUBE_MIN_DURATION_SEC:", YOUTUBE_MIN_DURATION_SEC)
     print("YOUTUBE_MAX_DURATION_SEC:", YOUTUBE_MAX_DURATION_SEC)
     print("STATE_KEY:", STATE_KEY)
+    print("YT_DLP_COOKIES_FILE set:", bool(YT_DLP_COOKIES_FILE))
 
     terms = [x.strip() for x in (YOUTUBE_SEARCH_TERMS or "").split(",") if x.strip()]
     if not terms:
@@ -398,14 +394,12 @@ def run_mode_y() -> None:
 
             if not vid:
                 continue
-
             if vid in processed_ids:
                 print("SKIP already processed:", vid, "|", title[:100])
                 continue
 
             score = youtube_score(item)
             print("CANDIDATE:", vid, "| score:", round(score, 2), "|", title[:100])
-
             all_candidates.append((score, item))
 
     if not all_candidates:

@@ -39,10 +39,11 @@ AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
 
-INPUT_PREFIX = env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox")
-OUTPUT_PREFIX = "ugc/library/clips"
+INPUT_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
+INPUT_MANUAL_PREFIX = (env_nonempty("UGC_INBOX_MANUAL_PREFIX", "ugc/inbox_manual") or "ugc/inbox_manual").strip().strip("/")
+OUTPUT_PREFIX = (env_nonempty("UGC_CLIPS_PREFIX", "ugc/library/clips") or "ugc/library/clips").strip().strip("/")
 
-STATE_KEY = "ugc/state/mode_c_state.json"
+STATE_KEY = env_nonempty("MODE_C_STATE_KEY", "ugc/state/mode_c_state.json")
 
 CLIP_SECONDS = env_int("MODE_C_CLIP_SECONDS", 8)
 MAX_INPUTS = env_int("MODE_C_MAX_INPUTS", 5)
@@ -68,17 +69,12 @@ def r2():
 # =========================
 
 def load_state():
-
     try:
         obj = r2().get_object(
             Bucket=BUCKET_NAME,
             Key=STATE_KEY
         )
-
-        state = json.loads(
-            obj["Body"].read()
-        )
-
+        state = json.loads(obj["Body"].read())
     except Exception:
         state = {}
 
@@ -95,7 +91,6 @@ def load_state():
 
 
 def save_state(state):
-
     if not isinstance(state, dict):
         state = {}
 
@@ -114,22 +109,30 @@ def save_state(state):
 # LIST VIDEOS
 # =========================
 
-def list_inbox_videos():
-
+def list_videos_from_prefix(prefix):
     resp = r2().list_objects_v2(
         Bucket=BUCKET_NAME,
-        Prefix=INPUT_PREFIX
+        Prefix=f"{prefix}/"
     )
 
     videos = []
 
     for obj in resp.get("Contents", []):
         key = obj["Key"]
-
         if key.endswith(".mp4"):
             videos.append(key)
 
     return videos
+
+
+def list_all_input_videos():
+    auto_videos = list_videos_from_prefix(INPUT_PREFIX)
+    manual_videos = list_videos_from_prefix(INPUT_MANUAL_PREFIX)
+
+    all_videos = auto_videos + manual_videos
+    all_videos.sort()
+
+    return all_videos
 
 
 # =========================
@@ -137,7 +140,6 @@ def list_inbox_videos():
 # =========================
 
 def download(key, path):
-
     r2().download_file(
         BUCKET_NAME,
         key,
@@ -150,7 +152,6 @@ def download(key, path):
 # =========================
 
 def upload(path, key):
-
     r2().upload_file(
         path,
         BUCKET_NAME,
@@ -164,7 +165,6 @@ def upload(path, key):
 # =========================
 
 def get_duration(path):
-
     cmd = [
         "ffprobe",
         "-v", "error",
@@ -186,7 +186,6 @@ def get_duration(path):
 # =========================
 
 def cut_clip(src, start, seconds, dst):
-
     cmd = [
         "ffmpeg",
         "-y",
@@ -205,20 +204,22 @@ def cut_clip(src, start, seconds, dst):
 # =========================
 
 def run_mode_c():
-
     print("===== UGC MODE C START =====")
+    print("INPUT_PREFIX:", INPUT_PREFIX)
+    print("INPUT_MANUAL_PREFIX:", INPUT_MANUAL_PREFIX)
+    print("OUTPUT_PREFIX:", OUTPUT_PREFIX)
+    print("STATE_KEY:", STATE_KEY)
 
     state = load_state()
     processed = set(state["processed"])
 
-    videos = list_inbox_videos()
+    videos = list_all_input_videos()
 
-    print("Videos en inbox:", len(videos))
+    print("Videos totales encontrados:", len(videos))
 
     count = 0
 
     for key in videos:
-
         if count >= MAX_INPUTS:
             break
 
@@ -228,20 +229,17 @@ def run_mode_c():
         print("Procesando:", key)
 
         with tempfile.TemporaryDirectory() as tmp:
-
             src = os.path.join(tmp, "video.mp4")
-
             download(key, src)
 
             duration = get_duration(src)
 
             if duration < CLIP_SECONDS:
-                print("Video demasiado corto")
+                print("Video demasiado corto:", key)
                 processed.add(key)
                 continue
 
             for i in range(MAX_CLIPS_PER_VIDEO):
-
                 start = random.uniform(
                     0,
                     max(1, duration - CLIP_SECONDS - 1)
@@ -263,11 +261,13 @@ def run_mode_c():
                 print("Clip creado:", clip_key)
 
         processed.add(key)
-
         count += 1
 
-    state["processed"] = list(processed)
-
+    state["processed"] = list(processed)[-5000:]
     save_state(state)
 
     print("===== MODE C DONE =====")
+
+
+if __name__ == "__main__":
+    run_mode_c()

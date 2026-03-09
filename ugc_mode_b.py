@@ -1,91 +1,56 @@
 import os
-import time
 import json
-import random
-import hashlib
-import tempfile
-import subprocess
-from typing import Optional, List
+from datetime import datetime, timezone
 
-import requests
 import boto3
 
 
-# -------------------------
-# ENV helpers
-# -------------------------
+# =========================
+# ENV HELPERS
+# =========================
 
-def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
+def env_nonempty(name, default=None):
     v = os.getenv(name)
-    if v is None:
+    if not v:
         return default
     v = v.strip()
     return v if v else default
 
 
-def env_bool(name: str, default: bool = False) -> bool:
+def env_bool(name, default=False):
     v = os.getenv(name)
     if v is None:
         return default
     return v.strip().lower() in ("1", "true", "yes", "y", "on")
 
 
-def env_int(name: str, default: int) -> int:
-    v = os.getenv(name)
-    if not v:
-        return default
-    try:
-        return int(v)
-    except Exception:
-        return default
-
-
-def env_float(name: str, default: float) -> float:
-    v = os.getenv(name)
-    if not v:
-        return default
-    try:
-        return float(v)
-    except Exception:
-        return default
-
-
-# -------------------------
-# GLOBAL CONFIG
-# -------------------------
-
-HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
+# =========================
+# CONFIG
+# =========================
 
 AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
+R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "") or "").rstrip("/")
 
-R2_PUBLIC_BASE_URL = (
-    env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or ""
-).rstrip("/")
+PREFIX_PRIORITY = (env_nonempty("B_PREFIX_PRIORITY", "ugc/final_priority") or "ugc/final_priority").strip().strip("/")
+PREFIX_MANUAL = (env_nonempty("B_PREFIX_MANUAL", "ugc/final_manual") or "ugc/final_manual").strip().strip("/")
+PREFIX_AUTO = (env_nonempty("B_PREFIX_AUTO", "ugc/final") or "ugc/final").strip().strip("/")
 
-GRAPH_VERSION = (env_nonempty("GRAPH_VERSION", "v25.0") or "v25.0").lstrip("v")
-GRAPH_BASE = f"https://graph.facebook.com/v{GRAPH_VERSION}"
+STATE_KEY = env_nonempty("B_STATE_KEY", "ugc/state/mode_b_state.json")
 
-IG_USER_ID = env_nonempty("IG_USER_ID")
-IG_ACCESS_TOKEN = env_nonempty("IG_ACCESS_TOKEN")
-
-FB_PAGE_ID = env_nonempty("FB_PAGE_ID")
-FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
-
-OPENAI_API_KEY = env_nonempty("OPENAI_API_KEY")
-OPENAI_MODEL = env_nonempty("OPENAI_MODEL", "gpt-4.1-mini")
+ENABLE_INSTAGRAM = env_bool("ENABLE_INSTAGRAM", False)
+ENABLE_FACEBOOK = env_bool("ENABLE_FACEBOOK", False)
+ENABLE_TIKTOK = env_bool("ENABLE_TIKTOK", False)
+ENABLE_SHORTS = env_bool("ENABLE_SHORTS", False)
 
 
-# -------------------------
-# R2 helpers
-# -------------------------
+# =========================
+# R2
+# =========================
 
-def r2_client():
-    if not (R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY):
-        raise RuntimeError("Faltan credenciales R2")
-
+def r2():
     return boto3.client(
         "s3",
         endpoint_url=R2_ENDPOINT_URL,
@@ -95,204 +60,134 @@ def r2_client():
     )
 
 
-def s3_get_bytes(key: str) -> bytes:
-    obj = r2_client().get_object(Bucket=BUCKET_NAME, Key=key)
-    return obj["Body"].read()
-
-
-def s3_put_bytes(key: str, data: bytes, content_type="application/octet-stream"):
-    r2_client().put_object(
-        Bucket=BUCKET_NAME,
-        Key=key,
-        Body=data,
-        ContentType=content_type,
-    )
-
-
-def r2_public_url(key: str) -> str:
-    return f"{R2_PUBLIC_BASE_URL}/{key}"
-
-
-# -------------------------
-# OpenAI helper
-# -------------------------
-
-def openai_text(prompt: str) -> str:
-
-    if not OPENAI_API_KEY:
-        raise RuntimeError("Falta OPENAI_API_KEY en secrets.")
-
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    r = requests.post(
-        "https://api.openai.com/v1/responses",
-        headers=headers,
-        json={
-            "model": OPENAI_MODEL,
-            "input": prompt
-        },
-        timeout=60,
-    )
-
-    if r.status_code >= 400:
-
-        r2 = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers=headers,
-            json={
-                "model": OPENAI_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-            },
-            timeout=60,
-        )
-
-        r2.raise_for_status()
-        j = r2.json()
-
-        return (j["choices"][0]["message"]["content"] or "").strip()
-
-    j = r.json()
-
-    if j.get("output_text"):
-        return j["output_text"].strip()
-
-    texts = []
-
-    for item in j.get("output", []) or []:
-        for part in item.get("content", []) or []:
-            if part.get("type") == "output_text":
-                texts.append(part.get("text", ""))
-
-    return "\n".join(texts).strip()
-
-
-# -------------------------
-# Instagram publish
-# -------------------------
-
-def ig_publish(video_url: str, caption: str):
-
-    if not (IG_USER_ID and IG_ACCESS_TOKEN):
-        raise RuntimeError("Faltan IG_USER_ID o IG_ACCESS_TOKEN")
-
-    r = requests.post(
-        f"{GRAPH_BASE}/{IG_USER_ID}/media",
-        data={
-            "media_type": "REELS",
-            "video_url": video_url,
-            "caption": caption,
-            "share_to_feed": "true",
-            "access_token": IG_ACCESS_TOKEN,
-        },
-        timeout=HTTP_TIMEOUT,
-    )
-
-    r.raise_for_status()
-
-    creation_id = r.json()["id"]
+def list_keys(prefix):
+    s3 = r2()
+    keys = []
+    token = None
 
     while True:
+        params = {"Bucket": BUCKET_NAME, "Prefix": f"{prefix}/", "MaxKeys": 200}
+        if token:
+            params["ContinuationToken"] = token
 
-        s = requests.get(
-            f"{GRAPH_BASE}/{creation_id}",
-            params={
-                "fields": "status_code",
-                "access_token": IG_ACCESS_TOKEN,
-            },
-            timeout=HTTP_TIMEOUT,
-        )
+        resp = s3.list_objects_v2(**params)
 
-        status = s.json().get("status_code")
+        for obj in resp.get("Contents", []):
+            k = obj["Key"]
+            if not k.endswith("/") and k.lower().endswith(".mp4"):
+                keys.append(k)
 
-        if status == "FINISHED":
+        if resp.get("IsTruncated"):
+            token = resp.get("NextContinuationToken")
+        else:
             break
 
-        if status in ("ERROR", "FAILED"):
-            raise RuntimeError(f"IG container error: {status}")
+    keys.sort()
+    return keys
 
-        time.sleep(3)
 
-    r = requests.post(
-        f"{GRAPH_BASE}/{IG_USER_ID}/media_publish",
-        data={
-            "creation_id": creation_id,
-            "access_token": IG_ACCESS_TOKEN,
-        },
-        timeout=HTTP_TIMEOUT,
+# =========================
+# STATE
+# =========================
+
+def load_state():
+    try:
+        obj = r2().get_object(Bucket=BUCKET_NAME, Key=STATE_KEY)
+        st = json.loads(obj["Body"].read())
+    except:
+        st = {}
+
+    if "published" not in st:
+        st["published"] = []
+
+    return st
+
+
+def save_state(st):
+    r2().put_object(
+        Bucket=BUCKET_NAME,
+        Key=STATE_KEY,
+        Body=json.dumps(st).encode(),
+        ContentType="application/json",
     )
 
-    r.raise_for_status()
 
-    return r.json()
+# =========================
+# PUBLISH
+# =========================
 
+def publish_stub(key):
+    """
+    Aquí luego se conectará IG / FB / TikTok / Shorts.
+    Por ahora solo log.
+    """
 
-# -------------------------
-# Facebook publish
-# -------------------------
+    public_url = f"{R2_PUBLIC_BASE_URL}/{key}" if R2_PUBLIC_BASE_URL else key
 
-def fb_publish(video_url: str, caption: str):
+    print("PUBLICANDO VIDEO:")
+    print("KEY:", key)
+    print("URL:", public_url)
 
-    if not (FB_PAGE_ID and FB_PAGE_ACCESS_TOKEN):
-        raise RuntimeError("Faltan FB tokens")
+    if ENABLE_INSTAGRAM:
+        print("→ Instagram ENABLED (pendiente integración)")
 
-    start = requests.post(
-        f"{GRAPH_BASE}/{FB_PAGE_ID}/video_reels",
-        data={
-            "upload_phase": "start",
-            "access_token": FB_PAGE_ACCESS_TOKEN,
-        },
-        timeout=HTTP_TIMEOUT,
-    )
+    if ENABLE_FACEBOOK:
+        print("→ Facebook ENABLED (pendiente integración)")
 
-    start.raise_for_status()
+    if ENABLE_TIKTOK:
+        print("→ TikTok ENABLED (pendiente integración)")
 
-    data = start.json()
+    if ENABLE_SHORTS:
+        print("→ YouTube Shorts ENABLED (pendiente integración)")
 
-    upload_url = data["upload_url"]
-    video_id = data["video_id"]
-
-    transfer = requests.post(
-        upload_url,
-        headers={
-            "Authorization": f"OAuth {FB_PAGE_ACCESS_TOKEN}",
-            "file_url": video_url,
-        },
-        timeout=HTTP_TIMEOUT,
-    )
-
-    transfer.raise_for_status()
-
-    finish = requests.post(
-        f"{GRAPH_BASE}/{FB_PAGE_ID}/video_reels",
-        data={
-            "upload_phase": "finish",
-            "video_id": video_id,
-            "video_state": "PUBLISHED",
-            "description": caption,
-            "access_token": FB_PAGE_ACCESS_TOKEN,
-        },
-        timeout=HTTP_TIMEOUT,
-    )
-
-    finish.raise_for_status()
-
-    return finish.json()
+    print("Publicado OK\n")
 
 
-# -------------------------
-# TikTok disabled
-# -------------------------
+# =========================
+# MAIN
+# =========================
 
-def tiktok_publish(video_url: str, caption: str):
-    return {"ok": False, "reason": "tiktok_disabled"}
+def run_mode_b():
+
+    print("===== MODE B (PUBLISHER) START =====")
+
+    state = load_state()
+    published = set(state["published"])
+
+    priority = list_keys(PREFIX_PRIORITY)
+    manual = list_keys(PREFIX_MANUAL)
+    auto = list_keys(PREFIX_AUTO)
+
+    print("Priority:", len(priority))
+    print("Manual:", len(manual))
+    print("Auto:", len(auto))
+
+    queue = []
+
+    queue.extend(priority)
+    queue.extend(manual)
+    queue.extend(auto)
+
+    count = 0
+
+    for key in queue:
+
+        if key in published:
+            continue
+
+        print("Procesando:", key)
+
+        publish_stub(key)
+
+        published.add(key)
+        count += 1
+
+    state["published"] = list(published)[-5000:]
+    save_state(state)
+
+    print("Publicados en esta corrida:", count)
+    print("===== MODE B DONE =====")
 
 
-# -------------------------
-# YouTube disabled
-# -------------------------
-
-def youtube_publish(video_path: str, caption: str):
-    return {"ok": False, "reason": "youtube_disabled"}
+if __name__ == "__main__":
+    run_mode_b()

@@ -79,7 +79,7 @@ print("RUN_MODE:", RUN_MODE)
 
 # MODE B
 if RUN_MODE in ("B", "UGC", "MODE_B", "MODEB"):
-    print(">>> RUN_MODE B - UGC ENGINE")
+    print(">>> RUN_MODE B - PUBLISHER")
     from ugc_mode_b import run_mode_b
 
     run_mode_b()

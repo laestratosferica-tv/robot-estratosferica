@@ -1,51 +1,48 @@
-# ugc_mode_h.py
 import os
 import re
 import json
-import math
 import random
 import hashlib
 import subprocess
 import tempfile
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List, Tuple
 
 import boto3
 
 
 # =========================
-# ENV helpers
+# ENV HELPERS
 # =========================
 
-def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
+def env_nonempty(name, default=None):
     v = os.getenv(name)
-    if v is None:
+    if not v:
         return default
     v = v.strip()
     return v if v else default
 
 
-def env_int(name: str, default: int) -> int:
+def env_int(name, default):
     v = os.getenv(name)
-    if not v or not v.strip():
+    if not v:
         return default
     try:
-        return int(v.strip())
-    except Exception:
+        return int(v)
+    except:
         return default
 
 
-def env_float(name: str, default: float) -> float:
+def env_float(name, default):
     v = os.getenv(name)
-    if not v or not v.strip():
+    if not v:
         return default
     try:
-        return float(v.strip())
-    except Exception:
+        return float(v)
+    except:
         return default
 
 
-def env_bool(name: str, default: bool = False) -> bool:
+def env_bool(name, default=False):
     v = os.getenv(name)
     if v is None:
         return default
@@ -55,8 +52,6 @@ def env_bool(name: str, default: bool = False) -> bool:
 # =========================
 # CONFIG
 # =========================
-
-HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
 
 AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
@@ -90,7 +85,7 @@ DEBUG_FINAL_NAME = env_nonempty("DEBUG_FINAL_NAME", "debug_final_reel.mp4") or "
 
 
 # =========================
-# HOOKS / CTA / GAME BADGES
+# TEXT LIBRARY
 # =========================
 
 GAME_BADGES = {
@@ -188,30 +183,30 @@ CTAS = [
 # HELPERS
 # =========================
 
-def now_utc() -> datetime:
+def now_utc():
     return datetime.now(timezone.utc)
 
 
-def iso_now_full() -> str:
+def iso_now_full():
     return now_utc().isoformat()
 
 
-def safe_slug(s: str) -> str:
+def safe_slug(s):
     s = (s or "").strip()
     s = re.sub(r"[^a-zA-Z0-9\-_]+", "_", s)[:140]
     return s.strip("_") or "clip"
 
 
-def short_hash_bytes(data: bytes) -> str:
+def short_hash_bytes(data):
     return hashlib.sha1(data).hexdigest()[:10]
 
 
-def safe_json_dumps(obj: Any) -> bytes:
+def safe_json_dumps(obj):
     return json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
 
 
-def list_mp3_files(search_dir: str) -> List[str]:
-    files: List[str] = []
+def list_mp3_files(search_dir):
+    files = []
     if search_dir and os.path.isdir(search_dir):
         for root, _, fnames in os.walk(search_dir):
             for f in fnames:
@@ -220,18 +215,19 @@ def list_mp3_files(search_dir: str) -> List[str]:
     return files
 
 
-def pick_music() -> Optional[str]:
+def pick_music():
     if random.random() > max(0.0, min(1.0, MUSIC_PROBABILITY)):
         return None
 
     candidates = list_mp3_files(MUSIC_SEARCH_DIR)
     good = []
+
     for c in candidates:
         try:
             if os.path.getsize(c) > 50_000:
                 good.append(c)
-        except Exception:
-            continue
+        except:
+            pass
 
     if not good:
         return None
@@ -239,9 +235,10 @@ def pick_music() -> Optional[str]:
     return random.choice(good)
 
 
-def pick_hud_overlay() -> Optional[str]:
+def pick_hud_overlay():
     if not ENABLE_HUD:
         return None
+
     if not os.path.isdir(HUD_DIR):
         return None
 
@@ -260,18 +257,20 @@ def pick_hud_overlay() -> Optional[str]:
     return random.choice(files)
 
 
-def wrap_text(text: str, max_chars_per_line: int = 18, max_lines: int = 2) -> str:
+def wrap_text(text, max_chars_per_line=18, max_lines=2):
     t = (text or "").strip().replace("\n", " ")
     words = t.split()
     if not words:
         return ""
 
-    lines: List[str] = []
+    lines = []
     cur = ""
+
     for w in words:
         if not cur:
             cur = w
             continue
+
         if len(cur) + 1 + len(w) <= max_chars_per_line:
             cur = cur + " " + w
         else:
@@ -289,7 +288,7 @@ def wrap_text(text: str, max_chars_per_line: int = 18, max_lines: int = 2) -> st
     return "\n".join(lines).strip()
 
 
-def ffprobe_json(path: str) -> dict:
+def ffprobe_json(path):
     cmd = [
         "ffprobe",
         "-v", "error",
@@ -303,19 +302,19 @@ def ffprobe_json(path: str) -> dict:
         return {}
     try:
         return json.loads(p.stdout or "{}")
-    except Exception:
+    except:
         return {}
 
 
-def get_video_duration(path: str) -> float:
+def get_video_duration(path):
     info = ffprobe_json(path)
     try:
         return float(info.get("format", {}).get("duration", 0.0) or 0.0)
-    except Exception:
+    except:
         return 0.0
 
 
-def game_from_key(key: str) -> str:
+def game_from_key(key):
     k = (key or "").lower()
 
     checks = [
@@ -332,6 +331,7 @@ def game_from_key(key: str) -> str:
         "cs2",
         "apex",
     ]
+
     for c in checks:
         if c in k:
             return c
@@ -339,17 +339,17 @@ def game_from_key(key: str) -> str:
     return "generic"
 
 
-def pick_hook(game_name: str) -> str:
+def pick_hook(game_name):
     g = (game_name or "").lower()
     options = GAME_HOOKS.get(g) or GENERIC_HOOKS
     return random.choice(options)
 
 
-def pick_cta() -> str:
+def pick_cta():
     return random.choice(CTAS)
 
 
-def pick_badge(game_name: str) -> str:
+def pick_badge(game_name):
     g = (game_name or "").lower()
     return GAME_BADGES.get(g, "GAMER")
 
@@ -361,6 +361,7 @@ def pick_badge(game_name: str) -> str:
 def r2_client():
     if not (R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and BUCKET_NAME):
         raise RuntimeError("Faltan credenciales R2/S3")
+
     return boto3.client(
         "s3",
         endpoint_url=R2_ENDPOINT_URL,
@@ -370,29 +371,31 @@ def r2_client():
     )
 
 
-def s3_put_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> str:
+def s3_put_bytes(key, data, content_type="application/octet-stream"):
     s3 = r2_client()
     s3.put_object(Bucket=BUCKET_NAME, Key=key, Body=data, ContentType=content_type)
+
     if R2_PUBLIC_BASE_URL.startswith("http"):
         return f"{R2_PUBLIC_BASE_URL}/{key}"
+
     return key
 
 
-def s3_put_json(key: str, payload: Dict[str, Any]):
+def s3_put_json(key, payload):
     s3_put_bytes(key, safe_json_dumps(payload), "application/json")
 
 
-def s3_get_json(key: str):
+def s3_get_json(key):
     try:
         obj = r2_client().get_object(Bucket=BUCKET_NAME, Key=key)
         return json.loads(obj["Body"].read().decode("utf-8"))
-    except Exception:
+    except:
         return None
 
 
-def r2_list_keys(prefix: str) -> List[str]:
+def r2_list_keys(prefix):
     s3 = r2_client()
-    keys: List[str] = []
+    keys = []
     continuation_token = None
 
     while True:
@@ -401,6 +404,7 @@ def r2_list_keys(prefix: str) -> List[str]:
             "Prefix": prefix,
             "MaxKeys": 200,
         }
+
         if continuation_token:
             kwargs["ContinuationToken"] = continuation_token
 
@@ -419,7 +423,7 @@ def r2_list_keys(prefix: str) -> List[str]:
     return keys
 
 
-def r2_download_to_file(key: str, dst_path: str):
+def r2_download_to_file(key, dst_path):
     r2_client().download_file(BUCKET_NAME, key, dst_path)
 
 
@@ -427,16 +431,21 @@ def r2_download_to_file(key: str, dst_path: str):
 # STATE
 # =========================
 
-def load_state() -> Dict[str, Any]:
+def load_state():
     st = s3_get_json(MODE_H_STATE_KEY)
     if not st:
         st = {"processed_keys": [], "last_run_at": None}
-    st.setdefault("processed_keys", [])
-    st.setdefault("last_run_at", None)
+
+    if "processed_keys" not in st:
+        st["processed_keys"] = []
+
+    if "last_run_at" not in st:
+        st["last_run_at"] = None
+
     return st
 
 
-def save_state(st: Dict[str, Any]):
+def save_state(st):
     st["last_run_at"] = iso_now_full()
     s3_put_json(MODE_H_STATE_KEY, st)
 
@@ -446,13 +455,13 @@ def save_state(st: Dict[str, Any]):
 # =========================
 
 def build_hype_reel(
-    input_video: str,
-    output_video: str,
-    hook_text: str,
-    badge_text: str,
-    cta_text: str,
-    music_mp3: Optional[str],
-    hud_png: Optional[str],
+    input_video,
+    output_video,
+    hook_text,
+    badge_text,
+    cta_text,
+    music_mp3,
+    hud_png,
 ):
     if not FONT_BOLD or not os.path.exists(FONT_BOLD):
         raise RuntimeError(f"No existe FONT_BOLD: {FONT_BOLD}")
@@ -468,12 +477,15 @@ def build_hype_reel(
 
         with open(hook_txt, "w", encoding="utf-8") as f:
             f.write(hook_wrapped)
+
         with open(cta_txt, "w", encoding="utf-8") as f:
             f.write(cta_wrapped)
+
         with open(badge_txt, "w", encoding="utf-8") as f:
             f.write(badge_wrapped)
 
         duration = max(3.0, get_video_duration(input_video))
+
         cmd = [
             "ffmpeg",
             "-y",

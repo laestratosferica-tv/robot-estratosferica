@@ -1,0 +1,67 @@
+name: hype-packer
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 */2 * * *"
+
+jobs:
+  hype_pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests boto3
+
+      - name: Run Mode H
+        env:
+          RUN_MODE: H
+
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+
+          MODE_H_INPUT_PREFIX: ugc/library/clips
+          MODE_H_OUTPUT_PREFIX: ugc/final
+          MODE_H_META_PREFIX: ugc/meta/final
+          MODE_H_STATE_KEY: ugc/state/mode_h_state.json
+          MODE_H_MAX_ITEMS: "6"
+
+          REEL_W: "1080"
+          REEL_H: "1920"
+          REEL_FPS: "30"
+
+          FONT_BOLD: /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+
+          MUSIC_SEARCH_DIR: assets
+          MUSIC_PROBABILITY: "0.85"
+          MUSIC_VOLUME: "0.28"
+
+          ENABLE_HUD: "true"
+          HUD_DIR: assets
+          HUD_PREFIX: "hud_"
+          HUD_OPACITY: "0.18"
+
+          SAVE_DEBUG_FINAL: "true"
+          DEBUG_FINAL_NAME: debug_final_reel.mp4
+
+        run: |
+          python -u main.py

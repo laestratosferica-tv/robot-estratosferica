@@ -8,7 +8,6 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 
-import requests
 import boto3
 
 
@@ -69,10 +68,6 @@ YOUTUBE_MAX_DURATION_SEC = env_float("YOUTUBE_MAX_DURATION_SEC", 14_400.0)  # 4h
 YOUTUBE_ONLY_LIVE_REPLAYS = env_bool("YOUTUBE_ONLY_LIVE_REPLAYS", False)
 
 HTTP_TIMEOUT = env_float("HTTP_TIMEOUT", 30.0)
-USER_AGENT = env_nonempty(
-    "HTTP_USER_AGENT",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36"
-) or "Mozilla/5.0"
 
 STATE_KEY = env_nonempty("YOUTUBE_MODE_Y_STATE_KEY", "ugc/state/mode_y_state.json")
 R2_META_PREFIX = (env_nonempty("UGC_META_PREFIX", "ugc/meta/") or "ugc/meta/").strip()
@@ -238,13 +233,14 @@ def yt_dlp_search(term: str) -> List[Dict[str, Any]]:
         YT_DLP_BIN,
         "--dump-single-json",
         "--skip-download",
+        "--remote-components", "ejs:github",
         "--dateafter", f"today-{YOUTUBE_SEARCH_DAYS}days",
         query,
     ]
 
     code, stdout, stderr = run_cmd(cmd)
     if code != 0:
-        print("yt-dlp search error:", stderr[:500])
+        print("yt-dlp search error:", stderr[:1000])
         return []
 
     try:
@@ -316,7 +312,6 @@ def youtube_score(item: Dict[str, Any]) -> float:
     if "ea sports fc" in search_term or "f1" in search_term or "gran turismo" in search_term:
         bonus += 60
 
-    # premia piezas intermedias
     duration_bonus = 0
     if 60 <= duration <= 1800:
         duration_bonus = 100
@@ -327,6 +322,7 @@ def youtube_score(item: Dict[str, Any]) -> float:
 def yt_dlp_download_video(video_url: str, out_path: str) -> bool:
     cmd = [
         YT_DLP_BIN,
+        "--remote-components", "ejs:github",
         "-f", "mp4/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
         "--merge-output-format", "mp4",
         "-o", out_path,
@@ -335,7 +331,7 @@ def yt_dlp_download_video(video_url: str, out_path: str) -> bool:
 
     code, _, stderr = run_cmd(cmd)
     if code != 0:
-        print("yt-dlp download error:", stderr[:500])
+        print("yt-dlp download error:", stderr[:1000])
         return False
     return True
 
@@ -439,7 +435,6 @@ def run_mode_y() -> None:
             if not ok:
                 continue
 
-            # localizar el archivo real descargado
             downloaded = None
             for name in os.listdir(td):
                 if name.startswith("video.") and name.lower().endswith(".mp4"):

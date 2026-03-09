@@ -8,6 +8,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -36,6 +37,12 @@ jobs:
           B_PREFIX_PRIORITY: ugc/final_priority
           B_PREFIX_MANUAL: ugc/final_manual
           B_PREFIX_AUTO: ugc/final
+          B_STATE_KEY: ugc/state/mode_b_state.json
+
+          ENABLE_INSTAGRAM: "true"
+          ENABLE_FACEBOOK: "true"
+          ENABLE_TIKTOK: "false"
+          ENABLE_SHORTS: "false"
 
         run: |
           python -u main.py

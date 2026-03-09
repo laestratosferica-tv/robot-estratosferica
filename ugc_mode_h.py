@@ -245,10 +245,23 @@ def pick_hud_overlay():
     files = []
     for f in os.listdir(HUD_DIR):
         name = f.lower()
+
         if not name.startswith(HUD_PREFIX.lower()):
             continue
+
         if not name.endswith(".png"):
             continue
+
+        if (
+            "safearea" in name
+            or "guide" in name
+            or "guides" in name
+            or "template" in name
+            or "layout" in name
+            or "grid" in name
+        ):
+            continue
+
         files.append(os.path.join(HUD_DIR, f))
 
     if not files:
@@ -316,11 +329,13 @@ def get_video_duration(path):
 
 def game_from_key(key):
     k = (key or "").lower()
+    normalized = k.replace("_", " ").replace("-", " ")
 
     checks = [
         "ea sports fc",
         "gran turismo",
         "league of legends",
+        "counter strike",
         "counter-strike",
         "valorant",
         "fortnite",
@@ -333,11 +348,10 @@ def game_from_key(key):
     ]
 
     for c in checks:
-        if c in k:
+        if c in normalized:
             return c
 
     return "generic"
-
 
 def pick_hook(game_name):
     g = (game_name or "").lower()

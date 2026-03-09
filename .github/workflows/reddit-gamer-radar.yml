@@ -1,0 +1,44 @@
+name: reddit-gamer-radar
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "20 */2 * * *"
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install python dependencies
+        run: |
+          pip install requests boto3
+
+      - name: Run Mode Z
+        env:
+          RUN_MODE: Z
+
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+
+          VIRAL_IDEAS_PREFIX: ugc/ideas/
+          REDDIT_MODE_Z_STATE_KEY: ugc/state/mode_z_state.json
+
+          REDDIT_GAMER_SUBS: "ValorantCompetitive,GlobalOffensive,leagueoflegends,FortniteCompetitive,CODWarzone,apexlegends,Minecraft,fifacareers,simracing,granturismo,F1Game"
+          REDDIT_MAX_POSTS_PER_SUB: "10"
+          REDDIT_MIN_SCORE: "100"
+          REDDIT_MIN_COMMENTS: "15"
+
+        run: |
+          python -u main.py

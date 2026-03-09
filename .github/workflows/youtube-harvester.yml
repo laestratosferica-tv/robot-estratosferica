@@ -2,7 +2,6 @@ name: youtube-harvester
 
 on:
   workflow_dispatch:
-
   schedule:
     - cron: "*/40 * * * *"
 
@@ -40,6 +39,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests boto3 "yt-dlp[default]"
 
+      - name: Write YouTube cookies
+        run: |
+          cat <<'EOF' > youtube_cookies.txt
+          ${{ secrets.YOUTUBE_COOKIES_TXT }}
+          EOF
+          test -s youtube_cookies.txt
+
       - name: Check yt-dlp / runtimes
         run: |
           which python
@@ -53,25 +59,16 @@ jobs:
         env:
           RUN_MODE: Y
 
-          # =====================
-          # R2 STORAGE
-          # =====================
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
-          # =====================
-          # UGC PIPELINE
-          # =====================
           UGC_INBOX_PREFIX: ugc/inbox
           UGC_META_PREFIX: ugc/meta
           YOUTUBE_MODE_Y_STATE_KEY: ugc/state/mode_y_state.json
 
-          # =====================
-          # YOUTUBE SETTINGS
-          # =====================
           YOUTUBE_SEARCH_TERMS: "EA Sports FC,F1,Gran Turismo,VALORANT,CS2,League of Legends,Fortnite,Warzone,Apex Legends,Minecraft"
           YOUTUBE_MAX_RESULTS_PER_TERM: "5"
           YOUTUBE_MAX_DOWNLOADS_PER_RUN: "3"
@@ -80,10 +77,8 @@ jobs:
           YOUTUBE_MIN_DURATION_SEC: "30"
           YOUTUBE_MAX_DURATION_SEC: "14400"
 
-          # yt-dlp runtime helpers
           YT_DLP_BIN: yt-dlp
-          HTTP_TIMEOUT: "30"
-          HTTP_USER_AGENT: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36"
+          YT_DLP_COOKIES_FILE: youtube_cookies.txt
 
         run: |
           python -u main.py

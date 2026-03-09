@@ -4,6 +4,7 @@ import random
 import subprocess
 import tempfile
 from datetime import datetime
+
 import boto3
 
 
@@ -84,15 +85,28 @@ def load_state():
     if not isinstance(state, dict):
         state = {}
 
-    # asegurar clave correcta
     if "processed" not in state:
         state["processed"] = []
 
-    # compatibilidad con estados viejos
     if not isinstance(state["processed"], list):
         state["processed"] = []
 
     return state
+
+
+def save_state(state):
+
+    if not isinstance(state, dict):
+        state = {}
+
+    if "processed" not in state:
+        state["processed"] = []
+
+    r2().put_object(
+        Bucket=BUCKET_NAME,
+        Key=STATE_KEY,
+        Body=json.dumps(state).encode(),
+        ContentType="application/json",
     )
 
 
@@ -146,7 +160,7 @@ def upload(path, key):
 
 
 # =========================
-# GET VIDEO DURATION
+# VIDEO DURATION
 # =========================
 
 def get_duration(path):

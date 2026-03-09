@@ -1,6 +1,5 @@
 import os
 import json
-from datetime import datetime, timezone
 
 import boto3
 
@@ -24,6 +23,16 @@ def env_bool(name, default=False):
     return v.strip().lower() in ("1", "true", "yes", "y", "on")
 
 
+def env_int(name, default):
+    v = os.getenv(name)
+    if not v:
+        return default
+    try:
+        return int(v)
+    except:
+        return default
+
+
 # =========================
 # CONFIG
 # =========================
@@ -39,6 +48,7 @@ PREFIX_MANUAL = (env_nonempty("B_PREFIX_MANUAL", "ugc/final_manual") or "ugc/fin
 PREFIX_AUTO = (env_nonempty("B_PREFIX_AUTO", "ugc/final") or "ugc/final").strip().strip("/")
 
 STATE_KEY = env_nonempty("B_STATE_KEY", "ugc/state/mode_b_state.json")
+B_MAX_PUBLISH_PER_RUN = env_int("B_MAX_PUBLISH_PER_RUN", 2)
 
 ENABLE_INSTAGRAM = env_bool("ENABLE_INSTAGRAM", False)
 ENABLE_FACEBOOK = env_bool("ENABLE_FACEBOOK", False)
@@ -66,7 +76,12 @@ def list_keys(prefix):
     token = None
 
     while True:
-        params = {"Bucket": BUCKET_NAME, "Prefix": f"{prefix}/", "MaxKeys": 200}
+        params = {
+            "Bucket": BUCKET_NAME,
+            "Prefix": f"{prefix}/",
+            "MaxKeys": 200,
+        }
+
         if token:
             params["ContinuationToken"] = token
 
@@ -117,11 +132,6 @@ def save_state(st):
 # =========================
 
 def publish_stub(key):
-    """
-    Aquí luego se conectará IG / FB / TikTok / Shorts.
-    Por ahora solo log.
-    """
-
     public_url = f"{R2_PUBLIC_BASE_URL}/{key}" if R2_PUBLIC_BASE_URL else key
 
     print("PUBLICANDO VIDEO:")
@@ -148,8 +158,8 @@ def publish_stub(key):
 # =========================
 
 def run_mode_b():
-
     print("===== MODE B (PUBLISHER) START =====")
+    print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
 
     state = load_state()
     published = set(state["published"])
@@ -163,7 +173,6 @@ def run_mode_b():
     print("Auto:", len(auto))
 
     queue = []
-
     queue.extend(priority)
     queue.extend(manual)
     queue.extend(auto)
@@ -171,6 +180,8 @@ def run_mode_b():
     count = 0
 
     for key in queue:
+        if count >= B_MAX_PUBLISH_PER_RUN:
+            break
 
         if key in published:
             continue

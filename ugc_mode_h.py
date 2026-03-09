@@ -365,7 +365,24 @@ def pick_cta():
 
 def pick_badge(game_name):
     g = (game_name or "").lower()
-    return GAME_BADGES.get(g, "GAMER")
+
+    mapping = {
+        "counter strike": "CS2",
+        "counter-strike": "CS2",
+        "ea sports fc": "FC",
+        "gran turismo": "GT",
+        "league of legends": "LOL",
+        "valorant": "VALORANT",
+        "fortnite": "FORTNITE",
+        "warzone": "WARZONE",
+        "apex legends": "APEX",
+        "apex": "APEX",
+        "minecraft": "MINECRAFT",
+        "f1": "F1",
+        "cs2": "CS2",
+    }
+
+    return mapping.get(g, "GAMER")
 
 
 # =========================

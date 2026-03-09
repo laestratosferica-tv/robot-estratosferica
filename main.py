@@ -142,6 +142,14 @@ if RUN_MODE in ("Y", "MODE_Y"):
     run_mode_y()
     raise SystemExit(0)
 
+# MODE H
+if RUN_MODE in ("H", "MODE_H"):
+    print(">>> RUN_MODE H - HYPE PACKER")
+    from ugc_mode_h import run_mode_h
+
+    run_mode_h()
+    raise SystemExit(0)
+
 print(">>> RUN_MODE A - EDITORIAL ENGINE")
 
 # =========================

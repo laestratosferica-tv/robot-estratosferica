@@ -3,7 +3,7 @@ name: Drive Sync → R2
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "*/15 * * * *"  # cada 15 minutos
+    - cron: "*/15 * * * *"
 
 concurrency:
   group: drive-sync-r2
@@ -36,16 +36,30 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-          # --- Google Drive ---
+          # --- Google Drive Service Account ---
           GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-          GDRIVE_DONE_FOLDER_ID: ${{ secrets.GDRIVE_DONE_FOLDER_ID }}
 
-          # --- Sync behavior ---
-          UGC_INBOX_PREFIX: "ugc/inbox/"
+          # --- Drive folders: inbox_manual ---
+          GDRIVE_INBOX_MANUAL_FOLDER_ID: ${{ secrets.GDRIVE_INBOX_MANUAL_FOLDER_ID }}
+          GDRIVE_INBOX_MANUAL_DONE_FOLDER_ID: ${{ secrets.GDRIVE_INBOX_MANUAL_DONE_FOLDER_ID }}
+
+          # --- Drive folders: final_manual ---
+          GDRIVE_FINAL_MANUAL_FOLDER_ID: ${{ secrets.GDRIVE_FINAL_MANUAL_FOLDER_ID }}
+          GDRIVE_FINAL_MANUAL_DONE_FOLDER_ID: ${{ secrets.GDRIVE_FINAL_MANUAL_DONE_FOLDER_ID }}
+
+          # --- Drive folders: final_priority ---
+          GDRIVE_FINAL_PRIORITY_FOLDER_ID: ${{ secrets.GDRIVE_FINAL_PRIORITY_FOLDER_ID }}
+          GDRIVE_FINAL_PRIORITY_DONE_FOLDER_ID: ${{ secrets.GDRIVE_FINAL_PRIORITY_DONE_FOLDER_ID }}
+
+          # --- R2 prefixes ---
+          UGC_INBOX_MANUAL_PREFIX: "ugc/inbox_manual/"
+          UGC_FINAL_MANUAL_PREFIX: "ugc/final_manual/"
+          UGC_FINAL_PRIORITY_PREFIX: "ugc/final_priority/"
+
+          # --- Behavior ---
           MAX_FILES_PER_RUN: "20"
           ONLY_VIDEO: "true"
           DRY_RUN: "false"
 
         run: |
-          python -u drive_sync.py
+          python -u sync_drive_to_r2.py

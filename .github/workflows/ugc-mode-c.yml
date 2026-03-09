@@ -1,16 +1,12 @@
-name: Robot Clip Generator (Modo C)
+name: ugc-mode-c
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
   schedule:
-    - cron: "30 */4 * * *"
-
-concurrency:
-  group: robot-clip-generator
-  cancel-in-progress: false
+    - cron: "10 * * * *"
 
 jobs:
-  ugc_mode_c:
+  clip_generator:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -18,66 +14,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install system deps (ffmpeg)
+      - name: Install system packages
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          ffmpeg -version
 
-      - name: Install Python deps
+      - name: Install python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install boto3
 
-      - name: Run Mode C (Clip Generator)
-        run: python -u main.py
+      - name: Run Mode C
         env:
           RUN_MODE: C
 
-          # --- R2 / S3 ---
-          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
-          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
-          # --- Mode C paths/state ---
-          UGC_MODE_C_STATE_KEY: ugc/state/mode_c_state.json
-          UGC_LIBRARY_PREFIX: ugc/inbox/
-          UGC_CLIPS_PREFIX: ugc/library/clips/
-          UGC_META_PREFIX: ugc/meta/
+          UGC_INBOX_PREFIX: ugc/inbox
 
-          # --- Mode C tuning ---
           MODE_C_CLIP_SECONDS: "8"
           MODE_C_MAX_INPUTS: "5"
           MODE_C_MAX_CLIPS_PER_VIDEO: "3"
-          MODE_C_MIN_SOURCE_BYTES: "200000"
 
-          # --- Publish control ---
-          MODE_C_UPLOAD_ONLY: "false"
-          MODE_C_PUBLISH_IG: "true"
-          MODE_C_PUBLISH_FB: "true"
-          MODE_C_PUBLISH_TIKTOK: "false"
-          MODE_C_PUBLISH_YOUTUBE: "false"
-
-          # --- Instagram publish ---
-          IG_USER_ID: ${{ secrets.IG_USER_ID }}
-          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
-          GRAPH_VERSION: "v25.0"
-
-          # --- Facebook publish ---
-          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
-
-          # --- OpenAI captions ---
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: gpt-4.1-mini
-
-          # --- Shared ---
-          DRY_RUN: "false"
-          HTTP_TIMEOUT: "30"
+        run: |
+          python -u main.py

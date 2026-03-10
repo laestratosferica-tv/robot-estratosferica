@@ -23,11 +23,11 @@ except ImportError:
 
 # OpenAI
 try:
-    import openai
+    from openai import OpenAI
 except ImportError:
     import subprocess, sys
     subprocess.check_call([sys.executable, "-m", "pip", "install", "openai>=1.0.0"])
-    import openai
+    from openai import OpenAI
 
 print(
     "RUNNING MEDIA ENGINE (Threads + Reels + IG + FB + YT + TikTok + Multi-account via accounts.json)"

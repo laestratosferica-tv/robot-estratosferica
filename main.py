@@ -16,8 +16,10 @@ import boto3
 # RSS
 try:
     import feedparser
-except Exception:
-    feedparser = None
+except ImportError:
+    import subprocess, sys
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "feedparser"])
+    import feedparser
 
 # OpenAI
 try:

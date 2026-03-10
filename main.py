@@ -1443,7 +1443,7 @@ def generate_reel_from_video_bg(
         with open(badge_txt, "w", encoding="utf-8") as f:
             f.write(badge_text)
 
-                cmd = [
+        cmd = [
             "ffmpeg",
             "-y",
             "-nostdin",
@@ -1466,7 +1466,7 @@ def generate_reel_from_video_bg(
 
         vf_parts = []
 
-               vf_parts.append(
+        vf_parts.append(
             f"[0:v]"
             f"trim=start=0.0:duration={int(seconds)},"
             f"setpts=PTS-STARTPTS,"
@@ -1479,8 +1479,7 @@ def generate_reel_from_video_bg(
 
         vf_parts.append(
             f"[bg]"
-            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=black@0.18:t=fill,"
-            f"drawbox=x=0:y=1180:w={REEL_W}:h=740:color=black@0.22:t=fill"
+            f"drawbox=x=0:y=1180:w={REEL_W}:h=740:color=black@0.10:t=fill"
             f"[bg2];"
         )
 
@@ -1514,7 +1513,7 @@ def generate_reel_from_video_bg(
 
         vf_parts.append(
             f"{current}"
-            f"drawbox=x=58:y=1230:w=964:h=360:color=black@0.18:t=fill"
+            f"drawbox=x=58:y=1230:w=964:h=360:color=black@0.10:t=fill"
             f"[textbase];"
         )
         current = "[textbase]"

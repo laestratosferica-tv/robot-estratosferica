@@ -71,14 +71,21 @@ REEL_H = env_int("REEL_H", 1920)
 REEL_FPS = env_int("REEL_FPS", 30)
 
 FONT_BOLD = env_nonempty("FONT_BOLD", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
-MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
-MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.85)
-MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.28)
 
-ENABLE_HUD = env_bool("ENABLE_HUD", True)
+MUSIC_SEARCH_DIR = env_nonempty("MUSIC_SEARCH_DIR", "assets") or "assets"
+MUSIC_PROBABILITY = env_float("MUSIC_PROBABILITY", 0.0)
+MUSIC_VOLUME = env_float("MUSIC_VOLUME", 0.18)
+
+KEEP_ORIGINAL_AUDIO = env_bool("KEEP_ORIGINAL_AUDIO", True)
+
+ENABLE_HUD = env_bool("ENABLE_HUD", False)
 HUD_DIR = env_nonempty("HUD_DIR", "assets") or "assets"
 HUD_PREFIX = env_nonempty("HUD_PREFIX", "hud_") or "hud_"
-HUD_OPACITY = env_float("HUD_OPACITY", 0.18)
+HUD_OPACITY = env_float("HUD_OPACITY", 0.10)
+
+ENABLE_BADGE_TEXT = env_bool("ENABLE_BADGE_TEXT", False)
+ENABLE_HOOK_TEXT = env_bool("ENABLE_HOOK_TEXT", False)
+ENABLE_CTA_TEXT = env_bool("ENABLE_CTA_TEXT", False)
 
 SAVE_DEBUG_FINAL = env_bool("SAVE_DEBUG_FINAL", True)
 DEBUG_FINAL_NAME = env_nonempty("DEBUG_FINAL_NAME", "debug_final_reel.mp4") or "debug_final_reel.mp4"
@@ -92,6 +99,7 @@ GAME_BADGES = {
     "valorant": "VALORANT",
     "cs2": "CS2",
     "counter-strike": "CS2",
+    "counter strike": "CS2",
     "league of legends": "LOL",
     "fortnite": "FORTNITE",
     "warzone": "WARZONE",
@@ -353,6 +361,7 @@ def game_from_key(key):
 
     return "generic"
 
+
 def pick_hook(game_name):
     g = (game_name or "").lower()
     options = GAME_HOOKS.get(g) or GENERIC_HOOKS
@@ -527,12 +536,12 @@ def build_hype_reel(
         ]
 
         hud_input_idx = None
-        if hud_png and os.path.exists(hud_png):
+        if hud_png and os.path.exists(hud_png) and ENABLE_HUD:
             cmd += ["-i", hud_png]
             hud_input_idx = 1
 
         music_input_idx = None
-        if music_mp3 and os.path.exists(music_mp3):
+        if music_mp3 and os.path.exists(music_mp3) and MUSIC_PROBABILITY > 0:
             cmd += ["-i", music_mp3]
             music_input_idx = 2 if hud_input_idx is not None else 1
 
@@ -561,54 +570,58 @@ def build_hype_reel(
             )
             current = "[v1]"
 
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=black@0.10:t=fill,"
-            f"drawbox=x=0:y=0:w={REEL_W}:h=210:color=black@0.18:t=fill,"
-            f"drawbox=x=0:y=1540:w={REEL_W}:h=380:color=black@0.20:t=fill"
-            f"[v2];"
-        )
-        current = "[v2]"
+        if ENABLE_BADGE_TEXT:
+            vf_parts.append(
+                f"{current}"
+                f"drawbox=x=60:y=70:w=250:h=78:color=white@0.82:t=fill,"
+                f"drawtext=fontfile={FONT_BOLD}:textfile={badge_txt}:"
+                f"x=94:y=90:fontsize=38:fontcolor=black"
+                f"[vbadge];"
+            )
+            current = "[vbadge]"
 
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=60:y=70:w=250:h=78:color=white@0.92:t=fill,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={badge_txt}:"
-            f"x=94:y=90:fontsize=38:fontcolor=black"
-            f"[v3];"
-        )
-        current = "[v3]"
+        if ENABLE_HOOK_TEXT:
+            vf_parts.append(
+                f"{current}"
+                f"drawtext=fontfile={FONT_BOLD}:textfile={hook_txt}:"
+                f"x=64:y=140:"
+                f"fontsize=64:"
+                f"line_spacing=8:"
+                f"fontcolor=white:"
+                f"borderw=2:bordercolor=black@0.55:"
+                f"box=1:boxcolor=black@0.18:boxborderw=12"
+                f"[vhook];"
+            )
+            current = "[vhook]"
 
-        vf_parts.append(
-            f"{current}"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={hook_txt}:"
-            f"x=64:y=230:"
-            f"fontsize=82:"
-            f"line_spacing=10:"
-            f"fontcolor=white:"
-            f"borderw=3:bordercolor=black@0.6:"
-            f"box=1:boxcolor=black@0.32:boxborderw=20"
-            f"[v4];"
-        )
-        current = "[v4]"
-
-        vf_parts.append(
-            f"{current}"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
-            f"x=64:y=1660:"
-            f"fontsize=48:"
-            f"fontcolor=white:"
-            f"borderw=2:bordercolor=black@0.5:"
-            f"box=1:boxcolor=black@0.28:boxborderw=16"
-            f"[vout]"
-        )
+        if ENABLE_CTA_TEXT:
+            vf_parts.append(
+                f"{current}"
+                f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
+                f"x=64:y=1660:"
+                f"fontsize=42:"
+                f"fontcolor=white:"
+                f"borderw=2:bordercolor=black@0.45:"
+                f"box=1:boxcolor=black@0.16:boxborderw=10"
+                f"[vcta]"
+            )
+            current = "[vcta]"
+        else:
+            vf_parts.append(f"{current}format=yuv420p[vcta]")
+            current = "[vcta]"
 
         cmd += [
             "-filter_complex", "".join(vf_parts),
-            "-map", "[vout]",
+            "-map", current,
         ]
 
-        if music_input_idx is not None:
+        if KEEP_ORIGINAL_AUDIO:
+            cmd += [
+                "-map", "0:a?",
+                "-c:a", "aac",
+                "-b:a", "128k",
+            ]
+        elif music_input_idx is not None:
             fade_out_start = max(0.0, duration - 0.9)
             cmd += [
                 "-map", f"{music_input_idx}:a",
@@ -644,6 +657,13 @@ def run_mode_h():
     print("MODE_H_META_PREFIX:", MODE_H_META_PREFIX)
     print("MODE_H_STATE_KEY:", MODE_H_STATE_KEY)
     print("MODE_H_MAX_ITEMS:", MODE_H_MAX_ITEMS)
+
+    print("KEEP_ORIGINAL_AUDIO:", KEEP_ORIGINAL_AUDIO)
+    print("MUSIC_PROBABILITY:", MUSIC_PROBABILITY)
+    print("ENABLE_HUD:", ENABLE_HUD)
+    print("ENABLE_BADGE_TEXT:", ENABLE_BADGE_TEXT)
+    print("ENABLE_HOOK_TEXT:", ENABLE_HOOK_TEXT)
+    print("ENABLE_CTA_TEXT:", ENABLE_CTA_TEXT)
 
     state = load_state()
     processed = set(state.get("processed_keys", []))

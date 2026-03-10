@@ -1059,8 +1059,44 @@ def download_runway_mp4_robust(mp4_url: str, task_id: Optional[str] = None) -> b
 # =========================
 # Reel generator helpers
 # =========================
+    
+def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.35) -> str:
+    """
+    Limpia el video de Runway para evitar primer frame negro
+    y arranques raros por seek/keyframes.
+    """
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i", src_path,
+        "-ss", str(start_sec),
+        "-an",
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "18",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        dst_path,
+    ]
 
+    p = subprocess.run(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    if p.returncode != 0:
+        raise RuntimeError(
+            f"sanitize_runway_bg_video falló:\nSTDERR:\n{(p.stderr or '')[:4000]}"
+        )
 
+    return dst_path
 def _require_file(path: str, label: str) -> None:
     if not os.path.exists(path):
         raise RuntimeError(f"Falta {label} en repo: {path}")

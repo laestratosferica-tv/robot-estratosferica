@@ -40,8 +40,8 @@ jobs:
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
           MODE_H_INPUT_PREFIX: ugc/library/clips
-          MODE_H_OUTPUT_PREFIX: ugc/final
-          MODE_H_META_PREFIX: ugc/meta/final
+          MODE_H_OUTPUT_PREFIX: ugc/final_clean
+          MODE_H_META_PREFIX: ugc/meta/final_clean
           MODE_H_STATE_KEY: ugc/state/mode_h_state.json
           MODE_H_MAX_ITEMS: "6"
 
@@ -65,6 +65,9 @@ jobs:
           ENABLE_BADGE_TEXT: "false"
           ENABLE_HOOK_TEXT: "false"
           ENABLE_CTA_TEXT: "false"
+
+          SAVE_DEBUG_FINAL: "true"
+          DEBUG_FINAL_NAME: debug_final_reel.mp4
 
         run: |
           python -u main.py

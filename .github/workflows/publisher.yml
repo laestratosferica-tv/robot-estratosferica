@@ -41,6 +41,9 @@ jobs:
           B_STATE_KEY: ugc/state/mode_b_state.json
           B_MAX_PUBLISH_PER_RUN: "2"
 
+          # FILTRO TEMPORAL PARA EVITAR BACKLOG VIEJO
+          B_ONLY_KEYS_CONTAIN: "2026-03-09"
+
           ENABLE_INSTAGRAM: "true"
           ENABLE_FACEBOOK: "true"
           ENABLE_TIKTOK: "false"

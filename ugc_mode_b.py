@@ -62,6 +62,7 @@ PREFIX_AUTO = (env_nonempty("B_PREFIX_AUTO", "ugc/final") or "ugc/final").strip(
 STATE_KEY = env_nonempty("B_STATE_KEY", "ugc/state/mode_b_state.json")
 B_MAX_PUBLISH_PER_RUN = env_int("B_MAX_PUBLISH_PER_RUN", 2)
 B_ONLY_KEYS_CONTAIN = env_nonempty("B_ONLY_KEYS_CONTAIN", "")
+B_AVOID_SAME_SOURCE_PER_RUN = env_bool("B_AVOID_SAME_SOURCE_PER_RUN", True)
 
 ENABLE_INSTAGRAM = env_bool("ENABLE_INSTAGRAM", False)
 ENABLE_FACEBOOK = env_bool("ENABLE_FACEBOOK", False)
@@ -128,7 +129,6 @@ def list_keys(prefix):
         else:
             break
 
-    # más nuevo primero
     items.sort(
         key=lambda x: x["last_modified"] or 0,
         reverse=True,
@@ -144,11 +144,6 @@ def get_public_url(key):
 
 
 def load_meta_for_video(key):
-    """
-    Busca meta de H:
-    ugc/final/foo__hype__abc.mp4
-    -> ugc/meta/final/foo__hype__abc.json
-    """
     base = os.path.basename(key).rsplit(".", 1)[0] + ".json"
     meta_key = f"{META_FINAL_PREFIX}/{base}"
 
@@ -224,6 +219,60 @@ def build_caption_from_meta(key, meta):
         f"{cta}\n\n"
         f"{hashtag_line}"
     )
+
+
+# =========================
+# QUEUE HELPERS
+# =========================
+
+def extract_source_group(key):
+    """
+    Agrupa reels del mismo video fuente.
+    Ej:
+    2026-03-09_youtube_ABC_title__0__hash__hype__x.mp4
+    2026-03-09_youtube_ABC_title__1__hash__hype__y.mp4
+    -> mismo source group
+    """
+    base = os.path.basename(key).rsplit(".", 1)[0]
+
+    if "__hype__" in base:
+        base = base.split("__hype__", 1)[0]
+
+    parts = base.split("__")
+
+    if len(parts) >= 3:
+        # quitamos el índice de clip (__0__, __1__, __2__)
+        return "__".join(parts[:-2])
+
+    return base
+
+
+def diversify_queue(queue):
+    if not B_AVOID_SAME_SOURCE_PER_RUN:
+        return queue
+
+    groups = {}
+    order = []
+
+    for key in queue:
+        group = extract_source_group(key)
+        if group not in groups:
+            groups[group] = []
+            order.append(group)
+        groups[group].append(key)
+
+    diversified = []
+
+    while True:
+        added = 0
+        for group in order:
+            if groups[group]:
+                diversified.append(groups[group].pop(0))
+                added += 1
+        if added == 0:
+            break
+
+    return diversified
 
 
 # =========================
@@ -411,8 +460,9 @@ def publish_real(key):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: REAL_PUBLISH_FILTERED_V2")
+    print("MODE B VERSION: REAL_PUBLISH_DIVERSIFIED_V3")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
+    print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
 
     state = load_state()
     published = set(state["published"])
@@ -435,6 +485,9 @@ def run_mode_b():
         print("Filtro B_ONLY_KEYS_CONTAIN:", B_ONLY_KEYS_CONTAIN)
         print("Queue tras filtro:", len(queue))
 
+    queue = diversify_queue(queue)
+    print("Queue final diversificada:", len(queue))
+
     count = 0
 
     for key in queue:
@@ -445,6 +498,7 @@ def run_mode_b():
             continue
 
         print("Procesando:", key)
+        print("SOURCE GROUP:", extract_source_group(key))
 
         try:
             publish_real(key)

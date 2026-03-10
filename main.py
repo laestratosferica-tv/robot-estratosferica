@@ -1466,14 +1466,14 @@ def generate_reel_from_video_bg(
 
         vf_parts = []
 
-        vf_parts.append(
+               vf_parts.append(
             f"[0:v]"
+            f"trim=start=0.0:duration={int(seconds)},"
+            f"setpts=PTS-STARTPTS,"
             f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
             f"crop={REEL_W}:{REEL_H},"
             f"fps=30,"
-            f"trim=duration={int(seconds)},"
-            f"setpts=PTS-STARTPTS,"
-            f"eq=contrast=1.08:brightness=-0.08:saturation=1.18,"
+            f"eq=contrast=1.03:brightness=0.03:saturation=1.08,"
             f"format=rgba[bg];"
         )
 

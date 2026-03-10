@@ -61,6 +61,7 @@ PREFIX_AUTO = (env_nonempty("B_PREFIX_AUTO", "ugc/final") or "ugc/final").strip(
 
 STATE_KEY = env_nonempty("B_STATE_KEY", "ugc/state/mode_b_state.json")
 B_MAX_PUBLISH_PER_RUN = env_int("B_MAX_PUBLISH_PER_RUN", 2)
+B_ONLY_KEYS_CONTAIN = env_nonempty("B_ONLY_KEYS_CONTAIN", "")
 
 ENABLE_INSTAGRAM = env_bool("ENABLE_INSTAGRAM", False)
 ENABLE_FACEBOOK = env_bool("ENABLE_FACEBOOK", False)
@@ -97,7 +98,7 @@ def r2():
 
 def list_keys(prefix):
     s3 = r2()
-    keys = []
+    items = []
     token = None
 
     while True:
@@ -115,15 +116,25 @@ def list_keys(prefix):
         for obj in resp.get("Contents", []):
             k = obj["Key"]
             if not k.endswith("/") and k.lower().endswith(".mp4"):
-                keys.append(k)
+                items.append(
+                    {
+                        "key": k,
+                        "last_modified": obj.get("LastModified"),
+                    }
+                )
 
         if resp.get("IsTruncated"):
             token = resp.get("NextContinuationToken")
         else:
             break
 
-    keys.sort()
-    return keys
+    # más nuevo primero
+    items.sort(
+        key=lambda x: x["last_modified"] or 0,
+        reverse=True,
+    )
+
+    return [x["key"] for x in items]
 
 
 def get_public_url(key):
@@ -400,6 +411,7 @@ def publish_real(key):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
+    print("MODE B VERSION: REAL_PUBLISH_FILTERED_V2")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
 
     state = load_state()
@@ -417,6 +429,11 @@ def run_mode_b():
     queue.extend(priority)
     queue.extend(manual)
     queue.extend(auto)
+
+    if B_ONLY_KEYS_CONTAIN:
+        queue = [k for k in queue if B_ONLY_KEYS_CONTAIN in k]
+        print("Filtro B_ONLY_KEYS_CONTAIN:", B_ONLY_KEYS_CONTAIN)
+        print("Queue tras filtro:", len(queue))
 
     count = 0
 
@@ -436,7 +453,6 @@ def run_mode_b():
         except Exception as e:
             print("ERROR publicando:", key)
             print(str(e))
-            # no lo marcamos como publicado si falló
             continue
 
     state["published"] = list(published)[-5000:]

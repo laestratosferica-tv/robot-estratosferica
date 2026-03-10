@@ -1443,15 +1443,13 @@ def generate_reel_from_video_bg(
         with open(badge_txt, "w", encoding="utf-8") as f:
             f.write(badge_text)
 
-        cmd = [
+                cmd = [
             "ffmpeg",
             "-y",
             "-nostdin",
             "-hide_banner",
             "-loglevel",
             "error",
-            "-ss",
-            "0.5",
             "-stream_loop",
             "-1",
             "-i",

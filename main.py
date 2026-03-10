@@ -2167,7 +2167,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             )
                             bbg_vid = os.path.join(td, "bg.mp4")
                             with open(bg_vid, "wb") as f:
-                            f.write(mp4_bytes)
+                                f.write(mp4_bytes)
 
                             bg_vid_clean = os.path.join(td, "bg_clean.mp4")
                             sanitize_runway_bg_video(bg_vid, bg_vid_clean, start_sec=0.35)

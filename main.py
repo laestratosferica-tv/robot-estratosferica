@@ -157,9 +157,10 @@ if RUN_MODE in ("H", "MODE_H"):
 # MODE Z
 if RUN_MODE in ("Z", "MODE_Z"):
     print(">>> RUN_MODE Z - REDDIT RADAR")
-    from reddit_gamer_radar import run_reddit_radar
 
-    run_reddit_radar()
+    from ugc_mode_z import run_mode_z
+
+    run_mode_z()
     raise SystemExit(0)
 
 print(">>> RUN_MODE A - EDITORIAL ENGINE")

@@ -39,7 +39,7 @@ jobs:
           B_PREFIX_AUTO: ugc/final
           B_META_FINAL_PREFIX: ugc/meta/final
           B_STATE_KEY: ugc/state/mode_b_state.json
-          B_MAX_PUBLISH_PER_RUN: "2"
+          B_MAX_PUBLISH_PER_RUN: "20"
 
           # filtro temporal para evitar backlog viejo
           B_ONLY_KEYS_CONTAIN: "2026-03-09"

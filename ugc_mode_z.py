@@ -3,7 +3,7 @@ import os
 import json
 import hashlib
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 import requests
 import boto3
@@ -72,6 +72,11 @@ AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
+
+REDDIT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 EstratosfericaBot/1.0",
+    "Accept": "application/json",
+}
 
 
 # =========================
@@ -155,15 +160,19 @@ def save_state(st: Dict[str, Any]):
 
 def reddit_fetch_hot(sub: str) -> List[Dict[str, Any]]:
     url = f"https://www.reddit.com/r/{sub}/hot.json?limit={REDDIT_MAX_POSTS_PER_SUB}"
+
     r = requests.get(
         url,
-        headers={"User-Agent": "robot-gamer-radar/1.0"},
+        headers=REDDIT_HEADERS,
         timeout=HTTP_TIMEOUT,
     )
     r.raise_for_status()
 
-    items = []
-    children = (r.json() or {}).get("data", {}).get("children", [])
+    payload = r.json() or {}
+    children = payload.get("data", {}).get("children", [])
+
+    items: List[Dict[str, Any]] = []
+
     for child in children:
         d = child.get("data", {}) or {}
 
@@ -207,6 +216,7 @@ def reddit_score(post: Dict[str, Any]) -> float:
         "leak", "insane", "goal", "career mode", "lap", "overtake",
         "ranked", "rage", "comeback", "best build"
     ]
+
     for w in hot_words:
         if w in title:
             bonus += 40
@@ -230,8 +240,8 @@ def build_idea_payload(post: Dict[str, Any]) -> Dict[str, Any]:
             "hook": f"¿Esto cambia el meta en {sub}?",
             "angle": f"Tema caliente en r/{sub}: {title[:120]}",
             "caption_seed": "Esto está prendiendo a la comunidad gamer. ¿Tú qué opinas?",
-            "why_it_hits": "alto score + muchos comentarios + potencial de debate"
-        }
+            "why_it_hits": "alto score + muchos comentarios + potencial de debate",
+        },
     }
 
 
@@ -268,17 +278,17 @@ def run_mode_z():
                 if not pid:
                     continue
 
-                state_key = f"{sub}:{pid}"
-                if state_key in processed:
-                    print("SKIP already processed:", state_key)
+                post_state_key = f"{sub}:{pid}"
+                if post_state_key in processed:
+                    print("SKIP already processed:", post_state_key)
                     continue
 
                 score = reddit_score(post)
                 print(
                     "CANDIDATE:",
-                    state_key,
+                    post_state_key,
                     "| score:", round(score, 2),
-                    "|", (post.get("title") or "")[:100]
+                    "|", (post.get("title") or "")[:100],
                 )
                 all_candidates.append((score, post))
 
@@ -299,14 +309,14 @@ def run_mode_z():
     for score, post in picked:
         sub = post.get("subreddit") or "unknown"
         pid = post.get("id") or "unknown"
-        state_key = f"{sub}:{pid}"
+        post_state_key = f"{sub}:{pid}"
 
         payload = build_idea_payload(post)
-        file_hash = short_hash(state_key + (post.get("title") or ""))
+        file_hash = short_hash(post_state_key + (post.get("title") or ""))
         idea_key = f"{IDEAS_PREFIX}{now_utc().strftime('%Y-%m-%d__%H%M%S')}__reddit__{sub}__{pid}__{file_hash}.json"
 
         s3_put_json(idea_key, payload)
-        processed.add(state_key)
+        processed.add(post_state_key)
         saved_count += 1
 
         print("Saved gamer idea:", idea_key)

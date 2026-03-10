@@ -52,16 +52,19 @@ jobs:
           FONT_BOLD: /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
 
           MUSIC_SEARCH_DIR: assets
-          MUSIC_PROBABILITY: "0.85"
-          MUSIC_VOLUME: "0.28"
+          MUSIC_PROBABILITY: "0.0"
+          MUSIC_VOLUME: "0.18"
 
-          ENABLE_HUD: "true"
+          KEEP_ORIGINAL_AUDIO: "true"
+
+          ENABLE_HUD: "false"
           HUD_DIR: assets
           HUD_PREFIX: "hud_"
-          HUD_OPACITY: "0.18"
+          HUD_OPACITY: "0.10"
 
-          SAVE_DEBUG_FINAL: "true"
-          DEBUG_FINAL_NAME: debug_final_reel.mp4
+          ENABLE_BADGE_TEXT: "false"
+          ENABLE_HOOK_TEXT: "false"
+          ENABLE_CTA_TEXT: "false"
 
         run: |
           python -u main.py

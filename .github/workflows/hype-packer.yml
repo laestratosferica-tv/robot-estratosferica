@@ -43,7 +43,7 @@ jobs:
           MODE_H_OUTPUT_PREFIX: ugc/final_clean
           MODE_H_META_PREFIX: ugc/meta/final_clean
           MODE_H_STATE_KEY: ugc/state/mode_h_state.json
-          MODE_H_MAX_ITEMS: "10"
+          MODE_H_MAX_ITEMS: "6"
 
           REEL_W: "1080"
           REEL_H: "1920"

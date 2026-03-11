@@ -41,12 +41,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests boto3 "yt-dlp[default]"
 
-      - name: Write YouTube cookies
-        run: |
-          cat <<'EOF' > youtube_cookies.txt
-          ${{ secrets.YOUTUBE_COOKIES_TXT }}
-          EOF
-          test -s youtube_cookies.txt
 
       - name: Check yt-dlp / runtimes
         run: |
@@ -80,7 +74,6 @@ jobs:
           YOUTUBE_MAX_DURATION_SEC: "14400"
 
           YT_DLP_BIN: yt-dlp
-          YT_DLP_COOKIES_FILE: youtube_cookies.txt
-
+         
         run: |
           python -u main.py

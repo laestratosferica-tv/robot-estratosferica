@@ -41,7 +41,8 @@ jobs:
           B_STATE_KEY: ugc/state/mode_b_state.json
           B_MAX_PUBLISH_PER_RUN: "2"
 
-          B_ONLY_KEYS_CONTAIN: "20260309"
+          # IMPORTANTE: vacío para no filtrar por fecha vieja
+          B_ONLY_KEYS_CONTAIN: ""
           B_AVOID_SAME_SOURCE_PER_RUN: "true"
 
           ENABLE_INSTAGRAM: "true"

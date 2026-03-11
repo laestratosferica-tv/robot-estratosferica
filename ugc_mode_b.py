@@ -162,10 +162,31 @@ def load_state():
     if not isinstance(st, dict):
         st = {}
 
-    st.setdefault("published", {})
+    old_published = st.get("published", {})
+
+    # Migración automática desde formato viejo:
+    # { "published": ["k1.mp4", "k2.mp4"] }
+    if isinstance(old_published, list):
+        st["published"] = {
+            "instagram": list(old_published),
+            "facebook": list(old_published),
+            "youtube_shorts": [],
+        }
+    elif isinstance(old_published, dict):
+        st["published"] = old_published
+    else:
+        st["published"] = {}
+
     st["published"].setdefault("instagram", [])
     st["published"].setdefault("facebook", [])
     st["published"].setdefault("youtube_shorts", [])
+
+    if not isinstance(st["published"]["instagram"], list):
+        st["published"]["instagram"] = []
+    if not isinstance(st["published"]["facebook"], list):
+        st["published"]["facebook"] = []
+    if not isinstance(st["published"]["youtube_shorts"], list):
+        st["published"]["youtube_shorts"] = []
 
     return st
 

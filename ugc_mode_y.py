@@ -72,7 +72,7 @@ R2_META_PREFIX = (env_nonempty("UGC_META_PREFIX", "ugc/meta/") or "ugc/meta/").s
 if not R2_META_PREFIX.endswith("/"):
     R2_META_PREFIX += "/"
 
-R2_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
+R2_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox_v2") or "ugc/inbox_v2").strip().strip("/")
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
 
 AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")

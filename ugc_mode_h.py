@@ -10,10 +10,6 @@ from datetime import datetime, timezone
 import boto3
 
 
-# =========================
-# ENV HELPERS
-# =========================
-
 def env_nonempty(name, default=None):
     v = os.getenv(name)
     if not v:
@@ -28,7 +24,7 @@ def env_int(name, default):
         return default
     try:
         return int(v)
-    except:
+    except Exception:
         return default
 
 
@@ -38,7 +34,7 @@ def env_float(name, default):
         return default
     try:
         return float(v)
-    except:
+    except Exception:
         return default
 
 
@@ -49,10 +45,6 @@ def env_bool(name, default=False):
     return v.strip().lower() in ("1", "true", "yes", "y", "on")
 
 
-# =========================
-# CONFIG
-# =========================
-
 AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
@@ -60,11 +52,13 @@ BUCKET_NAME = env_nonempty("BUCKET_NAME")
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
 
 MODE_H_INPUT_PREFIX = (env_nonempty("MODE_H_INPUT_PREFIX", "ugc/library/clips") or "ugc/library/clips").strip().strip("/")
-MODE_H_OUTPUT_PREFIX = (env_nonempty("MODE_H_OUTPUT_PREFIX", "ugc/final") or "ugc/final").strip().strip("/")
-MODE_H_META_PREFIX = (env_nonempty("MODE_H_META_PREFIX", "ugc/meta/final") or "ugc/meta/final").strip().strip("/")
+MODE_H_OUTPUT_PREFIX = (env_nonempty("MODE_H_OUTPUT_PREFIX", "ugc/final_clean") or "ugc/final_clean").strip().strip("/")
+MODE_H_META_PREFIX = (env_nonempty("MODE_H_META_PREFIX", "ugc/meta/final_clean") or "ugc/meta/final_clean").strip().strip("/")
 MODE_H_STATE_KEY = env_nonempty("MODE_H_STATE_KEY", "ugc/state/mode_h_state.json")
 
 MODE_H_MAX_ITEMS = env_int("MODE_H_MAX_ITEMS", 6)
+MODE_H_ONLY_KEYS_CONTAIN = env_nonempty("MODE_H_ONLY_KEYS_CONTAIN", "")
+MODE_H_NEWEST_FIRST = env_bool("MODE_H_NEWEST_FIRST", True)
 
 REEL_W = env_int("REEL_W", 1080)
 REEL_H = env_int("REEL_H", 1920)
@@ -90,10 +84,6 @@ ENABLE_CTA_TEXT = env_bool("ENABLE_CTA_TEXT", False)
 SAVE_DEBUG_FINAL = env_bool("SAVE_DEBUG_FINAL", True)
 DEBUG_FINAL_NAME = env_nonempty("DEBUG_FINAL_NAME", "debug_final_reel.mp4") or "debug_final_reel.mp4"
 
-
-# =========================
-# TEXT LIBRARY
-# =========================
 
 GAME_BADGES = {
     "valorant": "VALORANT",
@@ -187,10 +177,6 @@ CTAS = [
 ]
 
 
-# =========================
-# HELPERS
-# =========================
-
 def now_utc():
     return datetime.now(timezone.utc)
 
@@ -234,7 +220,7 @@ def pick_music():
         try:
             if os.path.getsize(c) > 50_000:
                 good.append(c)
-        except:
+        except Exception:
             pass
 
     if not good:
@@ -256,10 +242,8 @@ def pick_hud_overlay():
 
         if not name.startswith(HUD_PREFIX.lower()):
             continue
-
         if not name.endswith(".png"):
             continue
-
         if (
             "safearea" in name
             or "guide" in name
@@ -323,7 +307,7 @@ def ffprobe_json(path):
         return {}
     try:
         return json.loads(p.stdout or "{}")
-    except:
+    except Exception:
         return {}
 
 
@@ -331,7 +315,7 @@ def get_video_duration(path):
     info = ffprobe_json(path)
     try:
         return float(info.get("format", {}).get("duration", 0.0) or 0.0)
-    except:
+    except Exception:
         return 0.0
 
 
@@ -394,10 +378,6 @@ def pick_badge(game_name):
     return mapping.get(g, "GAMER")
 
 
-# =========================
-# R2
-# =========================
-
 def r2_client():
     if not (R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and BUCKET_NAME):
         raise RuntimeError("Faltan credenciales R2/S3")
@@ -429,13 +409,13 @@ def s3_get_json(key):
     try:
         obj = r2_client().get_object(Bucket=BUCKET_NAME, Key=key)
         return json.loads(obj["Body"].read().decode("utf-8"))
-    except:
+    except Exception:
         return None
 
 
-def r2_list_keys(prefix):
+def r2_list_objects(prefix):
     s3 = r2_client()
-    keys = []
+    items = []
     continuation_token = None
 
     while True:
@@ -453,30 +433,31 @@ def r2_list_keys(prefix):
         for obj in resp.get("Contents", []):
             k = obj["Key"]
             if not k.endswith("/"):
-                keys.append(k)
+                items.append(
+                    {
+                        "key": k,
+                        "last_modified": obj.get("LastModified"),
+                    }
+                )
 
         if resp.get("IsTruncated"):
             continuation_token = resp.get("NextContinuationToken")
         else:
             break
 
-    return keys
+    return items
 
 
 def r2_download_to_file(key, dst_path):
     r2_client().download_file(BUCKET_NAME, key, dst_path)
 
 
-# =========================
-# STATE
-# =========================
-
 def load_state():
     st = s3_get_json(MODE_H_STATE_KEY)
     if not st:
         st = {"processed_keys": [], "last_run_at": None}
 
-    if "processed_keys" not in st:
+    if "processed_keys" not in st or not isinstance(st["processed_keys"], list):
         st["processed_keys"] = []
 
     if "last_run_at" not in st:
@@ -489,10 +470,6 @@ def save_state(st):
     st["last_run_at"] = iso_now_full()
     s3_put_json(MODE_H_STATE_KEY, st)
 
-
-# =========================
-# RENDER
-# =========================
 
 def build_hype_reel(
     input_video,
@@ -531,8 +508,10 @@ def build_hype_reel(
             "-y",
             "-nostdin",
             "-hide_banner",
-            "-loglevel", "error",
-            "-i", input_video,
+            "-loglevel",
+            "error",
+            "-i",
+            input_video,
         ]
 
         hud_input_idx = None
@@ -565,9 +544,7 @@ def build_hype_reel(
                 f"format=rgba,"
                 f"colorchannelmixer=aa={max(0.0, min(1.0, HUD_OPACITY))}[hud];"
             )
-            vf_parts.append(
-                f"{current}[hud]overlay=0:0:format=auto[v1];"
-            )
+            vf_parts.append(f"{current}[hud]overlay=0:0:format=auto[v1];")
             current = "[v1]"
 
         if ENABLE_BADGE_TEXT:
@@ -611,33 +588,46 @@ def build_hype_reel(
             current = "[vcta]"
 
         cmd += [
-            "-filter_complex", "".join(vf_parts),
-            "-map", current,
+            "-filter_complex",
+            "".join(vf_parts),
+            "-map",
+            current,
         ]
 
         if KEEP_ORIGINAL_AUDIO:
             cmd += [
-                "-map", "0:a?",
-                "-c:a", "aac",
-                "-b:a", "128k",
+                "-map",
+                "0:a?",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
             ]
         elif music_input_idx is not None:
             fade_out_start = max(0.0, duration - 0.9)
             cmd += [
-                "-map", f"{music_input_idx}:a",
-                "-filter:a", f"volume={MUSIC_VOLUME},afade=t=in:st=0:d=0.35,afade=t=out:st={fade_out_start}:d=0.8",
-                "-c:a", "aac",
-                "-b:a", "128k",
+                "-map",
+                f"{music_input_idx}:a",
+                "-filter:a",
+                f"volume={MUSIC_VOLUME},afade=t=in:st=0:d=0.35,afade=t=out:st={fade_out_start}:d=0.8",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
                 "-shortest",
             ]
         else:
             cmd += ["-an"]
 
         cmd += [
-            "-c:v", "libx264",
-            "-preset", "veryfast",
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
             output_video,
         ]
 
@@ -646,10 +636,6 @@ def build_hype_reel(
             raise RuntimeError(f"ffmpeg falló:\n{(p.stderr or '')[:4000]}")
 
 
-# =========================
-# MAIN
-# =========================
-
 def run_mode_h():
     print("===== MODE H (HYPE PACKER) START =====")
     print("MODE_H_INPUT_PREFIX:", MODE_H_INPUT_PREFIX)
@@ -657,6 +643,8 @@ def run_mode_h():
     print("MODE_H_META_PREFIX:", MODE_H_META_PREFIX)
     print("MODE_H_STATE_KEY:", MODE_H_STATE_KEY)
     print("MODE_H_MAX_ITEMS:", MODE_H_MAX_ITEMS)
+    print("MODE_H_ONLY_KEYS_CONTAIN:", MODE_H_ONLY_KEYS_CONTAIN or "(vacío)")
+    print("MODE_H_NEWEST_FIRST:", MODE_H_NEWEST_FIRST)
 
     print("KEEP_ORIGINAL_AUDIO:", KEEP_ORIGINAL_AUDIO)
     print("MUSIC_PROBABILITY:", MUSIC_PROBABILITY)
@@ -668,11 +656,22 @@ def run_mode_h():
     state = load_state()
     processed = set(state.get("processed_keys", []))
 
-    source_keys = r2_list_keys(f"{MODE_H_INPUT_PREFIX}/")
-    clip_keys = [k for k in source_keys if k.lower().endswith(".mp4")]
-    clip_keys.sort()
+    source_items = r2_list_objects(f"{MODE_H_INPUT_PREFIX}/")
+    clip_items = [x for x in source_items if x["key"].lower().endswith(".mp4")]
+
+    clip_items.sort(
+        key=lambda x: x.get("last_modified") or 0,
+        reverse=MODE_H_NEWEST_FIRST,
+    )
+
+    clip_keys = [x["key"] for x in clip_items]
 
     print("Clips encontrados:", len(clip_keys))
+    print("Clips procesados en state:", len(processed))
+
+    if MODE_H_ONLY_KEYS_CONTAIN:
+        clip_keys = [k for k in clip_keys if MODE_H_ONLY_KEYS_CONTAIN in k]
+        print("Clips tras filtro:", len(clip_keys))
 
     processed_count = 0
 
@@ -681,6 +680,7 @@ def run_mode_h():
             break
 
         if key in processed:
+            print("SKIP already processed:", key)
             continue
 
         print("Empacando:", key)
@@ -699,55 +699,59 @@ def run_mode_h():
         print("MUSIC:", music if music else "NONE")
         print("HUD:", hud if hud else "NONE")
 
-        with tempfile.TemporaryDirectory() as td:
-            in_path = os.path.join(td, "in.mp4")
-            out_path = os.path.join(td, "out.mp4")
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                in_path = os.path.join(td, "in.mp4")
+                out_path = os.path.join(td, "out.mp4")
 
-            r2_download_to_file(key, in_path)
+                r2_download_to_file(key, in_path)
 
-            build_hype_reel(
-                input_video=in_path,
-                output_video=out_path,
-                hook_text=hook,
-                badge_text=badge,
-                cta_text=cta,
-                music_mp3=music,
-                hud_png=hud,
-            )
+                build_hype_reel(
+                    input_video=in_path,
+                    output_video=out_path,
+                    hook_text=hook,
+                    badge_text=badge,
+                    cta_text=cta,
+                    music_mp3=music,
+                    hud_png=hud,
+                )
 
-            with open(out_path, "rb") as f:
-                data = f.read()
+                with open(out_path, "rb") as f:
+                    data = f.read()
 
-            h = short_hash_bytes(data)
-            base = os.path.basename(key).rsplit(".", 1)[0]
-            out_key = f"{MODE_H_OUTPUT_PREFIX}/{base}__hype__{h}.mp4"
+                h = short_hash_bytes(data)
+                base = os.path.basename(key).rsplit(".", 1)[0]
+                out_key = f"{MODE_H_OUTPUT_PREFIX}/{base}__hype__{h}.mp4"
 
-            print("Uploading final reel:", out_key)
-            s3_put_bytes(out_key, data, "video/mp4")
+                print("Uploading final reel:", out_key)
+                s3_put_bytes(out_key, data, "video/mp4")
 
-            meta = {
-                "source_clip_key": key,
-                "final_key": out_key,
-                "game_name": game_name,
-                "hook": hook,
-                "cta": cta,
-                "badge": badge,
-                "music": music,
-                "hud": hud,
-                "generated_at": iso_now_full(),
-            }
+                meta = {
+                    "source_clip_key": key,
+                    "final_key": out_key,
+                    "game_name": game_name,
+                    "hook": hook,
+                    "cta": cta,
+                    "badge": badge,
+                    "music": music,
+                    "hud": hud,
+                    "generated_at": iso_now_full(),
+                }
 
-            meta_key = f"{MODE_H_META_PREFIX}/{os.path.basename(out_key).rsplit('.', 1)[0]}.json"
-            s3_put_json(meta_key, meta)
-            print("Saved final meta:", meta_key)
+                meta_key = f"{MODE_H_META_PREFIX}/{os.path.basename(out_key).rsplit('.', 1)[0]}.json"
+                s3_put_json(meta_key, meta)
+                print("Saved final meta:", meta_key)
 
-            if SAVE_DEBUG_FINAL:
-                with open(DEBUG_FINAL_NAME, "wb") as f:
-                    f.write(data)
-                print("Saved debug final:", DEBUG_FINAL_NAME)
+                if SAVE_DEBUG_FINAL:
+                    with open(DEBUG_FINAL_NAME, "wb") as f:
+                        f.write(data)
+                    print("Saved debug final:", DEBUG_FINAL_NAME)
 
-        processed.add(key)
-        processed_count += 1
+            processed.add(key)
+            processed_count += 1
+
+        except Exception as e:
+            print("ERROR empacando:", key, repr(e))
 
     state["processed_keys"] = list(processed)[-5000:]
     save_state(state)

@@ -65,7 +65,7 @@ jobs:
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
-          UGC_INBOX_PREFIX: ugc/inbox
+          UGC_INBOX_PREFIX: ugc/inbox_v2
           UGC_META_PREFIX: ugc/meta
           YOUTUBE_MODE_Y_STATE_KEY: ugc/state/mode_y_state.json
 

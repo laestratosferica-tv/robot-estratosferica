@@ -1,5 +1,7 @@
 name: youtube-harvester
 
+# force refresh
+
 on:
   workflow_dispatch:
   schedule:

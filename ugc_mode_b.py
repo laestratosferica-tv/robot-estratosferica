@@ -2,6 +2,7 @@ import os
 import re
 import json
 import time
+import random
 import requests
 import boto3
 
@@ -52,7 +53,6 @@ PREFIX_MANUAL = (env_nonempty("B_PREFIX_MANUAL", "ugc/final_manual") or "ugc/fin
 PREFIX_AUTO = (env_nonempty("B_PREFIX_AUTO", "ugc/final_clean") or "ugc/final_clean").strip().strip("/")
 
 META_FINAL_PREFIX = (env_nonempty("B_META_FINAL_PREFIX", "ugc/meta/final_clean") or "ugc/meta/final_clean").strip().strip("/")
-
 STATE_KEY = env_nonempty("B_STATE_KEY", "ugc/state/mode_b_state.json")
 
 B_MAX_PUBLISH_PER_RUN = env_int("B_MAX_PUBLISH_PER_RUN", 2)
@@ -160,9 +160,6 @@ def save_state(st):
 
 
 def extract_source_group(key):
-    """
-    Agrupa reels hermanos del mismo lote.
-    """
     base = os.path.basename(key).rsplit(".", 1)[0]
 
     if "__hype__" in base:
@@ -211,14 +208,244 @@ def diversify_queue(queue):
     return diversified
 
 
+def detect_game_from_key(key):
+    text = (key or "").lower().replace("_", " ").replace("-", " ")
+
+    checks = [
+        ("valorant", "Valorant"),
+        ("cs2", "CS2"),
+        ("counter strike", "CS2"),
+        ("counter-strike", "CS2"),
+        ("league of legends", "League of Legends"),
+        ("lol", "League of Legends"),
+        ("fortnite", "Fortnite"),
+        ("warzone", "Warzone"),
+        ("apex legends", "Apex Legends"),
+        ("apex", "Apex Legends"),
+        ("minecraft", "Minecraft"),
+        ("ea sports fc", "EA Sports FC"),
+        ("fc", "EA Sports FC"),
+        ("f1", "F1"),
+        ("gran turismo", "Gran Turismo"),
+    ]
+
+    for needle, label in checks:
+        if needle in text:
+            return label
+
+    return "Esports"
+
+
+GAME_HOOKS = {
+    "Valorant": [
+        "Esto no fue una play normal.",
+        "Hay rounds que definen mapas y rounds que cambian todo.",
+        "Si esto no te levanta de la silla, nada lo hace.",
+    ],
+    "CS2": [
+        "Esto fue puro timing y sangre fría.",
+        "Hay clips buenos y luego está esto.",
+        "Si pestañeaste, te perdiste la jugada.",
+    ],
+    "League of Legends": [
+        "Hay teamfights que explican por qué este juego sigue siendo cine.",
+        "Esto fue una locura total de principio a fin.",
+        "La diferencia entre competir y dominar se ve aquí.",
+    ],
+    "Fortnite": [
+        "Fortnite en modo absolutamente ridículo.",
+        "Esto es de esas jugadas que revientan la partida.",
+        "Hay mecánicas y luego está este nivel de locura.",
+    ],
+    "Warzone": [
+        "Esto no se gana normalmente.",
+        "Hay cierres sucios… y luego está este.",
+        "Warzone a veces parece un caos. Esto ya fue arte.",
+    ],
+    "Apex Legends": [
+        "Movement, lectura y sangre fría. Todo en una sola play.",
+        "Esto es Apex en su versión más salvaje.",
+        "Hay finales tensos y luego está esto.",
+    ],
+    "Minecraft": [
+        "Minecraft también puede ser puro cine.",
+        "Esto no tenía ningún sentido y aun así pasó.",
+        "Hay momentos que parecen editados… pero no.",
+    ],
+    "EA Sports FC": [
+        "Esto es de esos goles que encienden a toda la comunidad.",
+        "Hay jugadas bonitas y luego están las que humillan.",
+        "No me puedes decir que esto es normal.",
+    ],
+    "F1": [
+        "Esto fue una barbaridad de precisión.",
+        "Hay adelantamientos buenos y luego está esta locura.",
+        "F1 cuando se pone serio es una obra de arte.",
+    ],
+    "Gran Turismo": [
+        "Esto es manejo fino del bueno.",
+        "Hay vueltas limpias y luego está esta joya.",
+        "Gran Turismo también sabe regalar cine puro.",
+    ],
+    "Esports": [
+        "Esto no fue una jugada cualquiera.",
+        "Hay clips que entretienen y otros que hacen comunidad.",
+        "Esto es exactamente por lo que seguimos viendo esports.",
+    ],
+}
+
+GAME_CONTEXTS = {
+    "Valorant": [
+        "En Valorant, una play así te cambia el mood de toda la partida.",
+        "Esto en competitivo no perdona: o lo lees bien o te pasan por encima.",
+        "La comunidad siempre dice que estas rondas separan al bueno del que de verdad compite.",
+    ],
+    "CS2": [
+        "En CS2, una decisión así vale más que mil highlights vacíos.",
+        "Esto es lo que pasa cuando aim, timing y cabeza se alinean.",
+        "Si entiendes CS2, sabes por qué esta jugada pesa tanto.",
+    ],
+    "League of Legends": [
+        "En LoL, una sola secuencia puede reventar todo el mapa.",
+        "Este tipo de momento es el que termina marcando series enteras.",
+        "Hay plays que no solo ganan la pelea: cambian la narrativa.",
+    ],
+    "Fortnite": [
+        "En Fortnite, una mecánica así no solo se aplaude: se discute.",
+        "Esto es exactamente el tipo de clip que prende a toda la escena.",
+        "Hay finales buenos, pero esta clase de jugada se queda en la cabeza.",
+    ],
+    "Warzone": [
+        "Warzone tiene caos, sí, pero esto ya fue lectura de élite.",
+        "Este tipo de clip es el que pone a debatir a toda la escena.",
+        "Aquí no fue solo suerte: hubo timing, decisión y sangre fría.",
+    ],
+    "Apex Legends": [
+        "Apex recompensa a los que leen el caos mejor que nadie.",
+        "Este tipo de momento define por qué Apex sigue siendo tan adictivo de ver.",
+        "Aquí hubo más que aim: hubo lectura completa de la situación.",
+    ],
+    "Minecraft": [
+        "Sí, Minecraft también puede dejar momentos absurdamente buenos.",
+        "Esto parece meme, pero justamente por eso funciona tanto.",
+        "Cuando Minecraft regala una escena así, internet hace su trabajo solo.",
+    ],
+    "EA Sports FC": [
+        "En FC, una jugada así te pone a discutir con cualquiera en comentarios.",
+        "Esto es justo el tipo de acción que parte a la comunidad en dos.",
+        "Hay goles que valen uno. Este vale conversación toda la semana.",
+    ],
+    "F1": [
+        "En F1, una maniobra así no se regala: se gana.",
+        "Esto es precisión pura con presión máxima.",
+        "Este tipo de adelantamiento explica por qué la escena engancha tanto.",
+    ],
+    "Gran Turismo": [
+        "Esto es de lo más fino que puedes ver en un clip corto.",
+        "Hay técnica, hay lectura, y luego hay esta belleza.",
+        "Gran Turismo sabe regalar momentos de locura elegante.",
+    ],
+    "Esports": [
+        "Este tipo de clip es el que hace que la gente vuelva a comentar.",
+        "Aquí no hubo relleno: solo una jugada que merece conversación.",
+        "Esto es justo el tipo de momento que construye comunidad.",
+    ],
+}
+
+GAME_CTAS = {
+    "Valorant": [
+        "¿Esto fue puro skill o lectura del error rival?",
+        "¿Play de élite o defensa desastrosa?",
+        "¿Tú lo resuelves así o te comen vivo?",
+    ],
+    "CS2": [
+        "¿Esto fue aim puro o IQ de otro planeta?",
+        "¿Skill real o regalo del rival?",
+        "¿Top play o la están inflando demasiado?",
+    ],
+    "League of Legends": [
+        "¿Play histórica o la defensa regaló demasiado?",
+        "¿Esto fue macro, manos o puro caos bien aprovechado?",
+        "¿Tú dirías que aquí se ganó la serie mentalmente?",
+    ],
+    "Fortnite": [
+        "¿De verdad sigue habiendo alguien mejor que Bugha en esto?",
+        "¿Esto fue locura mecánica o pura descoordinación rival?",
+        "¿La mejor play o una de esas que se inflan por el replay?",
+    ],
+    "Warzone": [
+        "¿Esto fue puro control o simple caos favorable?",
+        "¿Skill brutal o suerte con esteroides?",
+        "¿Tú lo llamas clutch o milagro?",
+    ],
+    "Apex Legends": [
+        "¿Esto fue movement de élite o error del lobby?",
+        "¿Top play o exageración de clip corto?",
+        "¿Apex puro o fortuna demasiado conveniente?",
+    ],
+    "Minecraft": [
+        "¿Esto fue genialidad o casualidad total?",
+        "¿Play real o clip maldito de internet?",
+        "¿Tú le llamas skill o meme perfecto?",
+    ],
+    "EA Sports FC": [
+        "¿Golazo puro o defensa de plastilina?",
+        "¿Esto es top mundial o el rival ayudó demasiado?",
+        "¿Tú a esto le llamas clase o puro abuso del juego?",
+    ],
+    "F1": [
+        "¿Maniobra legendaria o riesgo innecesario?",
+        "¿Esto es talento puro o el rival dejó la puerta abierta?",
+        "¿Top adelantamiento o mucho hype para tan poco?",
+    ],
+    "Gran Turismo": [
+        "¿Esto fue limpieza total o el rival se equivocó feo?",
+        "¿Manejo perfecto o clip sobrevalorado?",
+        "¿Tú lo pones como top play o no tanto?",
+    ],
+    "Esports": [
+        "¿Skill puro o también hubo bastante fortuna?",
+        "¿Top play o clip inflado por el contexto?",
+        "¿Esto merece hype real o la están vendiendo demasiado?",
+    ],
+}
+
+GAME_HASHTAGS = {
+    "Valorant": ["#Valorant", "#VCT", "#EsportsLATAM", "#GamingLATAM", "#ValorantLATAM"],
+    "CS2": ["#CS2", "#CounterStrike", "#EsportsLATAM", "#GamingLATAM", "#CS2LATAM"],
+    "League of Legends": ["#LeagueOfLegends", "#LoL", "#EsportsLATAM", "#GamingLATAM", "#LoLLATAM"],
+    "Fortnite": ["#Fortnite", "#FortniteLATAM", "#EsportsLATAM", "#GamingLATAM", "#FortniteClips"],
+    "Warzone": ["#Warzone", "#CallOfDuty", "#EsportsLATAM", "#GamingLATAM", "#WarzoneLATAM"],
+    "Apex Legends": ["#ApexLegends", "#Apex", "#EsportsLATAM", "#GamingLATAM", "#ApexLATAM"],
+    "Minecraft": ["#Minecraft", "#MinecraftLATAM", "#GamingLATAM", "#EsportsLATAM", "#MinecraftClips"],
+    "EA Sports FC": ["#EASportsFC", "#FC", "#FCLATAM", "#GamingLATAM", "#EsportsLATAM"],
+    "F1": ["#F1", "#SimRacing", "#EsportsLATAM", "#GamingLATAM", "#F1Esports"],
+    "Gran Turismo": ["#GranTurismo", "#SimRacing", "#EsportsLATAM", "#GamingLATAM", "#GTLATAM"],
+    "Esports": ["#EsportsLATAM", "#GamingLATAM", "#Esports", "#Gaming", "#ReelsGaming"],
+}
+
+
+def pick_from_map(mapping, game_name):
+    options = mapping.get(game_name) or mapping.get("Esports") or []
+    return random.choice(options) if options else ""
+
+
 def build_caption(key):
-    title = os.path.basename(key).replace(".mp4", "")
-    return f"""🎮 Gaming moment
+    game_name = detect_game_from_key(key)
+    hook = pick_from_map(GAME_HOOKS, game_name)
+    context = pick_from_map(GAME_CONTEXTS, game_name)
+    cta = pick_from_map(GAME_CTAS, game_name)
+    hashtags = " ".join(GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"]))
 
-{title}
+    caption = f"""{hook}
 
-#gaming #esports #reels
-"""
+{context}
+
+🔥 {cta}
+
+{hashtags}"""
+
+    return caption.strip()
 
 
 def ig_publish(video_url, caption):
@@ -351,6 +578,7 @@ def publish(key):
     print("PUBLICANDO VIDEO:")
     print("KEY:", key)
     print("URL:", public_url)
+    print("CAPTION:\n", caption)
 
     if DRY_RUN:
         print("DRY_RUN activo: no se publica realmente")
@@ -372,7 +600,7 @@ def publish(key):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: REAL_PUBLISH_DIVERSIFIED_V4")
+    print("MODE B VERSION: REAL_PUBLISH_DIVERSIFIED_V5_C")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
     print("B_ONLY_KEYS_CONTAIN:", B_ONLY_KEYS_CONTAIN or "(vacío)")
@@ -421,6 +649,7 @@ def run_mode_b():
 
         print("Procesando:", key)
         print("SOURCE GROUP:", extract_source_group(key))
+        print("GAME DETECTED:", detect_game_from_key(key))
 
         try:
             publish(key)

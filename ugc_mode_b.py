@@ -90,7 +90,7 @@ FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
 YOUTUBE_CLIENT_ID = env_nonempty("YOUTUBE_CLIENT_ID")
 YOUTUBE_CLIENT_SECRET = env_nonempty("YOUTUBE_CLIENT_SECRET")
 YOUTUBE_REFRESH_TOKEN = env_nonempty("YOUTUBE_REFRESH_TOKEN")
-YOUTUBE_PRIVACY_STATUS = env_nonempty("YOUTUBE_PRIVACY_STATUS", "private")
+YOUTUBE_PRIVACY_STATUS = env_nonempty("YOUTUBE_PRIVACY_STATUS", "public")
 
 
 def r2():
@@ -164,8 +164,6 @@ def load_state():
 
     old_published = st.get("published", {})
 
-    # Migración automática desde formato viejo:
-    # { "published": ["k1.mp4", "k2.mp4"] }
     if isinstance(old_published, list):
         st["published"] = {
             "instagram": list(old_published),
@@ -736,7 +734,10 @@ def youtube_publish(video_url, title, description):
         }
 
 
-def publish(key):
+def publish(key, target_platforms=None):
+    if target_platforms is None:
+        target_platforms = ["instagram", "facebook", "youtube_shorts"]
+
     public_url = f"{R2_PUBLIC_BASE_URL}/{key}"
     caption = build_caption(key)
     shorts_title = build_shorts_title(key)
@@ -745,6 +746,7 @@ def publish(key):
     print("PUBLICANDO VIDEO:")
     print("KEY:", key)
     print("URL:", public_url)
+    print("TARGET_PLATFORMS:", target_platforms)
     print("CAPTION:\n", caption)
     print("SHORTS TITLE:", shorts_title)
 
@@ -756,13 +758,16 @@ def publish(key):
 
     if DRY_RUN:
         print("DRY_RUN activo: no se publica realmente")
-        results["instagram"] = {"ok": ENABLE_INSTAGRAM, "dry_run": True}
-        results["facebook"] = {"ok": ENABLE_FACEBOOK, "dry_run": True}
-        results["youtube_shorts"] = {"ok": ENABLE_SHORTS, "dry_run": True}
+        if "instagram" in target_platforms:
+            results["instagram"] = {"ok": ENABLE_INSTAGRAM, "dry_run": True}
+        if "facebook" in target_platforms:
+            results["facebook"] = {"ok": ENABLE_FACEBOOK, "dry_run": True}
+        if "youtube_shorts" in target_platforms:
+            results["youtube_shorts"] = {"ok": ENABLE_SHORTS, "dry_run": True}
         print("Publicado OK\n")
         return results
 
-    if ENABLE_INSTAGRAM:
+    if ENABLE_INSTAGRAM and "instagram" in target_platforms:
         try:
             print("→ Publicando en Instagram...")
             ig = ig_publish(public_url, caption)
@@ -772,7 +777,7 @@ def publish(key):
             print("IG ERROR:", repr(e))
             results["instagram"] = {"ok": False, "error": str(e)}
 
-    if ENABLE_FACEBOOK:
+    if ENABLE_FACEBOOK and "facebook" in target_platforms:
         try:
             print("→ Publicando en Facebook...")
             fb = fb_publish(public_url, caption)
@@ -782,7 +787,7 @@ def publish(key):
             print("FB ERROR:", repr(e))
             results["facebook"] = {"ok": False, "error": str(e)}
 
-    if ENABLE_SHORTS:
+    if ENABLE_SHORTS and "youtube_shorts" in target_platforms:
         try:
             print("→ Publicando en YouTube Shorts...")
             yt = youtube_publish(public_url, shorts_title, shorts_description)
@@ -813,7 +818,7 @@ def should_process_key(st, key):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: REAL_PUBLISH_DIVERSIFIED_V6_SHORTS")
+    print("MODE B VERSION: REAL_PUBLISH_DIVERSIFIED_V7_SHORTS_PUBLIC")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
     print("B_ONLY_KEYS_CONTAIN:", B_ONLY_KEYS_CONTAIN or "(vacío)")
@@ -870,19 +875,19 @@ def run_mode_b():
         print("MISSING PLATFORMS:", missing_platforms)
 
         try:
-            result = publish(key)
+            result = publish(key, target_platforms=missing_platforms)
 
             success_any = False
 
-            if ENABLE_INSTAGRAM and result.get("instagram", {}).get("ok"):
+            if "instagram" in missing_platforms and result.get("instagram", {}).get("ok"):
                 mark_published_on(state, "instagram", key)
                 success_any = True
 
-            if ENABLE_FACEBOOK and result.get("facebook", {}).get("ok"):
+            if "facebook" in missing_platforms and result.get("facebook", {}).get("ok"):
                 mark_published_on(state, "facebook", key)
                 success_any = True
 
-            if ENABLE_SHORTS and result.get("youtube_shorts", {}).get("ok"):
+            if "youtube_shorts" in missing_platforms and result.get("youtube_shorts", {}).get("ok"):
                 mark_published_on(state, "youtube_shorts", key)
                 success_any = True
 

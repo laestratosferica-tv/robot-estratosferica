@@ -3,6 +3,8 @@ import re
 import json
 import time
 import random
+import tempfile
+
 import requests
 import boto3
 
@@ -48,11 +50,19 @@ R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
 BUCKET_NAME = env_nonempty("BUCKET_NAME")
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "") or "").rstrip("/")
 
-PREFIX_PRIORITY = (env_nonempty("B_PREFIX_PRIORITY", "ugc/final_priority") or "ugc/final_priority").strip().strip("/")
-PREFIX_MANUAL = (env_nonempty("B_PREFIX_MANUAL", "ugc/final_manual") or "ugc/final_manual").strip().strip("/")
-PREFIX_AUTO = (env_nonempty("B_PREFIX_AUTO", "ugc/final_clean") or "ugc/final_clean").strip().strip("/")
+PREFIX_PRIORITY = (
+    env_nonempty("B_PREFIX_PRIORITY", "ugc/final_priority") or "ugc/final_priority"
+).strip().strip("/")
+PREFIX_MANUAL = (
+    env_nonempty("B_PREFIX_MANUAL", "ugc/final_manual") or "ugc/final_manual"
+).strip().strip("/")
+PREFIX_AUTO = (
+    env_nonempty("B_PREFIX_AUTO", "ugc/final_clean") or "ugc/final_clean"
+).strip().strip("/")
 
-META_FINAL_PREFIX = (env_nonempty("B_META_FINAL_PREFIX", "ugc/meta/final_clean") or "ugc/meta/final_clean").strip().strip("/")
+META_FINAL_PREFIX = (
+    env_nonempty("B_META_FINAL_PREFIX", "ugc/meta/final_clean") or "ugc/meta/final_clean"
+).strip().strip("/")
 STATE_KEY = env_nonempty("B_STATE_KEY", "ugc/state/mode_b_state.json")
 
 B_MAX_PUBLISH_PER_RUN = env_int("B_MAX_PUBLISH_PER_RUN", 2)
@@ -77,8 +87,22 @@ IG_ACCESS_TOKEN = env_nonempty("IG_ACCESS_TOKEN")
 FB_PAGE_ID = env_nonempty("FB_PAGE_ID")
 FB_PAGE_ACCESS_TOKEN = env_nonempty("FB_PAGE_ACCESS_TOKEN")
 
+YOUTUBE_CLIENT_ID = env_nonempty("YOUTUBE_CLIENT_ID")
+YOUTUBE_CLIENT_SECRET = env_nonempty("YOUTUBE_CLIENT_SECRET")
+YOUTUBE_REFRESH_TOKEN = env_nonempty("YOUTUBE_REFRESH_TOKEN")
+YOUTUBE_PRIVACY_STATUS = env_nonempty("YOUTUBE_PRIVACY_STATUS", "private")
+
 
 def r2():
+    if not AWS_ACCESS_KEY_ID:
+        raise RuntimeError("Falta AWS_ACCESS_KEY_ID")
+    if not AWS_SECRET_ACCESS_KEY:
+        raise RuntimeError("Falta AWS_SECRET_ACCESS_KEY")
+    if not R2_ENDPOINT_URL:
+        raise RuntimeError("Falta R2_ENDPOINT_URL")
+    if not BUCKET_NAME:
+        raise RuntimeError("Falta BUCKET_NAME")
+
     return boto3.client(
         "s3",
         endpoint_url=R2_ENDPOINT_URL,
@@ -138,8 +162,10 @@ def load_state():
     if not isinstance(st, dict):
         st = {}
 
-    if "published" not in st or not isinstance(st["published"], list):
-        st["published"] = []
+    st.setdefault("published", {})
+    st["published"].setdefault("instagram", [])
+    st["published"].setdefault("facebook", [])
+    st["published"].setdefault("youtube_shorts", [])
 
     return st
 
@@ -148,15 +174,29 @@ def save_state(st):
     if not isinstance(st, dict):
         st = {}
 
-    if "published" not in st or not isinstance(st["published"], list):
-        st["published"] = []
+    st.setdefault("published", {})
+    st["published"].setdefault("instagram", [])
+    st["published"].setdefault("facebook", [])
+    st["published"].setdefault("youtube_shorts", [])
 
     r2().put_object(
         Bucket=BUCKET_NAME,
         Key=STATE_KEY,
-        Body=json.dumps(st).encode(),
+        Body=json.dumps(st, ensure_ascii=False, indent=2).encode("utf-8"),
         ContentType="application/json",
     )
+
+
+def is_published_on(st, platform, key):
+    return key in st.get("published", {}).get(platform, [])
+
+
+def mark_published_on(st, platform, key):
+    st.setdefault("published", {})
+    st["published"].setdefault(platform, [])
+    if key not in st["published"][platform]:
+        st["published"][platform].append(key)
+        st["published"][platform] = st["published"][platform][-5000:]
 
 
 def extract_source_group(key):
@@ -448,6 +488,31 @@ def build_caption(key):
     return caption.strip()
 
 
+def build_shorts_title(key):
+    game_name = detect_game_from_key(key)
+    hook = pick_from_map(GAME_HOOKS, game_name) or "Clip brutal de esports"
+    title = hook.replace("\n", " ").strip()
+
+    if "#Shorts" not in title:
+        title = f"{title} #Shorts"
+
+    return title[:100]
+
+
+def build_shorts_description(key):
+    game_name = detect_game_from_key(key)
+    context = pick_from_map(GAME_CONTEXTS, game_name)
+    cta = pick_from_map(GAME_CTAS, game_name)
+    hashtags = " ".join(GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"]))
+
+    text = f"""{context}
+
+{cta}
+
+{hashtags}"""
+    return text[:5000].strip()
+
+
 def ig_publish(video_url, caption):
     print("IG publish: creando container...")
 
@@ -546,7 +611,11 @@ def fb_publish(video_url, caption):
     )
     transfer_resp.raise_for_status()
 
-    transfer = transfer_resp.json()
+    try:
+        transfer = transfer_resp.json()
+    except Exception:
+        transfer = {"raw": transfer_resp.text}
+
     print("FB transfer:", transfer)
 
     print("FB reel upload FINISH")
@@ -571,36 +640,159 @@ def fb_publish(video_url, caption):
     return finish
 
 
+def youtube_publish(video_url, title, description):
+    if not YOUTUBE_CLIENT_ID:
+        raise RuntimeError("Falta YOUTUBE_CLIENT_ID")
+    if not YOUTUBE_CLIENT_SECRET:
+        raise RuntimeError("Falta YOUTUBE_CLIENT_SECRET")
+    if not YOUTUBE_REFRESH_TOKEN:
+        raise RuntimeError("Falta YOUTUBE_REFRESH_TOKEN")
+
+    from google.oauth2.credentials import Credentials
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
+
+    with tempfile.TemporaryDirectory() as td:
+        local_path = os.path.join(td, "short.mp4")
+
+        print("YT download temp desde R2:", video_url)
+        resp = requests.get(video_url, timeout=120)
+        resp.raise_for_status()
+
+        with open(local_path, "wb") as f:
+            f.write(resp.content)
+
+        creds = Credentials(
+            None,
+            refresh_token=YOUTUBE_REFRESH_TOKEN,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=YOUTUBE_CLIENT_ID,
+            client_secret=YOUTUBE_CLIENT_SECRET,
+            scopes=["https://www.googleapis.com/auth/youtube.upload"],
+        )
+
+        youtube = build("youtube", "v3", credentials=creds)
+
+        body = {
+            "snippet": {
+                "title": title[:100],
+                "description": description[:5000],
+                "categoryId": "20",
+                "tags": ["shorts", "gaming", "esports", "latam"],
+            },
+            "status": {
+                "privacyStatus": YOUTUBE_PRIVACY_STATUS,
+                "selfDeclaredMadeForKids": False,
+            },
+        }
+
+        media = MediaFileUpload(
+            local_path,
+            mimetype="video/mp4",
+            resumable=True,
+            chunksize=5 * 1024 * 1024,
+        )
+
+        request = youtube.videos().insert(
+            part="snippet,status",
+            body=body,
+            media_body=media,
+        )
+
+        response = None
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                print(f"YT upload progress: {int(status.progress() * 100)}%")
+
+        if "id" not in response:
+            raise RuntimeError(f"YouTube upload error: {response}")
+
+        return {
+            "id": response["id"],
+            "url": f"https://www.youtube.com/watch?v={response['id']}",
+            "raw": response,
+        }
+
+
 def publish(key):
     public_url = f"{R2_PUBLIC_BASE_URL}/{key}"
     caption = build_caption(key)
+    shorts_title = build_shorts_title(key)
+    shorts_description = build_shorts_description(key)
 
     print("PUBLICANDO VIDEO:")
     print("KEY:", key)
     print("URL:", public_url)
     print("CAPTION:\n", caption)
+    print("SHORTS TITLE:", shorts_title)
+
+    results = {
+        "instagram": None,
+        "facebook": None,
+        "youtube_shorts": None,
+    }
 
     if DRY_RUN:
         print("DRY_RUN activo: no se publica realmente")
+        results["instagram"] = {"ok": ENABLE_INSTAGRAM, "dry_run": True}
+        results["facebook"] = {"ok": ENABLE_FACEBOOK, "dry_run": True}
+        results["youtube_shorts"] = {"ok": ENABLE_SHORTS, "dry_run": True}
         print("Publicado OK\n")
-        return
+        return results
 
     if ENABLE_INSTAGRAM:
-        print("→ Publicando en Instagram...")
-        ig = ig_publish(public_url, caption)
-        print("IG OK:", ig)
+        try:
+            print("→ Publicando en Instagram...")
+            ig = ig_publish(public_url, caption)
+            print("IG OK:", ig)
+            results["instagram"] = {"ok": True, "response": ig}
+        except Exception as e:
+            print("IG ERROR:", repr(e))
+            results["instagram"] = {"ok": False, "error": str(e)}
 
     if ENABLE_FACEBOOK:
-        print("→ Publicando en Facebook...")
-        fb = fb_publish(public_url, caption)
-        print("FB OK:", fb)
+        try:
+            print("→ Publicando en Facebook...")
+            fb = fb_publish(public_url, caption)
+            print("FB OK:", fb)
+            results["facebook"] = {"ok": True, "response": fb}
+        except Exception as e:
+            print("FB ERROR:", repr(e))
+            results["facebook"] = {"ok": False, "error": str(e)}
+
+    if ENABLE_SHORTS:
+        try:
+            print("→ Publicando en YouTube Shorts...")
+            yt = youtube_publish(public_url, shorts_title, shorts_description)
+            print("YT OK:", yt)
+            results["youtube_shorts"] = {"ok": True, "response": yt}
+        except Exception as e:
+            print("YT ERROR:", repr(e))
+            results["youtube_shorts"] = {"ok": False, "error": str(e)}
 
     print("Publicado OK\n")
+    return results
+
+
+def should_process_key(st, key):
+    wanted = []
+
+    if ENABLE_INSTAGRAM and not is_published_on(st, "instagram", key):
+        wanted.append("instagram")
+
+    if ENABLE_FACEBOOK and not is_published_on(st, "facebook", key):
+        wanted.append("facebook")
+
+    if ENABLE_SHORTS and not is_published_on(st, "youtube_shorts", key):
+        wanted.append("youtube_shorts")
+
+    return len(wanted) > 0, wanted
 
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: REAL_PUBLISH_DIVERSIFIED_V5_C")
+    print("MODE B VERSION: REAL_PUBLISH_DIVERSIFIED_V6_SHORTS")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
     print("B_ONLY_KEYS_CONTAIN:", B_ONLY_KEYS_CONTAIN or "(vacío)")
@@ -611,9 +803,10 @@ def run_mode_b():
     print("DRY_RUN:", DRY_RUN)
     print("ENABLE_INSTAGRAM:", ENABLE_INSTAGRAM)
     print("ENABLE_FACEBOOK:", ENABLE_FACEBOOK)
+    print("ENABLE_SHORTS:", ENABLE_SHORTS)
+    print("YOUTUBE_PRIVACY_STATUS:", YOUTUBE_PRIVACY_STATUS)
 
     state = load_state()
-    published = set(state["published"])
 
     priority = list_keys(PREFIX_PRIORITY)
     manual = list_keys(PREFIX_MANUAL)
@@ -622,7 +815,9 @@ def run_mode_b():
     print("Priority:", len(priority))
     print("Manual:", len(manual))
     print("Auto:", len(auto))
-    print("Published in state:", len(published))
+    print("Published IG:", len(state["published"]["instagram"]))
+    print("Published FB:", len(state["published"]["facebook"]))
+    print("Published YT:", len(state["published"]["youtube_shorts"]))
 
     queue = []
     queue.extend(priority)
@@ -643,22 +838,41 @@ def run_mode_b():
         if count >= B_MAX_PUBLISH_PER_RUN:
             break
 
-        if key in published:
-            print("SKIP already published:", key)
+        process, missing_platforms = should_process_key(state, key)
+        if not process:
+            print("SKIP already published in enabled platforms:", key)
             continue
 
         print("Procesando:", key)
         print("SOURCE GROUP:", extract_source_group(key))
         print("GAME DETECTED:", detect_game_from_key(key))
+        print("MISSING PLATFORMS:", missing_platforms)
 
         try:
-            publish(key)
-            published.add(key)
-            count += 1
+            result = publish(key)
+
+            success_any = False
+
+            if ENABLE_INSTAGRAM and result.get("instagram", {}).get("ok"):
+                mark_published_on(state, "instagram", key)
+                success_any = True
+
+            if ENABLE_FACEBOOK and result.get("facebook", {}).get("ok"):
+                mark_published_on(state, "facebook", key)
+                success_any = True
+
+            if ENABLE_SHORTS and result.get("youtube_shorts", {}).get("ok"):
+                mark_published_on(state, "youtube_shorts", key)
+                success_any = True
+
+            save_state(state)
+
+            if success_any:
+                count += 1
+
         except Exception as e:
             print("ERROR publicando:", repr(e))
 
-    state["published"] = list(published)[-5000:]
     save_state(state)
 
     print("Publicados en esta corrida:", count)

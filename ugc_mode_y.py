@@ -1,4 +1,3 @@
-# ugc_mode_y.py
 import os
 import re
 import json
@@ -10,10 +9,6 @@ from typing import Dict, Any, List, Optional, Tuple
 
 import boto3
 
-
-# =========================
-# ENV helpers
-# =========================
 
 def env_nonempty(name: str, default: Optional[str] = None) -> Optional[str]:
     v = os.getenv(name)
@@ -50,10 +45,6 @@ def env_bool(name: str, default: bool = False) -> bool:
     return v.strip().lower() in ("1", "true", "yes", "y", "on")
 
 
-# =========================
-# Config
-# =========================
-
 YOUTUBE_SEARCH_TERMS = env_nonempty(
     "YOUTUBE_SEARCH_TERMS",
     "EA Sports FC,F1,Gran Turismo,VALORANT,CS2,League of Legends,Fortnite,Warzone,Apex Legends,Minecraft",
@@ -72,7 +63,8 @@ R2_META_PREFIX = (env_nonempty("UGC_META_PREFIX", "ugc/meta/") or "ugc/meta/").s
 if not R2_META_PREFIX.endswith("/"):
     R2_META_PREFIX += "/"
 
-R2_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox_v2") or "ugc/inbox_v2").strip().strip("/")
+# IMPORTANTE: alineado con Mode C
+R2_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
 
 AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
@@ -84,16 +76,16 @@ YT_DLP_BIN = env_nonempty("YT_DLP_BIN", "yt-dlp") or "yt-dlp"
 YT_DLP_COOKIES_FILE = env_nonempty("YT_DLP_COOKIES_FILE")
 
 
-# =========================
-# Generic helpers
-# =========================
-
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
 def iso_now() -> str:
     return now_utc().strftime("%Y-%m-%d")
+
+
+def iso_now_compact() -> str:
+    return now_utc().strftime("%Y%m%d_%H%M%S")
 
 
 def iso_now_full() -> str:
@@ -128,12 +120,14 @@ def ffprobe_json(path: str) -> dict:
         "-show_streams",
         path,
     ]
-    code, stdout, _ = run_cmd(cmd)
+    code, stdout, stderr = run_cmd(cmd)
     if code != 0:
+        print("ffprobe error:", stderr[:1000])
         return {}
     try:
         return json.loads(stdout or "{}")
-    except Exception:
+    except Exception as e:
+        print("ffprobe json parse error:", repr(e))
         return {}
 
 
@@ -160,10 +154,6 @@ def is_probably_mp4_file(path: str) -> bool:
     except Exception:
         return False
 
-
-# =========================
-# R2 helpers
-# =========================
 
 def r2_client():
     if not (R2_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and BUCKET_NAME):
@@ -197,10 +187,6 @@ def s3_get_json(key: str):
         return None
 
 
-# =========================
-# State
-# =========================
-
 def load_state() -> Dict[str, Any]:
     st = s3_get_json(STATE_KEY)
     if not st:
@@ -215,15 +201,12 @@ def save_state(st: Dict[str, Any]):
     s3_put_json(STATE_KEY, st)
 
 
-# =========================
-# yt-dlp search / download
-# =========================
+def yt_dlp_search_args() -> List[str]:
+    return [YT_DLP_BIN]
 
-def yt_dlp_base_args() -> List[str]:
-    args = [
-        YT_DLP_BIN,
-        "--remote-components", "ejs:github",
-    ]
+
+def yt_dlp_download_args() -> List[str]:
+    args = [YT_DLP_BIN]
     if YT_DLP_COOKIES_FILE:
         args += ["--cookies", YT_DLP_COOKIES_FILE]
     return args
@@ -236,23 +219,35 @@ def build_search_query(term: str) -> str:
     return f"ytsearch{YOUTUBE_MAX_RESULTS_PER_TERM}:{base} highlights gameplay esports"
 
 
+def fallback_url_from_id(video_id: str) -> str:
+    return f"https://www.youtube.com/watch?v={video_id}"
+
+
 def yt_dlp_search(term: str) -> List[Dict[str, Any]]:
     query = build_search_query(term)
-    cmd = yt_dlp_base_args() + [
+    cmd = yt_dlp_search_args() + [
         "--dump-single-json",
         "--skip-download",
+        "--flat-playlist",
         "--dateafter", f"today-{YOUTUBE_SEARCH_DAYS}days",
         query,
     ]
 
+    print("YT_SEARCH_CMD:", cmd)
     code, stdout, stderr = run_cmd(cmd)
+
     if code != 0:
-        print("yt-dlp search error:", stderr[:1000])
+        print("yt-dlp search error code:", code)
+        print("yt-dlp search stderr:", stderr[:2000])
+        if stdout.strip():
+            print("yt-dlp search stdout:", stdout[:1000])
         return []
 
     try:
         data = json.loads(stdout)
-    except Exception:
+    except Exception as e:
+        print("yt-dlp search json parse error:", repr(e))
+        print("yt-dlp raw stdout snippet:", stdout[:1000])
         return []
 
     entries = data.get("entries") or []
@@ -264,7 +259,12 @@ def yt_dlp_search(term: str) -> List[Dict[str, Any]]:
 
         video_id = e.get("id")
         title = e.get("title") or ""
-        webpage_url = e.get("webpage_url") or e.get("original_url") or ""
+        webpage_url = (
+            e.get("webpage_url")
+            or e.get("url")
+            or e.get("original_url")
+            or (fallback_url_from_id(video_id) if video_id else "")
+        )
         channel = e.get("channel") or e.get("uploader") or ""
         duration = float(e.get("duration") or 0.0)
         view_count = int(e.get("view_count") or 0)
@@ -303,8 +303,18 @@ def youtube_score(item: Dict[str, Any]) -> float:
 
     bonus = 0
     hot_words = [
-        "highlights", "gameplay", "best moments", "clutch", "ace",
-        "ranked", "pro", "esports", "insane", "final", "goals", "overtake"
+        "highlights",
+        "gameplay",
+        "best moments",
+        "clutch",
+        "ace",
+        "ranked",
+        "pro",
+        "esports",
+        "insane",
+        "final",
+        "goals",
+        "overtake",
     ]
     for w in hot_words:
         if w in title:
@@ -320,23 +330,26 @@ def youtube_score(item: Dict[str, Any]) -> float:
 
 
 def yt_dlp_download_video(video_url: str, out_path: str) -> bool:
-    cmd = yt_dlp_base_args() + [
-        "-f", "mp4/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
-        "--merge-output-format", "mp4",
-        "-o", out_path,
+    cmd = yt_dlp_download_args() + [
+        "-f",
+        "mp4/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
+        "--merge-output-format",
+        "mp4",
+        "-o",
+        out_path,
         video_url,
     ]
 
-    code, _, stderr = run_cmd(cmd)
+    print("YT_DOWNLOAD_CMD:", cmd)
+    code, stdout, stderr = run_cmd(cmd)
     if code != 0:
-        print("yt-dlp download error:", stderr[:1000])
+        print("yt-dlp download error code:", code)
+        print("yt-dlp download stderr:", stderr[:2000])
+        if stdout.strip():
+            print("yt-dlp download stdout:", stdout[:1000])
         return False
     return True
 
-
-# =========================
-# Validation
-# =========================
 
 def validate_downloaded_video(path: str) -> Tuple[bool, str]:
     size = get_file_size_bytes(path)
@@ -357,9 +370,33 @@ def validate_downloaded_video(path: str) -> Tuple[bool, str]:
     return True, "ok"
 
 
-# =========================
-# Main
-# =========================
+def debug_cookies_file() -> None:
+    print("YT_DLP_COOKIES_FILE:", YT_DLP_COOKIES_FILE)
+    if not YT_DLP_COOKIES_FILE:
+        print("COOKIES: not configured")
+        return
+
+    exists = os.path.exists(YT_DLP_COOKIES_FILE)
+    print("COOKIES EXISTS:", exists)
+    if not exists:
+        return
+
+    try:
+        size = os.path.getsize(YT_DLP_COOKIES_FILE)
+    except Exception:
+        size = -1
+    print("COOKIES SIZE:", size)
+
+    try:
+        with open(YT_DLP_COOKIES_FILE, "r", encoding="utf-8", errors="ignore") as f:
+            for i in range(3):
+                line = f.readline()
+                if not line:
+                    break
+                print(f"COOKIE_LINE_{i+1}:", line.rstrip())
+    except Exception as e:
+        print("COOKIE_READ_ERROR:", repr(e))
+
 
 def run_mode_y() -> None:
     print("===== MODE Y (YOUTUBE GAMER HARVESTER) -> R2 INBOX =====")
@@ -371,7 +408,12 @@ def run_mode_y() -> None:
     print("YOUTUBE_MIN_DURATION_SEC:", YOUTUBE_MIN_DURATION_SEC)
     print("YOUTUBE_MAX_DURATION_SEC:", YOUTUBE_MAX_DURATION_SEC)
     print("STATE_KEY:", STATE_KEY)
+    print("R2_INBOX_PREFIX:", R2_INBOX_PREFIX)
+    print("R2_META_PREFIX:", R2_META_PREFIX)
+    print("YT_DLP_BIN:", YT_DLP_BIN)
     print("YT_DLP_COOKIES_FILE set:", bool(YT_DLP_COOKIES_FILE))
+
+    debug_cookies_file()
 
     terms = [x.strip() for x in (YOUTUBE_SEARCH_TERMS or "").split(",") if x.strip()]
     if not terms:
@@ -407,7 +449,7 @@ def run_mode_y() -> None:
         return
 
     all_candidates.sort(key=lambda x: x[0], reverse=True)
-    picked = all_candidates[:max(1, YOUTUBE_MAX_DOWNLOADS_PER_RUN)]
+    picked = all_candidates[: max(1, YOUTUBE_MAX_DOWNLOADS_PER_RUN)]
 
     print(f"Seleccionados {len(picked)} videos para bajar a inbox.")
 
@@ -451,7 +493,7 @@ def run_mode_y() -> None:
                 data = f.read()
 
         h = short_hash_bytes(data)
-        key = f"{R2_INBOX_PREFIX}/{iso_now()}__youtube__{video_id}__{safe_slug(title)}__{h}.mp4"
+        key = f"{R2_INBOX_PREFIX}/{iso_now_compact()}__youtube__{video_id}__{safe_slug(title)}__{h}.mp4"
 
         print("Uploading to R2 inbox:", key)
         s3_put_bytes(key, data, "video/mp4")

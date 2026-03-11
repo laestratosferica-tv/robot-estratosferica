@@ -63,7 +63,6 @@ R2_META_PREFIX = (env_nonempty("UGC_META_PREFIX", "ugc/meta/") or "ugc/meta/").s
 if not R2_META_PREFIX.endswith("/"):
     R2_META_PREFIX += "/"
 
-# IMPORTANTE: alineado con Mode C
 R2_INBOX_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
 
@@ -330,25 +329,52 @@ def youtube_score(item: Dict[str, Any]) -> float:
 
 
 def yt_dlp_download_video(video_url: str, out_path: str) -> bool:
-    cmd = yt_dlp_download_args() + [
-        "-f",
-        "mp4/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
-        "--merge-output-format",
-        "mp4",
-        "-o",
-        out_path,
-        video_url,
+    attempts = [
+        yt_dlp_download_args() + [
+            "-f",
+            "mp4/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
+            "--merge-output-format",
+            "mp4",
+            "-o",
+            out_path,
+            video_url,
+        ],
+        yt_dlp_download_args() + [
+            "--extractor-args",
+            "youtube:player_client=android,web",
+            "-f",
+            "mp4/b[ext=mp4]/b",
+            "--merge-output-format",
+            "mp4",
+            "-o",
+            out_path,
+            video_url,
+        ],
+        [YT_DLP_BIN] + [
+            "--extractor-args",
+            "youtube:player_client=android,web",
+            "-f",
+            "mp4/b[ext=mp4]/b",
+            "--merge-output-format",
+            "mp4",
+            "-o",
+            out_path,
+            video_url,
+        ],
     ]
 
-    print("YT_DOWNLOAD_CMD:", cmd)
-    code, stdout, stderr = run_cmd(cmd)
-    if code != 0:
-        print("yt-dlp download error code:", code)
-        print("yt-dlp download stderr:", stderr[:2000])
+    for idx, cmd in enumerate(attempts, start=1):
+        print(f"YT_DOWNLOAD_ATTEMPT_{idx}:", cmd)
+        code, stdout, stderr = run_cmd(cmd)
+        if code == 0:
+            return True
+
+        print(f"yt-dlp download attempt {idx} error code:", code)
+        print(f"yt-dlp download attempt {idx} stderr:", stderr[:2000])
         if stdout.strip():
-            print("yt-dlp download stdout:", stdout[:1000])
-        return False
-    return True
+            print(f"yt-dlp download attempt {idx} stdout:", stdout[:1000])
+
+    return False
 
 
 def validate_downloaded_video(path: str) -> Tuple[bool, str]:
@@ -449,13 +475,24 @@ def run_mode_y() -> None:
         return
 
     all_candidates.sort(key=lambda x: x[0], reverse=True)
-    picked = all_candidates[: max(1, YOUTUBE_MAX_DOWNLOADS_PER_RUN)]
 
-    print(f"Seleccionados {len(picked)} videos para bajar a inbox.")
+    print(f"Candidatos ordenados totales: {len(all_candidates)}")
+    print(f"Objetivo de uploads válidos: {YOUTUBE_MAX_DOWNLOADS_PER_RUN}")
 
     uploaded_count = 0
+    attempted_count = 0
+    max_attempts = min(len(all_candidates), max(YOUTUBE_MAX_DOWNLOADS_PER_RUN * 4, 10))
 
-    for score, item in picked:
+    for score, item in all_candidates:
+        if uploaded_count >= max(1, YOUTUBE_MAX_DOWNLOADS_PER_RUN):
+            break
+
+        if attempted_count >= max_attempts:
+            print("Se alcanzó el máximo de intentos de descarga para esta corrida.")
+            break
+
+        attempted_count += 1
+
         video_id = item["id"]
         title = item.get("title") or ""
         url = item.get("url") or ""
@@ -526,6 +563,7 @@ def run_mode_y() -> None:
     save_state(state)
 
     print("===== MODE Y DONE =====")
+    print("Intentos de descarga realizados:", attempted_count)
     print("Uploaded valid videos:", uploaded_count)
 
 

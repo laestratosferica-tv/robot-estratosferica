@@ -40,12 +40,16 @@ jobs:
           pip install requests boto3 "yt-dlp[default]"
 
       - name: Write YouTube cookies
+        shell: bash
         run: |
           cat <<'EOF' > youtube_cookies.txt
           ${{ secrets.YOUTUBE_COOKIES_TXT }}
           EOF
+
+          echo "Cookies file info:"
           ls -lh youtube_cookies.txt
           wc -l youtube_cookies.txt
+          head -n 3 youtube_cookies.txt || true
 
       - name: Check yt-dlp / runtimes
         run: |
@@ -66,7 +70,8 @@ jobs:
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
-          UGC_INBOX_PREFIX: ugc/inbox_v2
+          # IMPORTANTE: alineado con Mode C
+          UGC_INBOX_PREFIX: ugc/inbox
           UGC_META_PREFIX: ugc/meta
           YOUTUBE_MODE_Y_STATE_KEY: ugc/state/mode_y_state.json
 

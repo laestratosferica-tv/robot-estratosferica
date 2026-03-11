@@ -126,9 +126,7 @@ def list_videos_from_prefix(prefix):
 def list_all_input_videos():
     auto_videos = list_videos_from_prefix(INPUT_PREFIX)
     manual_videos = list_videos_from_prefix(INPUT_MANUAL_PREFIX)
-
-    all_videos = auto_videos + manual_videos
-    return all_videos
+    return auto_videos + manual_videos
 
 
 def download(key, path):
@@ -189,20 +187,58 @@ def detect_game_from_key(key):
 
     checks = [
         ("valorant", "valorant"),
+        ("vct", "valorant"),
+
         ("cs2", "cs2"),
         ("counter strike", "cs2"),
         ("counter-strike", "cs2"),
+        ("starladder", "cs2"),
+        ("blast premier", "cs2"),
+        ("pgl", "cs2"),
+        ("major", "cs2"),
+
         ("league of legends", "leagueoflegends"),
+        ("lck", "leagueoflegends"),
+        ("lec", "leagueoflegends"),
+        ("lcs", "leagueoflegends"),
+        ("lpl", "leagueoflegends"),
+        ("worlds", "leagueoflegends"),
         ("lol", "leagueoflegends"),
+
         ("fortnite", "fortnite"),
+        ("fncs", "fortnite"),
+        ("bugha", "fortnite"),
+
         ("warzone", "warzone"),
+        ("call of duty", "warzone"),
+        ("verdansk", "warzone"),
+        ("rebirth island", "warzone"),
+
         ("apex legends", "apex"),
-        ("apex", "apex"),
+        ("algs", "apex"),
+        ("final circles", "apex"),
+        ("imperialhal", "apex"),
+
         ("minecraft", "minecraft"),
+        ("hardcore", "minecraft"),
+        ("speedrun", "minecraft"),
+        ("bedwars", "minecraft"),
+
         ("ea sports fc", "easportsfc"),
-        ("fc", "easportsfc"),
+        ("fc pro", "easportsfc"),
+        ("echampionsleague", "easportsfc"),
+        ("eeuro", "easportsfc"),
+        ("vejrgang", "easportsfc"),
+        ("tekkz", "easportsfc"),
+
         ("f1", "f1"),
+        ("sim racing", "f1"),
+        ("formula 1", "f1"),
+        ("jarno opmeer", "f1"),
+
         ("gran turismo", "granturismo"),
+        ("gt world series", "granturismo"),
+        ("gt sport", "granturismo"),
     ]
 
     for needle, label in checks:
@@ -210,15 +246,6 @@ def detect_game_from_key(key):
             return label
 
     return "generic"
-
-
-def safe_slug(text, max_len=60):
-    text = (text or "").strip().lower()
-    text = re.sub(r"[^a-z0-9]+", "_", text)
-    text = re.sub(r"_+", "_", text).strip("_")
-    if not text:
-        text = "clip"
-    return text[:max_len]
 
 
 def build_clip_key(source_key, clip_index):

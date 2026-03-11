@@ -19,6 +19,16 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
       - name: Install system packages
         run: |
           sudo apt-get update
@@ -29,7 +39,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests boto3 "yt-dlp[default]"
 
-      # ✅ ESCRIBE LAS COOKIES DE YOUTUBE
       - name: Write YouTube cookies
         run: |
           cat <<'EOF' > youtube_cookies.txt
@@ -38,11 +47,14 @@ jobs:
           ls -lh youtube_cookies.txt
           wc -l youtube_cookies.txt
 
-      - name: Check yt-dlp
+      - name: Check yt-dlp / runtimes
         run: |
+          which python
+          python --version
           which yt-dlp
           yt-dlp --version
-          python --version
+          deno --version
+          node --version
 
       - name: Run Mode Y
         env:
@@ -54,7 +66,6 @@ jobs:
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
 
-          # 🔥 NUEVO INBOX LIMPIO
           UGC_INBOX_PREFIX: ugc/inbox_v2
           UGC_META_PREFIX: ugc/meta
           YOUTUBE_MODE_Y_STATE_KEY: ugc/state/mode_y_state.json

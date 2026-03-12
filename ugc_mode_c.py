@@ -2,11 +2,10 @@
 
 import os
 import json
-import random
-import re
+import math
+import hashlib
 import subprocess
 import tempfile
-import hashlib
 from datetime import datetime, timezone
 
 import boto3
@@ -40,13 +39,6 @@ def env_float(name, default):
         return default
 
 
-def env_bool(name, default=False):
-    v = os.getenv(name)
-    if v is None:
-        return default
-    return v.strip().lower() in ("1", "true", "yes", "y", "on")
-
-
 AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
 R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
@@ -54,28 +46,24 @@ BUCKET_NAME = env_nonempty("BUCKET_NAME")
 
 INPUT_PREFIX = (env_nonempty("UGC_INBOX_PREFIX", "ugc/inbox") or "ugc/inbox").strip().strip("/")
 INPUT_MANUAL_PREFIX = (env_nonempty("UGC_INBOX_MANUAL_PREFIX", "ugc/inbox_manual") or "ugc/inbox_manual").strip().strip("/")
-
 OUTPUT_PREFIX = (env_nonempty("UGC_CLIPS_PREFIX", "ugc/library/clips") or "ugc/library/clips").strip().strip("/")
-OUTPUT_META_PREFIX = (env_nonempty("UGC_CLIPS_META_PREFIX", "ugc/meta/clips") or "ugc/meta/clips").strip().strip("/")
+META_CLIPS_PREFIX = (env_nonempty("UGC_META_CLIPS_PREFIX", "ugc/meta/clips") or "ugc/meta/clips").strip().strip("/")
 
 STATE_KEY = env_nonempty("MODE_C_STATE_KEY", "ugc/state/mode_c_state.json")
 
-CLIP_SECONDS = env_int("MODE_C_CLIP_SECONDS", 8)
-MAX_INPUTS = env_int("MODE_C_MAX_INPUTS", 5)
-MAX_CLIPS_PER_VIDEO = env_int("MODE_C_MAX_CLIPS_PER_VIDEO", 3)
+CLIP_SECONDS = env_float("MODE_C_CLIP_SECONDS", 12.0)
+MAX_INPUTS = env_int("MODE_C_MAX_INPUTS", 4)
+MAX_CLIPS_PER_VIDEO = env_int("MODE_C_MAX_CLIPS_PER_VIDEO", 4)
 
-# distancia mínima entre inicios de clips del mismo video
-MODE_C_MIN_GAP_SECONDS = env_float("MODE_C_MIN_GAP_SECONDS", 18.0)
+ANALYSIS_STEP_SEC = env_float("MODE_C_ANALYSIS_STEP_SEC", 1.0)
+MIN_GAP_BETWEEN_CLIPS_SEC = env_float("MODE_C_MIN_GAP_BETWEEN_CLIPS_SEC", 18.0)
+MIN_SOURCE_DURATION_SEC = env_float("MODE_C_MIN_SOURCE_DURATION_SEC", 25.0)
 
-# evita cortar los primeros/últimos segundos del video
-MODE_C_START_PADDING_SECONDS = env_float("MODE_C_START_PADDING_SECONDS", 6.0)
-MODE_C_END_PADDING_SECONDS = env_float("MODE_C_END_PADDING_SECONDS", 6.0)
+AUDIO_WEIGHT = env_float("MODE_C_AUDIO_WEIGHT", 0.55)
+VIDEO_WEIGHT = env_float("MODE_C_VIDEO_WEIGHT", 0.45)
 
-# si el video es corto, reduce exigencia
-MODE_C_SHORT_VIDEO_THRESHOLD = env_float("MODE_C_SHORT_VIDEO_THRESHOLD", 40.0)
-
-# para naming/meta
-MODE_C_SOURCE_PREFIX_FALLBACK = env_nonempty("MODE_C_SOURCE_PREFIX_FALLBACK", "src")
+# protección para no cortar extremos horribles
+EDGE_PADDING_SEC = env_float("MODE_C_EDGE_PADDING_SEC", 3.0)
 
 
 def now_utc():
@@ -84,6 +72,14 @@ def now_utc():
 
 def iso_now_full():
     return now_utc().isoformat()
+
+
+def short_hash_text(text):
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
+
+
+def safe_json_dumps(obj):
+    return json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
 
 
 def r2():
@@ -105,31 +101,9 @@ def r2():
     )
 
 
-def safe_json_dumps(obj):
-    return json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
-
-
-def short_hash_text(text):
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
-
-
-def short_hash_bytes(data):
-    return hashlib.sha1(data).hexdigest()[:10]
-
-
-def safe_slug(text):
-    text = (text or "").strip().lower()
-    text = re.sub(r"[^a-z0-9\-_]+", "_", text)
-    text = re.sub(r"_+", "_", text).strip("_")
-    return text[:120] or "video"
-
-
 def load_state():
     try:
-        obj = r2().get_object(
-            Bucket=BUCKET_NAME,
-            Key=STATE_KEY
-        )
+        obj = r2().get_object(Bucket=BUCKET_NAME, Key=STATE_KEY)
         state = json.loads(obj["Body"].read())
     except Exception:
         state = {}
@@ -140,9 +114,6 @@ def load_state():
     if "processed" not in state or not isinstance(state["processed"], list):
         state["processed"] = []
 
-    if "generated_clips" not in state or not isinstance(state["generated_clips"], list):
-        state["generated_clips"] = []
-
     return state
 
 
@@ -152,9 +123,6 @@ def save_state(state):
 
     if "processed" not in state or not isinstance(state["processed"], list):
         state["processed"] = []
-
-    if "generated_clips" not in state or not isinstance(state["generated_clips"], list):
-        state["generated_clips"] = []
 
     r2().put_object(
         Bucket=BUCKET_NAME,
@@ -207,14 +175,10 @@ def list_all_input_videos():
 
 
 def download(key, path):
-    r2().download_file(
-        BUCKET_NAME,
-        key,
-        path
-    )
+    r2().download_file(BUCKET_NAME, key, path)
 
 
-def upload_video(path, key):
+def upload(path, key):
     r2().upload_file(
         path,
         BUCKET_NAME,
@@ -232,19 +196,28 @@ def upload_json(payload, key):
     )
 
 
-def get_duration(path):
+def ffprobe_json(path):
     cmd = [
         "ffprobe",
         "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
+        "-print_format", "json",
+        "-show_format",
+        "-show_streams",
         path,
     ]
-
     p = subprocess.run(cmd, capture_output=True, text=True)
-
+    if p.returncode != 0:
+        return {}
     try:
-        return float(p.stdout.strip())
+        return json.loads(p.stdout or "{}")
+    except Exception:
+        return {}
+
+
+def get_duration(path):
+    info = ffprobe_json(path)
+    try:
+        return float(info.get("format", {}).get("duration", 0.0) or 0.0)
     except Exception:
         return 0.0
 
@@ -253,7 +226,7 @@ def cut_clip(src, start, seconds, dst):
     cmd = [
         "ffmpeg",
         "-y",
-        "-ss", str(round(start, 3)),
+        "-ss", str(max(0.0, start)),
         "-i", src,
         "-t", str(seconds),
         "-c:v", "libx264",
@@ -263,7 +236,6 @@ def cut_clip(src, start, seconds, dst):
         "-b:a", "128k",
         dst,
     ]
-
     p = subprocess.run(cmd, capture_output=True, text=True)
     return p.returncode == 0
 
@@ -274,7 +246,6 @@ def detect_game_from_key(key):
     checks = [
         ("valorant", "valorant"),
         ("vct", "valorant"),
-
         ("cs2", "cs2"),
         ("counter strike", "cs2"),
         ("counter-strike", "cs2"),
@@ -282,7 +253,6 @@ def detect_game_from_key(key):
         ("blast premier", "cs2"),
         ("pgl", "cs2"),
         ("major", "cs2"),
-
         ("league of legends", "leagueoflegends"),
         ("lck", "leagueoflegends"),
         ("lec", "leagueoflegends"),
@@ -290,41 +260,25 @@ def detect_game_from_key(key):
         ("lpl", "leagueoflegends"),
         ("worlds", "leagueoflegends"),
         ("lol", "leagueoflegends"),
-
         ("fortnite", "fortnite"),
         ("fncs", "fortnite"),
         ("bugha", "fortnite"),
-
         ("warzone", "warzone"),
         ("call of duty", "warzone"),
         ("verdansk", "warzone"),
         ("rebirth island", "warzone"),
-
         ("apex legends", "apex"),
         ("algs", "apex"),
-        ("final circles", "apex"),
         ("imperialhal", "apex"),
-
         ("minecraft", "minecraft"),
-        ("hardcore", "minecraft"),
-        ("speedrun", "minecraft"),
         ("bedwars", "minecraft"),
-
+        ("speedrun", "minecraft"),
         ("ea sports fc", "easportsfc"),
         ("fc pro", "easportsfc"),
-        ("echampionsleague", "easportsfc"),
-        ("eeuro", "easportsfc"),
-        ("vejrgang", "easportsfc"),
-        ("tekkz", "easportsfc"),
-
         ("f1", "f1"),
-        ("sim racing", "f1"),
         ("formula 1", "f1"),
-        ("jarno opmeer", "f1"),
-
         ("gran turismo", "granturismo"),
         ("gt world series", "granturismo"),
-        ("gt sport", "granturismo"),
     ]
 
     for needle, label in checks:
@@ -334,139 +288,291 @@ def detect_game_from_key(key):
     return "generic"
 
 
-def extract_source_video_id(source_key):
+def safe_source_video_id_from_key(source_key):
     base = os.path.basename(source_key).rsplit(".", 1)[0]
-    base = safe_slug(base)
-
-    # intenta extraer ids conocidos
-    m = re.search(r"__youtube__([a-zA-Z0-9_-]{6,})__", source_key)
-    if m:
-        return f"youtube_{m.group(1)}"
-
-    m = re.search(r"__twitch__([a-zA-Z0-9_-]{6,})__", source_key)
-    if m:
-        return f"twitch_{m.group(1)}"
-
-    return f"{MODE_C_SOURCE_PREFIX_FALLBACK}_{base[:80]}"
+    return short_hash_text(source_key + "::" + base)
 
 
-def choose_candidate_starts(duration, clip_seconds, max_clips):
-    starts = []
+def build_clip_key(source_key, clip_index, start_sec, end_sec):
+    game_slug = detect_game_from_key(source_key)
+    source_video_id = safe_source_video_id_from_key(source_key)
+    start_i = int(round(start_sec))
+    end_i = int(round(end_sec))
+    return f"{OUTPUT_PREFIX}/{game_slug}__{source_video_id}__c{clip_index}__{start_i}s_{end_i}s.mp4"
 
-    if duration <= clip_seconds + 1:
-        return starts
 
-    start_padding = MODE_C_START_PADDING_SECONDS
-    end_padding = MODE_C_END_PADDING_SECONDS
-    min_gap = MODE_C_MIN_GAP_SECONDS
+def build_clip_meta_key_from_clip_key(clip_key):
+    base = os.path.basename(clip_key).rsplit(".", 1)[0]
+    return f"{META_CLIPS_PREFIX}/{base}.json"
 
-    # si es video corto, relaja reglas
-    if duration <= MODE_C_SHORT_VIDEO_THRESHOLD:
-        start_padding = min(2.0, max(0.0, duration * 0.05))
-        end_padding = min(2.0, max(0.0, duration * 0.05))
-        min_gap = max(float(clip_seconds), 8.0)
 
-    min_start = max(0.0, start_padding)
-    max_start = max(min_start, duration - clip_seconds - end_padding)
+def clamp(v, lo, hi):
+    return max(lo, min(hi, v))
 
-    if max_start <= min_start:
-        min_start = 0.0
-        max_start = max(0.0, duration - clip_seconds)
 
-    if max_start <= min_start:
-        return starts
+def mean(values):
+    if not values:
+        return 0.0
+    return sum(values) / len(values)
 
-    attempts = 0
-    max_attempts = max_clips * 20
 
-    while len(starts) < max_clips and attempts < max_attempts:
-        attempts += 1
-        candidate = round(random.uniform(min_start, max_start), 3)
+def stddev(values):
+    if not values:
+        return 0.0
+    m = mean(values)
+    var = sum((x - m) ** 2 for x in values) / len(values)
+    return math.sqrt(var)
+
+
+def normalize_series(values):
+    if not values:
+        return []
+    lo = min(values)
+    hi = max(values)
+    if hi - lo < 1e-9:
+        return [0.0 for _ in values]
+    return [(v - lo) / (hi - lo) for v in values]
+
+
+def zscore_series(values):
+    if not values:
+        return []
+    m = mean(values)
+    sd = stddev(values)
+    if sd < 1e-9:
+        return [0.0 for _ in values]
+    return [(v - m) / sd for v in values]
+
+
+def smooth_series(values, radius=1):
+    if not values:
+        return []
+    out = []
+    n = len(values)
+    for i in range(n):
+        a = max(0, i - radius)
+        b = min(n, i + radius + 1)
+        out.append(mean(values[a:b]))
+    return out
+
+
+def extract_audio_energy_series(src_path, duration, step_sec):
+    """
+    Saca RMS aproximado por ventana usando ffmpeg astats.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        null_out = os.path.join(td, "null.wav")
+        cmd = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel", "info",
+            "-i", src_path,
+            "-af", f"asetnsamples=n=44100,astats=metadata=1:reset=1",
+            "-f", "null",
+            null_out,
+        ]
+        p = subprocess.run(cmd, capture_output=True, text=True)
+        stderr = (p.stderr or "") + "\n" + (p.stdout or "")
+
+    rms_vals = []
+    for line in stderr.splitlines():
+        if "RMS level dB" in line:
+            try:
+                val = float(line.strip().split(":")[-1].strip())
+                rms_vals.append(val)
+            except Exception:
+                pass
+
+    # convertimos dB negativos a energía positiva
+    if not rms_vals:
+        count = max(1, int(math.ceil(duration / step_sec)))
+        return [0.0] * count
+
+    energy = []
+    for db in rms_vals:
+        # db viene usualmente negativo; más cerca de 0 = más fuerte
+        # lo invertimos suavemente
+        energy.append(60.0 + db)
+
+    count = max(1, int(math.ceil(duration / step_sec)))
+
+    # si ffmpeg devolvió muchas más muestras, reducimos
+    if len(energy) == count:
+        return energy
+
+    if len(energy) < count:
+        # pad con último
+        last = energy[-1] if energy else 0.0
+        return energy + [last] * (count - len(energy))
+
+    # downsample promedio
+    out = []
+    ratio = len(energy) / float(count)
+    for i in range(count):
+        a = int(i * ratio)
+        b = int((i + 1) * ratio)
+        if b <= a:
+            b = a + 1
+        out.append(mean(energy[a:b]))
+    return out
+
+
+def extract_visual_change_series(src_path, duration, step_sec):
+    """
+    Usa ffmpeg + select(scene) para detectar cambios de escena
+    y los convierte a score por ventana.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        out_dir = os.path.join(td, "frames")
+        os.makedirs(out_dir, exist_ok=True)
+
+        cmd = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel", "info",
+            "-i", src_path,
+            "-vf", f"fps=1/{step_sec},select='gt(scene,0.08)',showinfo",
+            "-vsync", "vfr",
+            os.path.join(out_dir, "frame_%05d.jpg"),
+        ]
+        p = subprocess.run(cmd, capture_output=True, text=True)
+        stderr = (p.stderr or "") + "\n" + (p.stdout or "")
+
+    count = max(1, int(math.ceil(duration / step_sec)))
+    scores = [0.0] * count
+
+    # buscamos pts_time de frames seleccionados
+    pts_times = []
+    for line in stderr.splitlines():
+        if "pts_time:" in line:
+            m = re.search(r"pts_time:([0-9\.]+)", line)
+            if m:
+                try:
+                    pts_times.append(float(m.group(1)))
+                except Exception:
+                    pass
+
+    for t in pts_times:
+        idx = int(t // step_sec)
+        if 0 <= idx < count:
+            scores[idx] += 1.0
+
+    return scores
+
+
+def infer_moment_type(audio_n, video_n, peak_audio, peak_video):
+    if peak_audio > 0.78 and peak_video > 0.72:
+        return "clutch"
+    if peak_audio > 0.82:
+        return "reaction"
+    if peak_video > 0.82:
+        return "action"
+    if (audio_n + video_n) / 2.0 > 0.65:
+        return "hype"
+    return "moment"
+
+
+def infer_emotion(moment_type, total_score):
+    if moment_type == "clutch":
+        return "clutch"
+    if moment_type == "reaction":
+        return "shock"
+    if moment_type == "action":
+        return "skill"
+    if total_score > 0.82:
+        return "heroic"
+    if total_score > 0.68:
+        return "chaos"
+    return "skill"
+
+
+def infer_intensity(score):
+    if score >= 0.88:
+        return "estratosferico"
+    if score >= 0.72:
+        return "high"
+    if score >= 0.50:
+        return "medium"
+    return "low"
+
+
+def score_segments(duration, audio_series, video_series, step_sec, clip_seconds):
+    audio_sm = smooth_series(normalize_series(audio_series), radius=1)
+    video_sm = smooth_series(normalize_series(video_series), radius=1)
+
+    count = min(len(audio_sm), len(video_sm))
+    candidates = []
+
+    for idx in range(count):
+        center = idx * step_sec
+        start = center - (clip_seconds / 2.0)
+        start = clamp(start, EDGE_PADDING_SEC, max(EDGE_PADDING_SEC, duration - clip_seconds - EDGE_PADDING_SEC))
+        end = start + clip_seconds
+
+        if end > duration:
+            start = max(0.0, duration - clip_seconds)
+            end = duration
+
+        # ventana de score
+        a_idx = max(0, int(start // step_sec))
+        b_idx = min(count, int(math.ceil(end / step_sec)))
+        if b_idx <= a_idx:
+            b_idx = min(count, a_idx + 1)
+
+        audio_window = audio_sm[a_idx:b_idx]
+        video_window = video_sm[a_idx:b_idx]
+
+        audio_peak = max(audio_window) if audio_window else 0.0
+        video_peak = max(video_window) if video_window else 0.0
+        audio_avg = mean(audio_window)
+        video_avg = mean(video_window)
+
+        total_score = (audio_avg * AUDIO_WEIGHT) + (video_avg * VIDEO_WEIGHT)
+        moment_type = infer_moment_type(audio_avg, video_avg, audio_peak, video_peak)
+        emotion = infer_emotion(moment_type, total_score)
+        intensity = infer_intensity(total_score)
+
+        candidates.append(
+            {
+                "start": round(start, 2),
+                "end": round(end, 2),
+                "duration": round(end - start, 2),
+                "audio_score": round(audio_avg, 4),
+                "video_score": round(video_avg, 4),
+                "audio_peak_score": round(audio_peak, 4),
+                "visual_peak_score": round(video_peak, 4),
+                "candidate_score": round(total_score, 4),
+                "moment_type": moment_type,
+                "emotion": emotion,
+                "intensity": intensity,
+            }
+        )
+
+    # ordenar mejor score primero
+    candidates.sort(key=lambda x: x["candidate_score"], reverse=True)
+    return candidates
+
+
+def pick_diverse_segments(candidates, max_clips, min_gap_sec):
+    selected = []
+
+    for c in candidates:
+        if len(selected) >= max_clips:
+            break
 
         too_close = False
-        for s in starts:
-            if abs(candidate - s) < min_gap:
+        for s in selected:
+            if abs(c["start"] - s["start"]) < min_gap_sec:
                 too_close = True
                 break
 
         if too_close:
             continue
 
-        starts.append(candidate)
+        selected.append(c)
 
-    starts.sort()
-    return starts
-
-
-def candidate_score(duration, start, clip_seconds):
-    """
-    Score simple, placeholder útil:
-    - penaliza inicio extremo
-    - penaliza final extremo
-    - favorece zona media
-    """
-    if duration <= 0:
-        return 0.0
-
-    center = start + (clip_seconds / 2.0)
-    relative = center / max(duration, 1.0)
-
-    # ideal alrededor del medio del video
-    distance_to_mid = abs(relative - 0.5)
-    score = max(0.0, 1.0 - (distance_to_mid * 1.6))
-
-    return round(score, 4)
-
-
-def build_clip_base_name(game_slug, source_video_id, clip_index, start, end):
-    start_tag = f"{int(round(start))}s"
-    end_tag = f"{int(round(end))}s"
-    return f"{game_slug}__{source_video_id}__c{clip_index}__{start_tag}_{end_tag}"
-
-
-def build_clip_key(base_name):
-    return f"{OUTPUT_PREFIX}/{base_name}.mp4"
-
-
-def build_meta_key(base_name):
-    return f"{OUTPUT_META_PREFIX}/{base_name}.json"
-
-
-def build_clip_meta(
-    source_key,
-    source_video_id,
-    game_slug,
-    clip_index,
-    start,
-    duration,
-    clip_key,
-    clip_hash,
-    score,
-):
-    end = round(start + duration, 3)
-    clip_id_raw = f"{source_video_id}|{clip_index}|{round(start,3)}|{duration}"
-    clip_id = short_hash_text(clip_id_raw)
-
-    return {
-        "clip_id": clip_id,
-        "source_video_key": source_key,
-        "source_video_id": source_video_id,
-        "source_group": source_video_id,
-        "game": game_slug,
-        "clip_index": clip_index,
-        "start": round(start, 3),
-        "duration": duration,
-        "end": end,
-        "candidate_score": score,
-        "status": "candidate",
-        "created_at": iso_now_full(),
-        "clip_key": clip_key,
-        "clip_hash": clip_hash,
-        "emotion": None,
-        "intensity": None,
-        "angle": None,
-        "caption": None,
-    }
+    # orden natural de publicación: del mejor al peor, pero puedes cambiar a start si quieres
+    return selected
 
 
 def run_mode_c():
@@ -474,12 +580,13 @@ def run_mode_c():
     print("INPUT_PREFIX:", INPUT_PREFIX)
     print("INPUT_MANUAL_PREFIX:", INPUT_MANUAL_PREFIX)
     print("OUTPUT_PREFIX:", OUTPUT_PREFIX)
-    print("OUTPUT_META_PREFIX:", OUTPUT_META_PREFIX)
+    print("META_CLIPS_PREFIX:", META_CLIPS_PREFIX)
     print("STATE_KEY:", STATE_KEY)
     print("CLIP_SECONDS:", CLIP_SECONDS)
     print("MAX_INPUTS:", MAX_INPUTS)
     print("MAX_CLIPS_PER_VIDEO:", MAX_CLIPS_PER_VIDEO)
-    print("MODE_C_MIN_GAP_SECONDS:", MODE_C_MIN_GAP_SECONDS)
+    print("ANALYSIS_STEP_SEC:", ANALYSIS_STEP_SEC)
+    print("MIN_GAP_BETWEEN_CLIPS_SEC:", MIN_GAP_BETWEEN_CLIPS_SEC)
 
     state = load_state()
     processed = set(state["processed"])
@@ -490,7 +597,6 @@ def run_mode_c():
     print("Videos procesados en state:", len(processed))
 
     count = 0
-    generated_clips = state.get("generated_clips", [])
 
     for key in videos:
         if count >= MAX_INPUTS:
@@ -509,22 +615,40 @@ def run_mode_c():
             duration = get_duration(src)
             print("Duración:", duration)
 
-            if duration < CLIP_SECONDS:
+            if duration < max(CLIP_SECONDS + 2.0, MIN_SOURCE_DURATION_SEC):
                 print("Video demasiado corto:", key)
                 processed.add(key)
                 continue
 
-            game_slug = detect_game_from_key(key)
-            source_video_id = extract_source_video_id(key)
-            starts = choose_candidate_starts(duration, CLIP_SECONDS, MAX_CLIPS_PER_VIDEO)
+            audio_series = extract_audio_energy_series(src, duration, ANALYSIS_STEP_SEC)
+            video_series = extract_visual_change_series(src, duration, ANALYSIS_STEP_SEC)
 
-            print("GAME DETECTED:", game_slug)
-            print("SOURCE VIDEO ID:", source_video_id)
-            print("STARTS ELEGIDOS:", starts)
+            candidates = score_segments(
+                duration=duration,
+                audio_series=audio_series,
+                video_series=video_series,
+                step_sec=ANALYSIS_STEP_SEC,
+                clip_seconds=CLIP_SECONDS,
+            )
+
+            selected = pick_diverse_segments(
+                candidates=candidates,
+                max_clips=MAX_CLIPS_PER_VIDEO,
+                min_gap_sec=MIN_GAP_BETWEEN_CLIPS_SEC,
+            )
+
+            print("Candidates analizados:", len(candidates))
+            print("Seleccionados:", len(selected))
+
+            source_video_id = safe_source_video_id_from_key(key)
+            source_group = source_video_id
+            game_slug = detect_game_from_key(key)
 
             created_for_video = 0
 
-            for i, start in enumerate(starts):
+            for i, seg in enumerate(selected):
+                start = float(seg["start"])
+                end = float(seg["end"])
                 out = os.path.join(tmp, f"clip{i}.mp4")
 
                 ok = cut_clip(src, start, CLIP_SECONDS, out)
@@ -536,53 +660,38 @@ def run_mode_c():
                     print("ERROR clip vacío:", key, "clip", i)
                     continue
 
-                with open(out, "rb") as f:
-                    clip_bytes = f.read()
+                clip_key = build_clip_key(key, i, start, end)
+                upload(out, clip_key)
 
-                if not clip_bytes:
-                    print("ERROR bytes vacíos:", key, "clip", i)
-                    continue
-
-                end = round(start + CLIP_SECONDS, 3)
-                base_name = build_clip_base_name(
-                    game_slug=game_slug,
-                    source_video_id=source_video_id,
-                    clip_index=i,
-                    start=start,
-                    end=end,
-                )
-
-                clip_key = build_clip_key(base_name)
-                meta_key = build_meta_key(base_name)
-                clip_hash = short_hash_bytes(clip_bytes)
-                score = candidate_score(duration, start, CLIP_SECONDS)
-
-                meta = build_clip_meta(
-                    source_key=key,
-                    source_video_id=source_video_id,
-                    game_slug=game_slug,
-                    clip_index=i,
-                    start=start,
-                    duration=CLIP_SECONDS,
-                    clip_key=clip_key,
-                    clip_hash=clip_hash,
-                    score=score,
-                )
-
-                upload_video(out, clip_key)
-                upload_json(meta, meta_key)
-
-                print("Clip creado:", clip_key)
-                print("Meta creada:", meta_key)
-                print("Score:", score)
-
-                generated_clips.append({
+                clip_meta = {
                     "source_video_key": key,
                     "source_video_id": source_video_id,
+                    "source_group": source_group,
                     "clip_key": clip_key,
-                    "meta_key": meta_key,
-                    "created_at": iso_now_full(),
-                })
+                    "clip_id": short_hash_text(clip_key),
+                    "clip_index": i,
+                    "game": game_slug,
+                    "start": start,
+                    "end": end,
+                    "duration": seg["duration"],
+                    "audio_score": seg["audio_score"],
+                    "video_score": seg["video_score"],
+                    "audio_peak_score": seg["audio_peak_score"],
+                    "visual_peak_score": seg["visual_peak_score"],
+                    "candidate_score": seg["candidate_score"],
+                    "moment_type": seg["moment_type"],
+                    "emotion": seg["emotion"],
+                    "intensity": seg["intensity"],
+                    "generated_at": iso_now_full(),
+                }
+
+                meta_key = build_clip_meta_key_from_clip_key(clip_key)
+                upload_json(clip_meta, meta_key)
+
+                print("GAME DETECTED:", game_slug)
+                print("Clip creado:", clip_key)
+                print("Meta creada:", meta_key)
+                print("Score:", seg["candidate_score"], "| moment:", seg["moment_type"], "| emotion:", seg["emotion"])
 
                 created_for_video += 1
 
@@ -593,7 +702,6 @@ def run_mode_c():
         count += 1
 
     state["processed"] = list(processed)[-5000:]
-    state["generated_clips"] = generated_clips[-10000:]
     save_state(state)
 
     print("===== MODE C DONE =====")

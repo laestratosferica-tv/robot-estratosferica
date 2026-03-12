@@ -208,12 +208,11 @@ FONT_BOLD = env_nonempty(
 # Publish toggles
 DRY_RUN = env_bool("DRY_RUN", False)
 
-# Redes fijas
-ENABLE_THREADS_PUBLISH = True
-ENABLE_IG_PUBLISH = True
-ENABLE_FB_PUBLISH = True
-ENABLE_YT_PUBLISH = False
-ENABLE_TIKTOK_PUBLISH = False
+ENABLE_THREADS_PUBLISH = env_bool("ENABLE_THREADS_PUBLISH", True)
+ENABLE_IG_PUBLISH = env_bool("ENABLE_IG_PUBLISH", True)
+ENABLE_FB_PUBLISH = env_bool("ENABLE_FB_PUBLISH", True)
+ENABLE_YT_PUBLISH = env_bool("ENABLE_YT_PUBLISH", False)
+ENABLE_TIKTOK_PUBLISH = env_bool("ENABLE_TIKTOK_PUBLISH", False)
 
 # Instagram publish (Graph API)
 IG_ACCESS_TOKEN = env_nonempty("IG_ACCESS_TOKEN")
@@ -236,6 +235,7 @@ TIKTOK_OPEN_ID = env_nonempty("TIKTOK_OPEN_ID")
 
 # Runway (optional)
 RUNWAY_ENABLED = env_bool("RUNWAY_ENABLED", True)
+RUNWAY_FORCE = env_bool("RUNWAY_FORCE", False)
 RUNWAY_API_KEY = env_nonempty("RUNWAY_API_KEY")
 RUNWAY_VERSION = env_nonempty("RUNWAY_VERSION", "2024-11-06")
 RUNWAY_BASE = env_nonempty("RUNWAY_BASE", "https://api.dev.runwayml.com").rstrip("/")

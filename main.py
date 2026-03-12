@@ -2249,35 +2249,42 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 build_instagram_caption(item, link),
             )
 
-        yt_res = None
+                yt_res = None
         if reel_url and (not acct_dry_run) and ENABLE_YT_PUBLISH:
             try:
                 with tempfile.TemporaryDirectory() as td:
-                    p = os.path.join(td, "reel.mp4")
+                    local_video = os.path.join(td, "reel.mp4")
+
                     rr = _get_with_retries(
                         reel_url,
                         timeout=90,
                         label="R2 DOWNLOAD REEL",
                         retries=2,
-            )
-            with open(p, "wb") as f:
-                f.write(rr.content)
-            cap = build_instagram_caption(item, link)
-            yt_title = (cap.splitlines()[0].strip()[:85] + " #Shorts").strip()
-            yt_desc = cap + "\n\n#Shorts #gaming #esports"
-            yt_res = youtube_upload_short(p, yt_title, yt_desc)
-    except Exception as e:
-        print("YT publish falló (no rompe):", str(e))
-        yt_res = {"ok": False, "error": str(e)}
-                    with open(p, "wb") as f:
+                    )
+
+                    with open(local_video, "wb") as f:
                         f.write(rr.content)
+
                     cap = build_instagram_caption(item, link)
-                    yt_title = (cap.splitlines()[0].strip()[:85] + " #Shorts").strip()
+
+                    yt_title = (
+                        cap.splitlines()[0].strip()[:85] + " #Shorts"
+                    ).strip()
+
                     yt_desc = cap + "\n\n#Shorts #gaming #esports"
-                    yt_res = youtube_upload_short(p, yt_title, yt_desc)
+
+                    yt_res = youtube_upload_short(
+                        local_video,
+                        yt_title,
+                        yt_desc,
+                    )
+
             except Exception as e:
                 print("YT publish falló (no rompe):", str(e))
-                yt_res = {"ok": False, "error": str(e)}
+                yt_res = {
+                    "ok": False,
+                    "error": str(e),
+                }
 
         tt_res = None
                 if reel_url and (not acct_dry_run) and ENABLE_TIKTOK_PUBLISH:

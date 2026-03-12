@@ -2264,7 +2264,16 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         timeout=90,
                         label="R2 DOWNLOAD REEL",
                         retries=2,
-                    )
+            )
+            with open(p, "wb") as f:
+                f.write(rr.content)
+            cap = build_instagram_caption(item, link)
+            yt_title = (cap.splitlines()[0].strip()[:85] + " #Shorts").strip()
+            yt_desc = cap + "\n\n#Shorts #gaming #esports"
+            yt_res = youtube_upload_short(p, yt_title, yt_desc)
+    except Exception as e:
+        print("YT publish falló (no rompe):", str(e))
+        yt_res = {"ok": False, "error": str(e)}
                     with open(p, "wb") as f:
                         f.write(rr.content)
                     cap = build_instagram_caption(item, link)

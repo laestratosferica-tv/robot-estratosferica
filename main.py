@@ -2129,7 +2129,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 )
                 print("Imagen rehost R2:", img_r2_url)
 
-                chosen_music = pick_music_path()
+                                chosen_music = pick_music_path()
                 chosen_logo = pick_logo_path(asset_logo_default)
                 video_hook = build_video_hook(item.get("title", ""))
                 video_cta = pick_gamer_cta(cta_text)
@@ -2138,15 +2138,13 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     local_img = os.path.join(td, f"news{img_ext}")
                     with open(local_img, "wb") as f:
                         f.write(img_bytes)
-                    
+
                     use_runway = (
                         RUNWAY_ENABLED
                         and bool(RUNWAY_API_KEY)
                         and (
                             RUNWAY_FORCE
                             or random.random() <= max(0.0, min(1.0, RUNWAY_PROBABILITY))
-                        )
-                    )
                         )
                     )
 
@@ -2178,13 +2176,13 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                                 mp4_url,
                                 task_id=task_id,
                             )
-                            bbg_vid = os.path.join(td, "bg.mp4")
+                            bg_vid = os.path.join(td, "bg.mp4")
                             with open(bg_vid, "wb") as f:
                                 f.write(mp4_bytes)
 
                             bg_vid_clean = os.path.join(td, "bg_clean.mp4")
                             sanitize_runway_bg_video(bg_vid, bg_vid_clean, start_sec=0.35)
-                            
+
                             reel_bytes = generate_reel_from_video_bg(
                                 headline=video_hook,
                                 bg_video_path=bg_vid_clean,
@@ -2194,10 +2192,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                                 cta_text=video_cta,
                             )
                         except Exception as e:
-                            print(
-                                "Runway falló (fallback a reel normal):",
-                                str(e),
-                            )
+                            print("Runway falló (fallback a reel normal):", str(e))
                             reel_bytes = generate_reel_from_image(
                                 headline=video_hook,
                                 news_image_path=local_img,

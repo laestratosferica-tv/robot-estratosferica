@@ -39,7 +39,7 @@ jobs:
           B_PREFIX_AUTO: ugc/final_clean
           B_META_FINAL_PREFIX: ugc/meta/final_clean
           B_STATE_KEY: ugc/state/mode_b_state.json
-          B_MAX_PUBLISH_PER_RUN: "1"
+          B_MAX_PUBLISH_PER_RUN: "2"
 
           B_ONLY_KEYS_CONTAIN: ""
           B_AVOID_SAME_SOURCE_PER_RUN: "true"

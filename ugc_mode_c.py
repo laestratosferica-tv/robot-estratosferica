@@ -1,10 +1,10 @@
 # ===== INICIO: ugc_mode_c.py =====
 
 import os
+import re
 import json
 import math
 import hashlib
-import re
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -63,8 +63,12 @@ MIN_SOURCE_DURATION_SEC = env_float("MODE_C_MIN_SOURCE_DURATION_SEC", 25.0)
 AUDIO_WEIGHT = env_float("MODE_C_AUDIO_WEIGHT", 0.55)
 VIDEO_WEIGHT = env_float("MODE_C_VIDEO_WEIGHT", 0.45)
 
-# protección para no cortar extremos horribles
 EDGE_PADDING_SEC = env_float("MODE_C_EDGE_PADDING_SEC", 3.0)
+
+FFMPEG_TIMEOUT_SEC = env_int("MODE_C_FFMPEG_TIMEOUT_SEC", 1800)
+FFPROBE_TIMEOUT_SEC = env_int("MODE_C_FFPROBE_TIMEOUT_SEC", 180)
+AUDIO_ANALYSIS_HARD_LIMIT_SEC = env_float("MODE_C_AUDIO_ANALYSIS_HARD_LIMIT_SEC", 1800.0)
+VIDEO_ANALYSIS_HARD_LIMIT_SEC = env_float("MODE_C_VIDEO_ANALYSIS_HARD_LIMIT_SEC", 1800.0)
 
 
 def now_utc():
@@ -206,12 +210,28 @@ def ffprobe_json(path):
         "-show_streams",
         path,
     ]
-    p = subprocess.run(cmd, capture_output=True, text=True)
-    if p.returncode != 0:
+    try:
+        p = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=FFPROBE_TIMEOUT_SEC,
+        )
+    except subprocess.TimeoutExpired:
+        print("ffprobe timeout:", path)
         return {}
+    except Exception as e:
+        print("ffprobe exception:", repr(e))
+        return {}
+
+    if p.returncode != 0:
+        print("ffprobe error:", (p.stderr or "")[:1000])
+        return {}
+
     try:
         return json.loads(p.stdout or "{}")
-    except Exception:
+    except Exception as e:
+        print("ffprobe json parse error:", repr(e))
         return {}
 
 
@@ -237,8 +257,23 @@ def cut_clip(src, start, seconds, dst):
         "-b:a", "128k",
         dst,
     ]
-    p = subprocess.run(cmd, capture_output=True, text=True)
-    return p.returncode == 0
+    try:
+        p = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=FFMPEG_TIMEOUT_SEC,
+        )
+        if p.returncode != 0:
+            print("ERROR ffmpeg cut_clip:", (p.stderr or "")[:1200])
+            return False
+        return True
+    except subprocess.TimeoutExpired:
+        print("Timeout en cut_clip:", src)
+        return False
+    except Exception as e:
+        print("Exception en cut_clip:", repr(e))
+        return False
 
 
 def detect_game_from_key(key):
@@ -276,6 +311,9 @@ def detect_game_from_key(key):
         ("speedrun", "minecraft"),
         ("ea sports fc", "easportsfc"),
         ("fc pro", "easportsfc"),
+        ("echampionsleague", "easportsfc"),
+        ("vejrgang", "easportsfc"),
+        ("tekkz", "easportsfc"),
         ("f1", "f1"),
         ("formula 1", "f1"),
         ("gran turismo", "granturismo"),
@@ -335,16 +373,6 @@ def normalize_series(values):
     return [(v - lo) / (hi - lo) for v in values]
 
 
-def zscore_series(values):
-    if not values:
-        return []
-    m = mean(values)
-    sd = stddev(values)
-    if sd < 1e-9:
-        return [0.0 for _ in values]
-    return [(v - m) / sd for v in values]
-
-
 def smooth_series(values, radius=1):
     if not values:
         return []
@@ -360,20 +388,37 @@ def smooth_series(values, radius=1):
 def extract_audio_energy_series(src_path, duration, step_sec):
     """
     Saca RMS aproximado por ventana usando ffmpeg astats.
+    Si falla, devuelve una serie plana.
     """
+    analysis_duration = min(duration, AUDIO_ANALYSIS_HARD_LIMIT_SEC)
     with tempfile.TemporaryDirectory() as td:
         null_out = os.path.join(td, "null.wav")
         cmd = [
             "ffmpeg",
             "-hide_banner",
             "-loglevel", "info",
+            "-t", str(analysis_duration),
             "-i", src_path,
-            "-af", f"asetnsamples=n=44100,astats=metadata=1:reset=1",
+            "-af", "asetnsamples=n=44100,astats=metadata=1:reset=1",
             "-f", "null",
             null_out,
         ]
-        p = subprocess.run(cmd, capture_output=True, text=True)
-        stderr = (p.stderr or "") + "\n" + (p.stdout or "")
+        try:
+            p = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=FFMPEG_TIMEOUT_SEC,
+            )
+            stderr = (p.stderr or "") + "\n" + (p.stdout or "")
+        except subprocess.TimeoutExpired:
+            print("Timeout en extract_audio_energy_series:", src_path)
+            count = max(1, int(math.ceil(duration / step_sec)))
+            return [0.0] * count
+        except Exception as e:
+            print("Exception en extract_audio_energy_series:", repr(e))
+            count = max(1, int(math.ceil(duration / step_sec)))
+            return [0.0] * count
 
     rms_vals = []
     for line in stderr.splitlines():
@@ -384,29 +429,23 @@ def extract_audio_energy_series(src_path, duration, step_sec):
             except Exception:
                 pass
 
-    # convertimos dB negativos a energía positiva
     if not rms_vals:
         count = max(1, int(math.ceil(duration / step_sec)))
         return [0.0] * count
 
     energy = []
     for db in rms_vals:
-        # db viene usualmente negativo; más cerca de 0 = más fuerte
-        # lo invertimos suavemente
         energy.append(60.0 + db)
 
     count = max(1, int(math.ceil(duration / step_sec)))
 
-    # si ffmpeg devolvió muchas más muestras, reducimos
     if len(energy) == count:
         return energy
 
     if len(energy) < count:
-        # pad con último
         last = energy[-1] if energy else 0.0
         return energy + [last] * (count - len(energy))
 
-    # downsample promedio
     out = []
     ratio = len(energy) / float(count)
     for i in range(count):
@@ -420,9 +459,11 @@ def extract_audio_energy_series(src_path, duration, step_sec):
 
 def extract_visual_change_series(src_path, duration, step_sec):
     """
-    Usa ffmpeg + select(scene) para detectar cambios de escena
-    y los convierte a score por ventana.
+    Usa ffmpeg + select(scene) para detectar cambios de escena.
+    Si falla, devuelve serie plana.
     """
+    analysis_duration = min(duration, VIDEO_ANALYSIS_HARD_LIMIT_SEC)
+
     with tempfile.TemporaryDirectory() as td:
         out_dir = os.path.join(td, "frames")
         os.makedirs(out_dir, exist_ok=True)
@@ -431,18 +472,33 @@ def extract_visual_change_series(src_path, duration, step_sec):
             "ffmpeg",
             "-hide_banner",
             "-loglevel", "info",
+            "-t", str(analysis_duration),
             "-i", src_path,
             "-vf", f"fps=1/{step_sec},select='gt(scene,0.08)',showinfo",
             "-vsync", "vfr",
             os.path.join(out_dir, "frame_%05d.jpg"),
         ]
-        p = subprocess.run(cmd, capture_output=True, text=True)
-        stderr = (p.stderr or "") + "\n" + (p.stdout or "")
+
+        try:
+            p = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=FFMPEG_TIMEOUT_SEC,
+            )
+            stderr = (p.stderr or "") + "\n" + (p.stdout or "")
+        except subprocess.TimeoutExpired:
+            print("Timeout en extract_visual_change_series:", src_path)
+            count = max(1, int(math.ceil(duration / step_sec)))
+            return [0.0] * count
+        except Exception as e:
+            print("Exception en extract_visual_change_series:", repr(e))
+            count = max(1, int(math.ceil(duration / step_sec)))
+            return [0.0] * count
 
     count = max(1, int(math.ceil(duration / step_sec)))
     scores = [0.0] * count
 
-    # buscamos pts_time de frames seleccionados
     pts_times = []
     for line in stderr.splitlines():
         if "pts_time:" in line:
@@ -507,14 +563,17 @@ def score_segments(duration, audio_series, video_series, step_sec, clip_seconds)
     for idx in range(count):
         center = idx * step_sec
         start = center - (clip_seconds / 2.0)
-        start = clamp(start, EDGE_PADDING_SEC, max(EDGE_PADDING_SEC, duration - clip_seconds - EDGE_PADDING_SEC))
+        start = clamp(
+            start,
+            EDGE_PADDING_SEC,
+            max(EDGE_PADDING_SEC, duration - clip_seconds - EDGE_PADDING_SEC),
+        )
         end = start + clip_seconds
 
         if end > duration:
             start = max(0.0, duration - clip_seconds)
             end = duration
 
-        # ventana de score
         a_idx = max(0, int(start // step_sec))
         b_idx = min(count, int(math.ceil(end / step_sec)))
         if b_idx <= a_idx:
@@ -549,7 +608,6 @@ def score_segments(duration, audio_series, video_series, step_sec, clip_seconds)
             }
         )
 
-    # ordenar mejor score primero
     candidates.sort(key=lambda x: x["candidate_score"], reverse=True)
     return candidates
 
@@ -572,7 +630,6 @@ def pick_diverse_segments(candidates, max_clips, min_gap_sec):
 
         selected.append(c)
 
-    # orden natural de publicación: del mejor al peor, pero puedes cambiar a start si quieres
     return selected
 
 
@@ -588,6 +645,8 @@ def run_mode_c():
     print("MAX_CLIPS_PER_VIDEO:", MAX_CLIPS_PER_VIDEO)
     print("ANALYSIS_STEP_SEC:", ANALYSIS_STEP_SEC)
     print("MIN_GAP_BETWEEN_CLIPS_SEC:", MIN_GAP_BETWEEN_CLIPS_SEC)
+    print("AUDIO_WEIGHT:", AUDIO_WEIGHT)
+    print("VIDEO_WEIGHT:", VIDEO_WEIGHT)
 
     state = load_state()
     processed = set(state["processed"])
@@ -621,25 +680,34 @@ def run_mode_c():
                 processed.add(key)
                 continue
 
-            audio_series = extract_audio_energy_series(src, duration, ANALYSIS_STEP_SEC)
-            video_series = extract_visual_change_series(src, duration, ANALYSIS_STEP_SEC)
+            try:
+                audio_series = extract_audio_energy_series(src, duration, ANALYSIS_STEP_SEC)
+                video_series = extract_visual_change_series(src, duration, ANALYSIS_STEP_SEC)
 
-            candidates = score_segments(
-                duration=duration,
-                audio_series=audio_series,
-                video_series=video_series,
-                step_sec=ANALYSIS_STEP_SEC,
-                clip_seconds=CLIP_SECONDS,
-            )
+                print("Audio samples:", len(audio_series))
+                print("Video samples:", len(video_series))
 
-            selected = pick_diverse_segments(
-                candidates=candidates,
-                max_clips=MAX_CLIPS_PER_VIDEO,
-                min_gap_sec=MIN_GAP_BETWEEN_CLIPS_SEC,
-            )
+                candidates = score_segments(
+                    duration=duration,
+                    audio_series=audio_series,
+                    video_series=video_series,
+                    step_sec=ANALYSIS_STEP_SEC,
+                    clip_seconds=CLIP_SECONDS,
+                )
 
-            print("Candidates analizados:", len(candidates))
-            print("Seleccionados:", len(selected))
+                selected = pick_diverse_segments(
+                    candidates=candidates,
+                    max_clips=MAX_CLIPS_PER_VIDEO,
+                    min_gap_sec=MIN_GAP_BETWEEN_CLIPS_SEC,
+                )
+
+                print("Candidates analizados:", len(candidates))
+                print("Seleccionados:", len(selected))
+
+            except Exception as e:
+                print("ERROR analizando video:", key, repr(e))
+                processed.add(key)
+                continue
 
             source_video_id = safe_source_video_id_from_key(key)
             source_group = source_video_id
@@ -692,7 +760,12 @@ def run_mode_c():
                 print("GAME DETECTED:", game_slug)
                 print("Clip creado:", clip_key)
                 print("Meta creada:", meta_key)
-                print("Score:", seg["candidate_score"], "| moment:", seg["moment_type"], "| emotion:", seg["emotion"])
+                print(
+                    "Score:", seg["candidate_score"],
+                    "| moment:", seg["moment_type"],
+                    "| emotion:", seg["emotion"],
+                    "| intensity:", seg["intensity"],
+                )
 
                 created_for_video += 1
 

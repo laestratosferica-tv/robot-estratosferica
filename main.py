@@ -2221,7 +2221,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as e:
                 print("Reel generation falló (no rompe):", str(e))
 
-        ig_res = None
+                ig_res = None
         if reel_url:
             if ENABLE_IG_PUBLISH and (not acct_dry_run):
                 try:
@@ -2240,16 +2240,19 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     }
             else:
                 print("[DRY_RUN] IG disabled or dry_run, no publico.")
-                ig_res = {"video_url": reel_url, "published": False}
+                ig_res = {
+                    "video_url": reel_url,
+                    "published": False,
+                }
 
         fb_res = None
-        if reel_url and (not acct_dry_run):
+        if reel_url and (not acct_dry_run) and ENABLE_FB_PUBLISH:
             fb_res = fb_publish_reel(
                 reel_url,
                 build_instagram_caption(item, link),
             )
 
-                yt_res = None
+        yt_res = None
         if reel_url and (not acct_dry_run) and ENABLE_YT_PUBLISH:
             try:
                 with tempfile.TemporaryDirectory() as td:
@@ -2287,11 +2290,11 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 }
 
         tt_res = None
-                if reel_url and (not acct_dry_run) and ENABLE_TIKTOK_PUBLISH:
-                    tt_res = tiktok_publish_video_from_url(
-                        reel_url,
-                        build_instagram_caption(item, link),
-                    )
+        if reel_url and (not acct_dry_run) and ENABLE_TIKTOK_PUBLISH:
+            tt_res = tiktok_publish_video_from_url(
+                reel_url,
+                build_instagram_caption(item, link),
+            )
 
         if threads_res and threads_res.get("ok") and not threads_res.get("dry_run"):
             mark_posted(state, link)

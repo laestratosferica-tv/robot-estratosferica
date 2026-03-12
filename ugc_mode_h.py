@@ -1,7 +1,7 @@
+# ===== INICIO: ugc_mode_h.py =====
+
 import os
-import re
 import json
-import random
 import hashlib
 import subprocess
 import tempfile
@@ -52,6 +52,7 @@ BUCKET_NAME = env_nonempty("BUCKET_NAME")
 R2_PUBLIC_BASE_URL = (env_nonempty("R2_PUBLIC_BASE_URL", "https://example.r2.dev") or "").rstrip("/")
 
 MODE_H_INPUT_PREFIX = (env_nonempty("MODE_H_INPUT_PREFIX", "ugc/library/clips") or "ugc/library/clips").strip().strip("/")
+MODE_H_INPUT_META_PREFIX = (env_nonempty("MODE_H_INPUT_META_PREFIX", "ugc/meta/clips") or "ugc/meta/clips").strip().strip("/")
 MODE_H_OUTPUT_PREFIX = (env_nonempty("MODE_H_OUTPUT_PREFIX", "ugc/final_clean") or "ugc/final_clean").strip().strip("/")
 MODE_H_META_PREFIX = (env_nonempty("MODE_H_META_PREFIX", "ugc/meta/final_clean") or "ugc/meta/final_clean").strip().strip("/")
 MODE_H_STATE_KEY = env_nonempty("MODE_H_STATE_KEY", "ugc/state/mode_h_state.json")
@@ -107,7 +108,7 @@ GAME_HOOKS = {
         "ESTO ES PURO AIM",
         "CLUTCH DE OTRO PLANETA",
     ],
-    "league of legends": [
+    "leagueoflegends": [
         "ESTA TEAMFIGHT FUE CINE",
         "LOL EN SU MEJOR MOMENTO",
         "ESTO CAMBIA TODA LA PARTIDA",
@@ -122,7 +123,7 @@ GAME_HOOKS = {
         "ESTO NO ERA GANABLE",
         "QUÉ CIERRE TAN SUCIO",
     ],
-    "apex legends": [
+    "apex": [
         "APEX EN MODO BESTIA",
         "FINAL CIRCLE DE LOCOS",
         "ESTO ES PURO MOVEMENT",
@@ -132,7 +133,7 @@ GAME_HOOKS = {
         "ESTO ES MUY MALA SUERTE",
         "NAH, QUÉ MOMENTO",
     ],
-    "ea sports fc": [
+    "easportsfc": [
         "ESO ES GOLAZO",
         "FC ESTÁ DEMENCIAL",
         "ESTE GOL ES RIDÍCULO",
@@ -142,22 +143,71 @@ GAME_HOOKS = {
         "ESO FUE PURO SKILL",
         "F1 EN MODO BESTIA",
     ],
-    "gran turismo": [
+    "granturismo": [
         "ESTA ÚLTIMA VUELTA FUE CINE",
         "GT ESTÁ HERMOSO",
         "QUÉ FINAL TAN LIMPIO",
     ],
 }
 
-CTAS = [
+EMOTION_HOOKS = {
+    "clutch": [
+        "ESTO NO SE DEBÍA GANAR",
+        "CLUTCH ABSURDO",
+        "PRESIÓN MÁXIMA",
+    ],
+    "skill": [
+        "ESO ES PURA MANO",
+        "SKILL DE OTRO NIVEL",
+        "HAY NIVELES",
+    ],
+    "chaos": [
+        "CAOS TOTAL",
+        "TODO EXPLOTÓ",
+        "DESCONTROL PURO",
+    ],
+    "shock": [
+        "NADIE ESPERABA ESO",
+        "ESO CAMBIÓ TODO",
+        "QUÉ ACABO DE VER",
+    ],
+    "heroic": [
+        "SE LA JUGÓ TODA",
+        "PROTAGONISTA TOTAL",
+        "JUGADA HEROICA",
+    ],
+}
+
+INTENSITY_CTA = {
+    "estratosferico": [
+        "¿ESTO ES LEGAL?",
+        "¿TOP DEL MES O NO?",
+        "¿ESTO YA ES HISTORIA?",
+    ],
+    "high": [
+        "¿TOP O HUMO?",
+        "¿SKILL O SUERTE?",
+        "¿TÚ LO SACABAS?",
+    ],
+    "medium": [
+        "¿W O BASURA?",
+        "¿ESTO ES CINE O NO?",
+        "¿MEJOR JUGADA O NO?",
+    ],
+    "low": [
+        "¿TE GUSTA O NO?",
+        "¿LA COMPRAS O NO?",
+        "¿ESTÁ BIEN O NO?",
+    ],
+}
+
+DEFAULT_CTAS = [
     "¿TOP O HUMO?",
     "¿SKILL O SUERTE?",
     "¿TÚ LO SACABAS?",
     "¿W O BASURA?",
     "¿ESTO ES CINE O NO?",
     "¿MEJOR JUGADA O NO?",
-    "¿SE LA COMEN O NO?",
-    "¿ESTO ES LEGAL?",
 ]
 
 
@@ -188,6 +238,8 @@ def list_mp3_files(search_dir):
 
 
 def pick_music():
+    import random
+
     if random.random() > max(0.0, min(1.0, MUSIC_PROBABILITY)):
         return None
 
@@ -208,6 +260,8 @@ def pick_music():
 
 
 def pick_hud_overlay():
+    import random
+
     if not ENABLE_HUD:
         return None
 
@@ -297,59 +351,71 @@ def get_video_duration(path):
         return 0.0
 
 
+def pick_from_list(options, fallback=""):
+    import random
+
+    if not options:
+        return fallback
+    return random.choice(options)
+
+
 def game_from_key(key):
     k = (key or "").lower()
     normalized = k.replace("_", " ").replace("-", " ")
 
     checks = [
-        "ea sports fc",
-        "gran turismo",
-        "league of legends",
-        "counter strike",
-        "counter-strike",
-        "valorant",
-        "fortnite",
-        "warzone",
-        "apex legends",
-        "minecraft",
-        "f1",
-        "cs2",
-        "apex",
+        ("ea sports fc", "easportsfc"),
+        ("gran turismo", "granturismo"),
+        ("league of legends", "leagueoflegends"),
+        ("counter strike", "cs2"),
+        ("counter-strike", "cs2"),
+        ("valorant", "valorant"),
+        ("fortnite", "fortnite"),
+        ("warzone", "warzone"),
+        ("apex legends", "apex"),
+        ("minecraft", "minecraft"),
+        ("f1", "f1"),
+        ("cs2", "cs2"),
+        ("apex", "apex"),
     ]
 
-    for c in checks:
-        if c in normalized:
-            return c
+    for needle, label in checks:
+        if needle in normalized:
+            return label
 
     return "generic"
 
 
-def pick_hook(game_name):
+def pick_hook(game_name, clip_meta):
+    emotion = (clip_meta.get("emotion") or "").lower() if isinstance(clip_meta, dict) else ""
+    if emotion in EMOTION_HOOKS:
+        return pick_from_list(EMOTION_HOOKS[emotion], fallback="ESTO FUE CINE")
+
     g = (game_name or "").lower()
     options = GAME_HOOKS.get(g) or GENERIC_HOOKS
-    return random.choice(options)
+    return pick_from_list(options, fallback="ESTO FUE CINE")
 
 
-def pick_cta():
-    return random.choice(CTAS)
+def pick_cta(clip_meta):
+    intensity = (clip_meta.get("intensity") or "").lower() if isinstance(clip_meta, dict) else ""
+    if intensity in INTENSITY_CTA:
+        return pick_from_list(INTENSITY_CTA[intensity], fallback="¿TOP O HUMO?")
+    return pick_from_list(DEFAULT_CTAS, fallback="¿TOP O HUMO?")
 
 
 def pick_badge(game_name):
     g = (game_name or "").lower()
     mapping = {
-        "counter strike": "CS2",
-        "counter-strike": "CS2",
-        "ea sports fc": "FC",
-        "gran turismo": "GT",
-        "league of legends": "LOL",
+        "cs2": "CS2",
+        "easportsfc": "FC",
+        "granturismo": "GT",
+        "leagueoflegends": "LOL",
         "valorant": "VALORANT",
         "fortnite": "FORTNITE",
         "warzone": "WARZONE",
-        "apex legends": "APEX",
         "apex": "APEX",
         "minecraft": "MINECRAFT",
         "f1": "F1",
-        "cs2": "CS2",
     }
     return mapping.get(g, "GAMER")
 
@@ -445,6 +511,17 @@ def load_state():
 def save_state(st):
     st["last_run_at"] = iso_now_full()
     s3_put_json(MODE_H_STATE_KEY, st)
+
+
+def resolve_input_meta_key_from_clip_key(clip_key):
+    base = os.path.basename(clip_key).rsplit(".", 1)[0]
+    return f"{MODE_H_INPUT_META_PREFIX}/{base}.json"
+
+
+def load_clip_meta(clip_key):
+    meta_key = resolve_input_meta_key_from_clip_key(clip_key)
+    meta = s3_get_json(meta_key)
+    return meta_key, meta or {}
 
 
 def build_hype_reel(
@@ -612,9 +689,51 @@ def build_hype_reel(
             raise RuntimeError(f"ffmpeg falló:\n{(p.stderr or '')[:4000]}")
 
 
+def build_final_meta(
+    source_clip_key,
+    final_key,
+    clip_meta,
+    game_name,
+    hook,
+    cta,
+    badge,
+    music,
+    hud,
+):
+    clip_meta = clip_meta or {}
+
+    return {
+        "source_clip_key": source_clip_key,
+        "source_video_key": clip_meta.get("source_video_key"),
+        "source_video_id": clip_meta.get("source_video_id"),
+        "source_group": clip_meta.get("source_group") or clip_meta.get("source_video_id"),
+        "clip_id": clip_meta.get("clip_id"),
+        "clip_index": clip_meta.get("clip_index"),
+        "start": clip_meta.get("start"),
+        "end": clip_meta.get("end"),
+        "duration": clip_meta.get("duration"),
+        "candidate_score": clip_meta.get("candidate_score"),
+        "game": clip_meta.get("game") or game_name,
+        "emotion": clip_meta.get("emotion"),
+        "intensity": clip_meta.get("intensity"),
+        "angle": clip_meta.get("angle"),
+        "caption": clip_meta.get("caption"),
+        "shorts_title": clip_meta.get("shorts_title"),
+        "shorts_description": clip_meta.get("shorts_description"),
+        "final_key": final_key,
+        "hook": hook,
+        "cta": cta,
+        "badge": badge,
+        "music": music,
+        "hud": hud,
+        "generated_at": iso_now_full(),
+    }
+
+
 def run_mode_h():
     print("===== MODE H (HYPE PACKER) START =====")
     print("MODE_H_INPUT_PREFIX:", MODE_H_INPUT_PREFIX)
+    print("MODE_H_INPUT_META_PREFIX:", MODE_H_INPUT_META_PREFIX)
     print("MODE_H_OUTPUT_PREFIX:", MODE_H_OUTPUT_PREFIX)
     print("MODE_H_META_PREFIX:", MODE_H_META_PREFIX)
     print("MODE_H_STATE_KEY:", MODE_H_STATE_KEY)
@@ -654,14 +773,23 @@ def run_mode_h():
 
         print("Empacando:", key)
 
-        game_name = game_from_key(key)
-        hook = pick_hook(game_name)
-        cta = pick_cta()
+        input_meta_key, clip_meta = load_clip_meta(key)
+        print("INPUT META KEY:", input_meta_key)
+        print("CLIP META FOUND:", bool(clip_meta))
+
+        game_name = (clip_meta.get("game") or game_from_key(key)).lower()
+        hook = pick_hook(game_name, clip_meta)
+        cta = pick_cta(clip_meta)
         badge = pick_badge(game_name)
         music = pick_music()
         hud = pick_hud_overlay()
 
         print("GAME:", game_name)
+        print("SOURCE_VIDEO_ID:", clip_meta.get("source_video_id"))
+        print("SOURCE_GROUP:", clip_meta.get("source_group"))
+        print("CANDIDATE_SCORE:", clip_meta.get("candidate_score"))
+        print("EMOTION:", clip_meta.get("emotion"))
+        print("INTENSITY:", clip_meta.get("intensity"))
         print("HOOK:", hook)
         print("CTA:", cta)
         print("BADGE:", badge)
@@ -695,17 +823,17 @@ def run_mode_h():
                 print("Uploading final reel:", out_key)
                 s3_put_bytes(out_key, data, "video/mp4")
 
-                meta = {
-                    "source_clip_key": key,
-                    "final_key": out_key,
-                    "game_name": game_name,
-                    "hook": hook,
-                    "cta": cta,
-                    "badge": badge,
-                    "music": music,
-                    "hud": hud,
-                    "generated_at": iso_now_full(),
-                }
+                meta = build_final_meta(
+                    source_clip_key=key,
+                    final_key=out_key,
+                    clip_meta=clip_meta,
+                    game_name=game_name,
+                    hook=hook,
+                    cta=cta,
+                    badge=badge,
+                    music=music,
+                    hud=hud,
+                )
 
                 meta_key = f"{MODE_H_META_PREFIX}/{os.path.basename(out_key).rsplit('.', 1)[0]}.json"
                 s3_put_json(meta_key, meta)
@@ -731,3 +859,5 @@ def run_mode_h():
 
 if __name__ == "__main__":
     run_mode_h()
+
+# ===== FIN: ugc_mode_h.py =====

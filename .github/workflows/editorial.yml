@@ -73,7 +73,7 @@ jobs:
           ENABLE_THREADS_PUBLISH: ${{ github.event_name == 'schedule' && 'true' || github.event_name == 'workflow_dispatch' && github.event.inputs.publish_threads || 'false' }}
 
           ENABLE_FB_PUBLISH: "true"
-          ENABLE_YT_PUBLISH: "true"
+          ENABLE_YT_PUBLISH: "false"
           ENABLE_TIKTOK_PUBLISH: "false"
 
           # -------------------

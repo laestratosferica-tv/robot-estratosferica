@@ -1,9 +1,10 @@
+# ===== INICIO: ugc_mode_b.py =====
+
 import os
 import re
 import json
-import time
-import random
 import tempfile
+from datetime import datetime, timezone
 
 import requests
 import boto3
@@ -63,11 +64,18 @@ PREFIX_AUTO = (
 META_FINAL_PREFIX = (
     env_nonempty("B_META_FINAL_PREFIX", "ugc/meta/final_clean") or "ugc/meta/final_clean"
 ).strip().strip("/")
+
 STATE_KEY = env_nonempty("B_STATE_KEY", "ugc/state/mode_b_state.json")
 
 B_MAX_PUBLISH_PER_RUN = env_int("B_MAX_PUBLISH_PER_RUN", 2)
 B_ONLY_KEYS_CONTAIN = env_nonempty("B_ONLY_KEYS_CONTAIN", "")
 B_AVOID_SAME_SOURCE_PER_RUN = env_bool("B_AVOID_SAME_SOURCE_PER_RUN", True)
+
+# máximo histórico por source_group en cada plataforma
+B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED = env_bool("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED", True)
+
+# si quieres permitir republicar otra variante del mismo source después, pon false arriba
+# o más adelante lo hacemos por ventanas de tiempo
 
 ENABLE_INSTAGRAM = env_bool("ENABLE_INSTAGRAM", True)
 ENABLE_FACEBOOK = env_bool("ENABLE_FACEBOOK", True)
@@ -91,6 +99,14 @@ YOUTUBE_CLIENT_ID = env_nonempty("YOUTUBE_CLIENT_ID")
 YOUTUBE_CLIENT_SECRET = env_nonempty("YOUTUBE_CLIENT_SECRET")
 YOUTUBE_REFRESH_TOKEN = env_nonempty("YOUTUBE_REFRESH_TOKEN")
 YOUTUBE_PRIVACY_STATUS = env_nonempty("YOUTUBE_PRIVACY_STATUS", "public")
+
+
+def now_utc():
+    return datetime.now(timezone.utc)
+
+
+def iso_now_full():
+    return now_utc().isoformat()
 
 
 def r2():
@@ -152,6 +168,14 @@ def list_keys(prefix):
     return [x["key"] for x in items]
 
 
+def load_json(key):
+    try:
+        obj = r2().get_object(Bucket=BUCKET_NAME, Key=key)
+        return json.loads(obj["Body"].read().decode("utf-8"))
+    except Exception:
+        return None
+
+
 def load_state():
     try:
         obj = r2().get_object(Bucket=BUCKET_NAME, Key=STATE_KEY)
@@ -162,22 +186,17 @@ def load_state():
     if not isinstance(st, dict):
         st = {}
 
-    old_published = st.get("published", {})
-
-    if isinstance(old_published, list):
-        st["published"] = {
-            "instagram": list(old_published),
-            "facebook": list(old_published),
-            "youtube_shorts": [],
-        }
-    elif isinstance(old_published, dict):
-        st["published"] = old_published
-    else:
-        st["published"] = {}
-
+    st.setdefault("published", {})
     st["published"].setdefault("instagram", [])
     st["published"].setdefault("facebook", [])
     st["published"].setdefault("youtube_shorts", [])
+
+    st.setdefault("published_source_groups", {})
+    st["published_source_groups"].setdefault("instagram", [])
+    st["published_source_groups"].setdefault("facebook", [])
+    st["published_source_groups"].setdefault("youtube_shorts", [])
+
+    st.setdefault("history", [])
 
     if not isinstance(st["published"]["instagram"], list):
         st["published"]["instagram"] = []
@@ -185,6 +204,16 @@ def load_state():
         st["published"]["facebook"] = []
     if not isinstance(st["published"]["youtube_shorts"], list):
         st["published"]["youtube_shorts"] = []
+
+    if not isinstance(st["published_source_groups"]["instagram"], list):
+        st["published_source_groups"]["instagram"] = []
+    if not isinstance(st["published_source_groups"]["facebook"], list):
+        st["published_source_groups"]["facebook"] = []
+    if not isinstance(st["published_source_groups"]["youtube_shorts"], list):
+        st["published_source_groups"]["youtube_shorts"] = []
+
+    if not isinstance(st["history"], list):
+        st["history"] = []
 
     return st
 
@@ -197,6 +226,13 @@ def save_state(st):
     st["published"].setdefault("instagram", [])
     st["published"].setdefault("facebook", [])
     st["published"].setdefault("youtube_shorts", [])
+
+    st.setdefault("published_source_groups", {})
+    st["published_source_groups"].setdefault("instagram", [])
+    st["published_source_groups"].setdefault("facebook", [])
+    st["published_source_groups"].setdefault("youtube_shorts", [])
+
+    st.setdefault("history", [])
 
     r2().put_object(
         Bucket=BUCKET_NAME,
@@ -218,7 +254,31 @@ def mark_published_on(st, platform, key):
         st["published"][platform] = st["published"][platform][-5000:]
 
 
-def extract_source_group(key):
+def is_source_group_published_on(st, platform, source_group):
+    if not source_group:
+        return False
+    return source_group in st.get("published_source_groups", {}).get(platform, [])
+
+
+def mark_source_group_published_on(st, platform, source_group):
+    if not source_group:
+        return
+
+    st.setdefault("published_source_groups", {})
+    st["published_source_groups"].setdefault(platform, [])
+
+    if source_group not in st["published_source_groups"][platform]:
+        st["published_source_groups"][platform].append(source_group)
+        st["published_source_groups"][platform] = st["published_source_groups"][platform][-5000:]
+
+
+def append_history(st, payload):
+    st.setdefault("history", [])
+    st["history"].append(payload)
+    st["history"] = st["history"][-10000:]
+
+
+def extract_source_group_from_key(key):
     base = os.path.basename(key).rsplit(".", 1)[0]
 
     if "__hype__" in base:
@@ -235,21 +295,90 @@ def extract_source_group(key):
     return base
 
 
-def diversify_queue(queue):
+def resolve_meta_key_for_video_key(key):
+    """
+    Convierte:
+    ugc/final_clean/foo.mp4 -> ugc/meta/final_clean/foo.json
+    """
+    base = os.path.basename(key).rsplit(".", 1)[0]
+    return f"{META_FINAL_PREFIX}/{base}.json"
+
+
+def load_meta_for_video_key(key):
+    meta_key = resolve_meta_key_for_video_key(key)
+    meta = load_json(meta_key)
+    return meta_key, meta
+
+
+def resolve_source_group(key, meta):
+    if isinstance(meta, dict):
+        # H nuevo debería propagar source_group / source_video_id
+        sg = meta.get("source_group")
+        if sg:
+            return str(sg)
+
+        source_video_id = meta.get("source_video_id")
+        if source_video_id:
+            return str(source_video_id)
+
+        # si meta solo tiene source_clip_key, intenta sacar group de ahí
+        source_clip_key = meta.get("source_clip_key")
+        if source_clip_key:
+            clip_meta = load_clip_meta_from_source_clip_key(source_clip_key)
+            if isinstance(clip_meta, dict):
+                sg2 = clip_meta.get("source_group") or clip_meta.get("source_video_id")
+                if sg2:
+                    return str(sg2)
+
+    return extract_source_group_from_key(key)
+
+
+def resolve_game_name(key, meta):
+    if isinstance(meta, dict):
+        clip_game = meta.get("game")
+        if clip_game:
+            return clip_game
+
+        game_name = meta.get("game_name")
+        if game_name:
+            return game_name
+
+        source_clip_key = meta.get("source_clip_key")
+        if source_clip_key:
+            clip_meta = load_clip_meta_from_source_clip_key(source_clip_key)
+            if isinstance(clip_meta, dict):
+                g = clip_meta.get("game")
+                if g:
+                    return g
+
+    return detect_game_from_key(key)
+
+
+def load_clip_meta_from_source_clip_key(source_clip_key):
+    # ugc/library/clips/foo.mp4 -> ugc/meta/clips/foo.json
+    base = os.path.basename(source_clip_key).rsplit(".", 1)[0]
+    clip_meta_key = f"ugc/meta/clips/{base}.json"
+    return load_json(clip_meta_key)
+
+
+def diversify_queue(items):
+    """
+    items = [{"key":..., "meta":..., "source_group":..., ...}, ...]
+    """
     if not B_AVOID_SAME_SOURCE_PER_RUN:
-        return queue
+        return items
 
     groups = {}
     order = []
 
-    for key in queue:
-        group = extract_source_group(key)
+    for item in items:
+        group = item.get("source_group") or "unknown"
 
         if group not in groups:
             groups[group] = []
             order.append(group)
 
-        groups[group].append(key)
+        groups[group].append(item)
 
     diversified = []
 
@@ -484,42 +613,89 @@ GAME_HASHTAGS = {
 }
 
 
-def pick_from_map(mapping, game_name):
-    options = mapping.get(game_name) or mapping.get("Esports") or []
-    return random.choice(options) if options else ""
+EMOTION_HOOKS = {
+    "clutch": [
+        "La presión era absurda y aun así salió esto.",
+        "Esto parecía perdido hasta este segundo.",
+        "Hay clutchs… y luego está esto.",
+    ],
+    "skill": [
+        "Esto ya no es suerte, esto es manos.",
+        "Hay nivel… y luego está ESTE nivel.",
+        "Esto es ejecución pura.",
+    ],
+    "chaos": [
+        "El caos tomó control total acá.",
+        "Esto fue desorden puro… pero del bueno.",
+        "Todo explotó en segundos.",
+    ],
+    "shock": [
+        "Nadie esperaba que esto pasara así.",
+        "Este momento no se veía venir.",
+        "Eso cambió todo en un instante.",
+    ],
+    "heroic": [
+        "Esto fue una locura de protagonista total.",
+        "Hay jugadas que se sienten heroicas y esta es una.",
+        "Se jugó todo en una sola secuencia.",
+    ],
+}
 
 
-def build_caption(key):
-    game_name = detect_game_from_key(key)
-    hook = pick_from_map(GAME_HOOKS, game_name)
+def pick_from_map(mapping, key_name, fallback="Esports"):
+    options = mapping.get(key_name) or mapping.get(fallback) or []
+    return options[0] if len(options) == 1 else (options and __import__("random").choice(options) or "")
+
+
+def build_caption_from_meta(key, meta):
+    game_name = resolve_game_name(key, meta)
+
+    emotion = None
+    intensity = None
+    angle = None
+    if isinstance(meta, dict):
+        emotion = meta.get("emotion")
+        intensity = meta.get("intensity")
+        angle = meta.get("angle")
+
+    if emotion and emotion in EMOTION_HOOKS:
+        hook = pick_from_map(EMOTION_HOOKS, emotion, fallback=None)
+    else:
+        hook = pick_from_map(GAME_HOOKS, game_name)
+
     context = pick_from_map(GAME_CONTEXTS, game_name)
     cta = pick_from_map(GAME_CTAS, game_name)
     hashtags = " ".join(GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"]))
 
-    caption = f"""{hook}
+    extra = []
+    if intensity:
+        extra.append(f"intensity:{intensity}")
+    if angle:
+        extra.append(f"angle:{angle}")
 
-{context}
+    body = [hook, "", context, "", f"🔥 {cta}", "", hashtags]
 
-🔥 {cta}
-
-{hashtags}"""
-
-    return caption.strip()
+    return "\n".join(body).strip()
 
 
-def build_shorts_title(key):
-    game_name = detect_game_from_key(key)
-    hook = pick_from_map(GAME_HOOKS, game_name) or "Clip brutal de esports"
-    title = hook.replace("\n", " ").strip()
+def build_shorts_title_from_meta(key, meta):
+    game_name = resolve_game_name(key, meta)
+    emotion = meta.get("emotion") if isinstance(meta, dict) else None
 
+    if emotion and emotion in EMOTION_HOOKS:
+        title = pick_from_map(EMOTION_HOOKS, emotion, fallback=None)
+    else:
+        title = pick_from_map(GAME_HOOKS, game_name)
+
+    title = title.replace("\n", " ").strip()
     if "#Shorts" not in title:
         title = f"{title} #Shorts"
 
     return title[:100]
 
 
-def build_shorts_description(key):
-    game_name = detect_game_from_key(key)
+def build_shorts_description_from_meta(key, meta):
+    game_name = resolve_game_name(key, meta)
     context = pick_from_map(GAME_CONTEXTS, game_name)
     cta = pick_from_map(GAME_CTAS, game_name)
     hashtags = " ".join(GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"]))
@@ -577,7 +753,7 @@ def ig_publish(video_url, caption):
         if status in ("ERROR", "EXPIRED"):
             raise RuntimeError(f"IG container failed: {status_payload}")
 
-        time.sleep(3)
+        __import__("time").sleep(3)
 
     print("IG publish: publicando...")
 
@@ -734,18 +910,35 @@ def youtube_publish(video_url, title, description):
         }
 
 
-def publish(key, target_platforms=None):
+def build_public_url(key):
+    return f"{R2_PUBLIC_BASE_URL}/{key}"
+
+
+def publish(item, target_platforms=None):
     if target_platforms is None:
         target_platforms = ["instagram", "facebook", "youtube_shorts"]
 
-    public_url = f"{R2_PUBLIC_BASE_URL}/{key}"
-    caption = build_caption(key)
-    shorts_title = build_shorts_title(key)
-    shorts_description = build_shorts_description(key)
+    key = item["key"]
+    meta = item.get("meta") or {}
+    public_url = build_public_url(key)
+
+    # si H o futuro brain ya dejó caption final, se usa
+    caption = meta.get("caption") if isinstance(meta, dict) else None
+    if not caption:
+        caption = build_caption_from_meta(key, meta)
+
+    shorts_title = meta.get("shorts_title") if isinstance(meta, dict) else None
+    if not shorts_title:
+        shorts_title = build_shorts_title_from_meta(key, meta)
+
+    shorts_description = meta.get("shorts_description") if isinstance(meta, dict) else None
+    if not shorts_description:
+        shorts_description = build_shorts_description_from_meta(key, meta)
 
     print("PUBLICANDO VIDEO:")
     print("KEY:", key)
     print("URL:", public_url)
+    print("SOURCE_GROUP:", item.get("source_group"))
     print("TARGET_PLATFORMS:", target_platforms)
     print("CAPTION:\n", caption)
     print("SHORTS TITLE:", shorts_title)
@@ -801,30 +994,79 @@ def publish(key, target_platforms=None):
     return results
 
 
-def should_process_key(st, key):
+def should_process_item(st, item):
+    key = item["key"]
+    source_group = item.get("source_group")
     wanted = []
 
     if ENABLE_INSTAGRAM and not is_published_on(st, "instagram", key):
-        wanted.append("instagram")
+        if not (B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED and is_source_group_published_on(st, "instagram", source_group)):
+            wanted.append("instagram")
 
     if ENABLE_FACEBOOK and not is_published_on(st, "facebook", key):
-        wanted.append("facebook")
+        if not (B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED and is_source_group_published_on(st, "facebook", source_group)):
+            wanted.append("facebook")
 
     if ENABLE_SHORTS and not is_published_on(st, "youtube_shorts", key):
-        wanted.append("youtube_shorts")
+        if not (B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED and is_source_group_published_on(st, "youtube_shorts", source_group)):
+            wanted.append("youtube_shorts")
 
     return len(wanted) > 0, wanted
 
 
+def build_item_from_key(key):
+    meta_key, meta = load_meta_for_video_key(key)
+    source_group = resolve_source_group(key, meta)
+    game_name = resolve_game_name(key, meta)
+
+    candidate_score = None
+    if isinstance(meta, dict):
+        candidate_score = meta.get("candidate_score")
+
+    # si final meta no trae score, intenta buscar score desde clip meta
+    if candidate_score is None and isinstance(meta, dict):
+        source_clip_key = meta.get("source_clip_key")
+        if source_clip_key:
+            clip_meta = load_clip_meta_from_source_clip_key(source_clip_key)
+            if isinstance(clip_meta, dict):
+                candidate_score = clip_meta.get("candidate_score")
+
+    if candidate_score is None:
+        candidate_score = 0.0
+
+    return {
+        "key": key,
+        "meta_key": meta_key,
+        "meta": meta or {},
+        "source_group": source_group,
+        "game_name": game_name,
+        "candidate_score": float(candidate_score or 0.0),
+    }
+
+
+def sort_queue_items(items):
+    # prioridad: score alto primero
+    return sorted(
+        items,
+        key=lambda x: (
+            x.get("candidate_score", 0.0),
+            x["key"],
+        ),
+        reverse=True,
+    )
+
+
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: REAL_PUBLISH_DIVERSIFIED_V7_SHORTS_PUBLIC")
+    print("MODE B VERSION: META_AWARE_SOURCE_GROUP_V2")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
+    print("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED:", B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED)
     print("B_ONLY_KEYS_CONTAIN:", B_ONLY_KEYS_CONTAIN or "(vacío)")
     print("PREFIX_PRIORITY:", PREFIX_PRIORITY)
     print("PREFIX_MANUAL:", PREFIX_MANUAL)
     print("PREFIX_AUTO:", PREFIX_AUTO)
+    print("META_FINAL_PREFIX:", META_FINAL_PREFIX)
     print("STATE_KEY:", STATE_KEY)
     print("DRY_RUN:", DRY_RUN)
     print("ENABLE_INSTAGRAM:", ENABLE_INSTAGRAM)
@@ -845,55 +1087,89 @@ def run_mode_b():
     print("Published FB:", len(state["published"]["facebook"]))
     print("Published YT:", len(state["published"]["youtube_shorts"]))
 
-    queue = []
-    queue.extend(priority)
-    queue.extend(manual)
-    queue.extend(auto)
+    raw_queue = []
+    raw_queue.extend(priority)
+    raw_queue.extend(manual)
+    raw_queue.extend(auto)
 
     if B_ONLY_KEYS_CONTAIN:
-        queue = [k for k in queue if B_ONLY_KEYS_CONTAIN in k]
-        print("Queue tras filtro:", len(queue))
+        raw_queue = [k for k in raw_queue if B_ONLY_KEYS_CONTAIN in k]
+        print("Queue tras filtro:", len(raw_queue))
 
-    queue = diversify_queue(queue)
+    queue_items = []
+    for key in raw_queue:
+        try:
+            item = build_item_from_key(key)
+            queue_items.append(item)
+        except Exception as e:
+            print("ERROR armando item de queue:", key, repr(e))
 
-    print("Queue final diversificada:", len(queue))
+    queue_items = sort_queue_items(queue_items)
+    queue_items = diversify_queue(queue_items)
+
+    print("Queue final diversificada:", len(queue_items))
 
     count = 0
+    used_source_groups_this_run = set()
 
-    for key in queue:
+    for item in queue_items:
         if count >= B_MAX_PUBLISH_PER_RUN:
             break
 
-        process, missing_platforms = should_process_key(state, key)
+        key = item["key"]
+        source_group = item.get("source_group") or "unknown"
+
+        if B_AVOID_SAME_SOURCE_PER_RUN and source_group in used_source_groups_this_run:
+            print("SKIP same source group in this run:", source_group, "|", key)
+            continue
+
+        process, missing_platforms = should_process_item(state, item)
         if not process:
-            print("SKIP already published in enabled platforms:", key)
+            print("SKIP already published / blocked by source group:", key)
             continue
 
         print("Procesando:", key)
-        print("SOURCE GROUP:", extract_source_group(key))
-        print("GAME DETECTED:", detect_game_from_key(key))
+        print("SOURCE GROUP:", source_group)
+        print("GAME DETECTED:", item.get("game_name"))
+        print("CANDIDATE SCORE:", item.get("candidate_score"))
+        print("META KEY:", item.get("meta_key"))
         print("MISSING PLATFORMS:", missing_platforms)
 
         try:
-            result = publish(key, target_platforms=missing_platforms)
+            result = publish(item, target_platforms=missing_platforms)
 
             success_any = False
 
             if "instagram" in missing_platforms and result.get("instagram", {}).get("ok"):
                 mark_published_on(state, "instagram", key)
+                mark_source_group_published_on(state, "instagram", source_group)
                 success_any = True
 
             if "facebook" in missing_platforms and result.get("facebook", {}).get("ok"):
                 mark_published_on(state, "facebook", key)
+                mark_source_group_published_on(state, "facebook", source_group)
                 success_any = True
 
             if "youtube_shorts" in missing_platforms and result.get("youtube_shorts", {}).get("ok"):
                 mark_published_on(state, "youtube_shorts", key)
+                mark_source_group_published_on(state, "youtube_shorts", source_group)
                 success_any = True
+
+            append_history(
+                state,
+                {
+                    "published_at": iso_now_full(),
+                    "key": key,
+                    "source_group": source_group,
+                    "candidate_score": item.get("candidate_score"),
+                    "platform_results": result,
+                },
+            )
 
             save_state(state)
 
             if success_any:
+                used_source_groups_this_run.add(source_group)
                 count += 1
 
         except Exception as e:
@@ -907,3 +1183,5 @@ def run_mode_b():
 
 if __name__ == "__main__":
     run_mode_b()
+
+# ===== FIN: ugc_mode_b.py =====

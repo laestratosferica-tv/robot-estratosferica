@@ -2129,7 +2129,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 )
                 print("Imagen rehost R2:", img_r2_url)
 
-                                chosen_music = pick_music_path()
+                chosen_music = pick_music_path()
                 chosen_logo = pick_logo_path(asset_logo_default)
                 video_hook = build_video_hook(item.get("title", ""))
                 video_cta = pick_gamer_cta(cta_text)

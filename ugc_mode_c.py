@@ -4,6 +4,7 @@ import os
 import json
 import math
 import hashlib
+import re
 import subprocess
 import tempfile
 from datetime import datetime, timezone

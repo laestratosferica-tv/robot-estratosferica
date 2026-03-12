@@ -70,7 +70,7 @@ jobs:
 
           # EXTRA CHANNELS
           ENABLE_FB_PUBLISH: "true"
-          ENABLE_YT_PUBLISH: "false"
+          ENABLE_YT_PUBLISH: "true"
           ENABLE_TIKTOK_PUBLISH: "false"
 
           # -------------------
@@ -148,7 +148,7 @@ jobs:
           # REEL SETTINGS
           # -------------------
           ENABLE_REELS: "true"
-          REEL_SECONDS: "8"
+          REEL_SECONDS: "10"
           REEL_W: "1080"
           REEL_H: "1920"
           ASSET_BG: "assets/bg.jpg"

@@ -2,9 +2,9 @@ name: Robot Editorial (Modo A) - Auto
 
 on:
   schedule:
-    - cron: "0 14 * * *" # 9am Colombia -> FFmpeg reel
-    - cron: "0 20 * * *" # 3pm Colombia -> RUNWAY reel
-    - cron: "0 2 * * *"  # 9pm Colombia -> FFmpeg reel
+    - cron: "0 14 * * *" # 9am Colombia
+    - cron: "0 20 * * *" # 3pm Colombia -> Runway forzado
+    - cron: "0 2 * * *"  # 9pm Colombia
   workflow_dispatch:
     inputs:
       dry_run:
@@ -20,9 +20,13 @@ on:
         required: false
         default: "true"
       runway_enabled:
-        description: "Forzar Runway manualmente"
+        description: "Activar Runway"
         required: false
         default: "true"
+      runway_force:
+        description: "Forzar Runway sí o sí"
+        required: false
+        default: "false"
 
 concurrency:
   group: robot-publisher
@@ -63,20 +67,20 @@ jobs:
           # -------------------
           # PUBLICATION FLAGS
           # -------------------
-          DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run) || 'false' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
 
-          ENABLE_IG_PUBLISH: ${{ (github.event_name == 'schedule' && 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ig) || 'false' }}
-          ENABLE_THREADS_PUBLISH: ${{ (github.event_name == 'schedule' && 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_threads) || 'false' }}
+          ENABLE_IG_PUBLISH: ${{ github.event_name == 'schedule' && 'true' || github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ig || 'false' }}
+          ENABLE_THREADS_PUBLISH: ${{ github.event_name == 'schedule' && 'true' || github.event_name == 'workflow_dispatch' && github.event.inputs.publish_threads || 'false' }}
 
-          # EXTRA CHANNELS
           ENABLE_FB_PUBLISH: "true"
           ENABLE_YT_PUBLISH: "true"
           ENABLE_TIKTOK_PUBLISH: "false"
 
           # -------------------
-          # RUNWAY CONTROL
+          # RUNWAY
           # -------------------
-          RUNWAY_ENABLED: ${{ (github.event_name == 'schedule' && github.event.schedule == '0 20 * * *' && 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.runway_enabled) || 'false' }}
+          RUNWAY_ENABLED: ${{ github.event_name == 'schedule' && 'true' || github.event_name == 'workflow_dispatch' && github.event.inputs.runway_enabled || 'false' }}
+          RUNWAY_FORCE: ${{ github.event_name == 'schedule' && github.event.schedule == '0 20 * * *' && 'true' || github.event_name == 'workflow_dispatch' && github.event.inputs.runway_force || 'false' }}
 
           EVENT_NAME: ${{ github.event_name }}
           EVENT_SCHEDULE: ${{ github.event.schedule }}
@@ -87,6 +91,11 @@ jobs:
           RUNWAY_API_KEY: ${{ secrets.RUNWAY_API_KEY }}
           RUNWAY_BASE: "https://api.dev.runwayml.com"
           RUNWAY_I2V_MODEL: "gen4.5"
+          RUNWAY_I2V_SECONDS: "5"
+          RUNWAY_TIMEOUT: "420"
+          RUNWAY_POLL_SEC: "6"
+          RUNWAY_MP4_RETRIES: "3"
+          RUNWAY_PROBABILITY: "0.55"
 
           # -------------------
           # AUTONOMY SETTINGS
@@ -132,14 +141,14 @@ jobs:
           FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
 
           # -------------------
-          # YOUTUBE (apagado)
+          # YOUTUBE
           # -------------------
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
 
           # -------------------
-          # TIKTOK (apagado)
+          # TIKTOK
           # -------------------
           TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
           TIKTOK_OPEN_ID: ${{ secrets.TIKTOK_OPEN_ID }}
@@ -166,5 +175,6 @@ jobs:
           echo "ENABLE_YT_PUBLISH=$ENABLE_YT_PUBLISH"
           echo "ENABLE_TIKTOK_PUBLISH=$ENABLE_TIKTOK_PUBLISH"
           echo "RUNWAY_ENABLED=$RUNWAY_ENABLED"
+          echo "RUNWAY_FORCE=$RUNWAY_FORCE"
           echo "================="
           python -u main.py

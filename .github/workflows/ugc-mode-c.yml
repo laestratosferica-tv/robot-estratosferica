@@ -40,7 +40,7 @@ jobs:
 
           UGC_INBOX_PREFIX: ugc/inbox
 
-          MODE_C_CLIP_SECONDS: "8"
+          MODE_C_CLIP_SECONDS: "12"
           MODE_C_MAX_INPUTS: "5"
           MODE_C_MAX_CLIPS_PER_VIDEO: "3"
 

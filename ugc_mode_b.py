@@ -313,7 +313,7 @@ def resolve_meta_key_for_video_key(key):
     return f"{META_FINAL_PREFIX}/{base}.json"
 
 
-def resolve_sidecar_txt_key_for_video_key(key):
+def resolve_sidecar_txt_for_video_key(key):
     base = os.path.basename(key).rsplit(".", 1)[0]
     folder = os.path.dirname(key)
     return f"{folder}/{base}.txt"
@@ -325,10 +325,10 @@ def load_meta_for_video_key(key):
     return meta_key, meta
 
 
-def load_sidecar_txt_for_video_key(key):
-    txt_key = resolve_sidecar_txt_key_for_video_key(key)
-    txt = load_text(txt_key)
-    return txt_key, txt
+def load_clip_meta_from_source_clip_key(source_clip_key):
+    base = os.path.basename(source_clip_key).rsplit(".", 1)[0]
+    clip_meta_key = f"ugc/meta/clips/{base}.json"
+    return load_json(clip_meta_key)
 
 
 def resolve_source_group(key, meta):
@@ -352,6 +352,34 @@ def resolve_source_group(key, meta):
     return extract_source_group_from_key(key)
 
 
+def detect_game_from_key(key):
+    text = (key or "").lower().replace("_", " ").replace("-", " ")
+
+    checks = [
+        ("valorant", "Valorant"),
+        ("cs2", "CS2"),
+        ("counter strike", "CS2"),
+        ("counter-strike", "CS2"),
+        ("league of legends", "League of Legends"),
+        ("lol", "League of Legends"),
+        ("fortnite", "Fortnite"),
+        ("warzone", "Warzone"),
+        ("apex legends", "Apex Legends"),
+        ("apex", "Apex Legends"),
+        ("minecraft", "Minecraft"),
+        ("ea sports fc", "EA Sports FC"),
+        ("fc", "EA Sports FC"),
+        ("f1", "F1"),
+        ("gran turismo", "Gran Turismo"),
+    ]
+
+    for needle, label in checks:
+        if needle in text:
+            return label
+
+    return "Esports"
+
+
 def resolve_game_name(key, meta):
     if isinstance(meta, dict):
         clip_game = meta.get("game")
@@ -371,12 +399,6 @@ def resolve_game_name(key, meta):
                     return g
 
     return detect_game_from_key(key)
-
-
-def load_clip_meta_from_source_clip_key(source_clip_key):
-    base = os.path.basename(source_clip_key).rsplit(".", 1)[0]
-    clip_meta_key = f"ugc/meta/clips/{base}.json"
-    return load_json(clip_meta_key)
 
 
 def diversify_queue(items):
@@ -409,34 +431,6 @@ def diversify_queue(items):
             break
 
     return diversified
-
-
-def detect_game_from_key(key):
-    text = (key or "").lower().replace("_", " ").replace("-", " ")
-
-    checks = [
-        ("valorant", "Valorant"),
-        ("cs2", "CS2"),
-        ("counter strike", "CS2"),
-        ("counter-strike", "CS2"),
-        ("league of legends", "League of Legends"),
-        ("lol", "League of Legends"),
-        ("fortnite", "Fortnite"),
-        ("warzone", "Warzone"),
-        ("apex legends", "Apex Legends"),
-        ("apex", "Apex Legends"),
-        ("minecraft", "Minecraft"),
-        ("ea sports fc", "EA Sports FC"),
-        ("fc", "EA Sports FC"),
-        ("f1", "F1"),
-        ("gran turismo", "Gran Turismo"),
-    ]
-
-    for needle, label in checks:
-        if needle in text:
-            return label
-
-    return "Esports"
 
 
 GAME_HOOKS = {
@@ -639,13 +633,13 @@ SMART_FALLBACK_HASHTAGS = [
 def pick_from_map(mapping, key_name, fallback="Esports"):
     import random
 
-    options = mapping.get(key_name) or mapping.get(fallback) or []
+    options = mapping.get(key_name) or (mapping.get(fallback) if fallback is not None else None) or []
     return random.choice(options) if options else ""
 
 
 def openai_text(prompt):
     if not OPENAI_API_KEY:
-        raise RuntimeError("Falta OPENAI_API_KEY para generar copy inteligente desde .txt")
+        raise RuntimeError("Falta OPENAI_API_KEY")
 
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
@@ -678,125 +672,249 @@ def openai_text(prompt):
     return "\n".join(texts).strip()
 
 
-def build_campaign_caption_from_txt(key, meta, brief_text):
-    game_name = resolve_game_name(key, meta)
+def parse_brief_text(raw_text):
+    result = {
+        "campaign": None,
+        "game": None,
+        "type": None,
+        "priority": None,
+        "emotion": None,
+        "angle": None,
+        "target": None,
+        "hook": None,
+        "cta": None,
+        "style": None,
+        "intensity": None,
+        "notes": None,
+        "raw_text": (raw_text or "").strip(),
+    }
+
+    if not raw_text or not raw_text.strip():
+        return result
+
+    lines = raw_text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+
+    field_map = {
+        "CAMPAIGN": "campaign",
+        "GAME": "game",
+        "TYPE": "type",
+        "PRIORITY": "priority",
+        "EMOTION": "emotion",
+        "ANGLE": "angle",
+        "TARGET": "target",
+        "HOOK": "hook",
+        "CTA": "cta",
+        "STYLE": "style",
+        "INTENSITY": "intensity",
+        "NOTES": "notes",
+        "NOTA": "notes",
+        "NOTA EDITORIAL": "notes",
+        "OBJETIVO": "notes",
+    }
+
+    current_multiline_key = None
+    notes_buffer = []
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            if current_multiline_key == "notes":
+                notes_buffer.append("")
+            continue
+
+        matched = False
+
+        for label, dest in field_map.items():
+            prefix = f"{label}:"
+            if line.upper().startswith(prefix):
+                value = line[len(prefix):].strip()
+
+                if dest == "notes":
+                    current_multiline_key = "notes"
+                    if value:
+                        notes_buffer.append(value)
+                else:
+                    result[dest] = value or None
+                    current_multiline_key = None
+
+                matched = True
+                break
+
+        if matched:
+            continue
+
+        if current_multiline_key == "notes":
+            notes_buffer.append(line)
+
+    if notes_buffer:
+        result["notes"] = "\n".join(notes_buffer).strip() or None
+
+    return result
+
+
+def load_and_parse_sidecar_brief(key):
+    txt_key = resolve_sidecar_txt_for_video_key(key)
+    raw_txt = load_text(txt_key)
+
+    if not raw_txt:
+        return txt_key, None, None
+
+    parsed = parse_brief_text(raw_txt)
+    return txt_key, raw_txt, parsed
+
+
+def build_campaign_caption_from_brief(key, meta, brief):
+    game_name = brief.get("game") or resolve_game_name(key, meta) or "gaming"
 
     prompt = f"""
-Eres editor viral premium de esports y gaming LATAM.
+Eres editor viral premium de gaming y esports LATAM.
 
-Tu tarea: escribir caption para una pieza PRIORITY / campaña.
-Debe sonar potente, comercial, emocional y publicable.
-No corporativo aburrido.
-No sonar robot.
-No repetir frases genéricas.
+Escribe un caption para una pieza PRIORITY.
+Debe sonar:
+- potente
+- publicable
+- emocional
+- nada genérico
+- no robótico
+- si es sponsor, que se sienta premium
 
-Contexto del video:
-- Juego: {game_name}
-- Archivo: {os.path.basename(key)}
-
-Brief del usuario:
-{brief_text}
+Contexto:
+Archivo: {os.path.basename(key)}
+Juego: {game_name}
+Campaign: {brief.get('campaign') or ''}
+Type: {brief.get('type') or ''}
+Priority: {brief.get('priority') or ''}
+Emotion: {brief.get('emotion') or ''}
+Angle: {brief.get('angle') or ''}
+Target: {brief.get('target') or ''}
+Hook idea: {brief.get('hook') or ''}
+CTA idea: {brief.get('cta') or ''}
+Style: {brief.get('style') or ''}
+Intensity: {brief.get('intensity') or ''}
+Notes: {brief.get('notes') or ''}
 
 Devuelve SOLO el caption final.
 Reglas:
 - 1 hook fuerte al inicio
-- 2 a 4 líneas máximas de desarrollo
+- 2 a 4 líneas de desarrollo
 - 1 CTA o pregunta final
-- 5 a 8 hashtags relevantes
-- si es campaña, puede sonar premium
+- 5 a 8 hashtags
 - máximo 120 palabras
 """
 
     try:
-        text = openai_text(prompt).strip()
-        if text:
-            return text
+        if OPENAI_API_KEY:
+            text = openai_text(prompt).strip()
+            if text:
+                return text
     except Exception as e:
         print("OpenAI brief caption fallback:", repr(e))
 
-    hashtags = " ".join((GAME_HASHTAGS.get(game_name, [])[:3] + SMART_FALLBACK_HASHTAGS[:3])[:6])
+    hashtags = []
+    if brief.get("campaign"):
+        hashtags.append(f"#{str(brief['campaign']).replace(' ', '')}")
+    if game_name:
+        hashtags.append(f"#{str(game_name).replace(' ', '')}")
+    hashtags.extend(SMART_FALLBACK_HASHTAGS[:4])
 
-    return f"""Esto se ve demasiado brutal para ignorarlo.
+    hook = brief.get("hook") or "Esto se ve demasiado brutal para ignorarlo."
+    angle = brief.get("angle") or "pieza premium con potencial de conversación"
+    cta = brief.get("cta") or "¿Tu setup aguanta esto o ya toca upgrade?"
 
-{brief_text[:180].strip()}
+    return f"""{hook}
 
-🔥 ¿Tu setup aguanta esto o todavía no estás listo?
+{angle}
 
-{hashtags}""".strip()
+🔥 {cta}
+
+{" ".join(hashtags[:7])}""".strip()
 
 
-def build_campaign_shorts_title_from_txt(key, meta, brief_text):
-    game_name = resolve_game_name(key, meta)
+def build_campaign_shorts_title_from_brief(key, meta, brief):
+    game_name = brief.get("game") or resolve_game_name(key, meta) or "Gaming"
 
     prompt = f"""
-Eres editor de Shorts para gaming/esports LATAM.
+Eres editor de Shorts gaming LATAM.
 
-Crea un título corto, premium, fuerte y publicable para YouTube Shorts.
+Crea un título corto, fuerte y premium.
 
-Juego: {game_name}
 Archivo: {os.path.basename(key)}
-Brief:
-{brief_text}
+Juego: {game_name}
+Campaign: {brief.get('campaign') or ''}
+Angle: {brief.get('angle') or ''}
+Hook idea: {brief.get('hook') or ''}
+Style: {brief.get('style') or ''}
+Intensity: {brief.get('intensity') or ''}
 
 Reglas:
 - máximo 80 caracteres antes de #Shorts
-- tono fuerte / hype / premium
-- no genérico
 - devuelve solo el título final
 """
 
     try:
-        text = openai_text(prompt).strip().replace('"', "").strip()
-        if text:
-            if "#Shorts" not in text:
-                text = f"{text} #Shorts"
-            return text[:100]
+        if OPENAI_API_KEY:
+            text = openai_text(prompt).strip().replace('"', "").strip()
+            if text:
+                if "#Shorts" not in text:
+                    text = f"{text} #Shorts"
+                return text[:100]
     except Exception as e:
         print("OpenAI brief shorts title fallback:", repr(e))
 
-    title = f"{game_name} se ve RIDÍCULO #Shorts"
-    return title[:100]
+    base = brief.get("hook") or f"{game_name} se ve RIDÍCULO"
+    if "#Shorts" not in base:
+        base = f"{base} #Shorts"
+    return base[:100]
 
 
-def build_campaign_shorts_description_from_txt(key, meta, brief_text):
-    game_name = resolve_game_name(key, meta)
+def build_campaign_shorts_description_from_brief(key, meta, brief):
+    game_name = brief.get("game") or resolve_game_name(key, meta) or "Gaming"
 
     prompt = f"""
-Escribe una descripción para Shorts de gaming/esports LATAM.
+Escribe descripción para Shorts de gaming LATAM.
 
 Juego: {game_name}
-Brief:
-{brief_text}
+Campaign: {brief.get('campaign') or ''}
+Emotion: {brief.get('emotion') or ''}
+Angle: {brief.get('angle') or ''}
+Target: {brief.get('target') or ''}
+CTA: {brief.get('cta') or ''}
+Notes: {brief.get('notes') or ''}
 
 Reglas:
 - 2 a 4 líneas
-- tono hype / premium
+- tono hype/premium
 - terminar con hashtags
-- máximo 400 palabras
 - devuelve solo el texto final
 """
 
     try:
-        text = openai_text(prompt).strip()
-        if text:
-            return text[:5000]
+        if OPENAI_API_KEY:
+            text = openai_text(prompt).strip()
+            if text:
+                return text[:5000]
     except Exception as e:
         print("OpenAI brief shorts description fallback:", repr(e))
 
-    hashtags = " ".join((GAME_HASHTAGS.get(game_name, [])[:3] + SMART_FALLBACK_HASHTAGS[:3])[:6])
+    hashtags = []
+    if brief.get("campaign"):
+        hashtags.append(f"#{str(brief['campaign']).replace(' ', '')}")
+    if game_name:
+        hashtags.append(f"#{str(game_name).replace(' ', '')}")
+    hashtags.extend(SMART_FALLBACK_HASHTAGS[:4])
 
-    return f"""{brief_text[:240].strip()}
+    angle = brief.get("angle") or "pieza premium gaming"
+    cta = brief.get("cta") or "¿La montarías en tu setup?"
 
-{hashtags}""".strip()
+    return f"""{angle}
+
+{cta}
+
+{" ".join(hashtags[:7])}""".strip()
 
 
 def build_caption_from_meta(key, meta):
     game_name = resolve_game_name(key, meta)
-
-    emotion = None
-    if isinstance(meta, dict):
-        emotion = meta.get("emotion")
-
     hook = pick_from_map(GAME_HOOKS, game_name)
     context = pick_from_map(GAME_CONTEXTS, game_name)
     cta = pick_from_map(GAME_CTAS, game_name)
@@ -1039,7 +1157,7 @@ def publish(item, target_platforms=None):
 
     key = item["key"]
     meta = item.get("meta") or {}
-    brief_text = item.get("brief_text")
+    brief = item.get("brief")
     public_url = build_public_url(key)
 
     caption = None
@@ -1051,14 +1169,14 @@ def publish(item, target_platforms=None):
         shorts_title = meta.get("shorts_title")
         shorts_description = meta.get("shorts_description")
 
-    if brief_text:
+    if brief:
         print("BRIEF TXT DETECTADO -> modo campaign/priority")
         if not caption:
-            caption = build_campaign_caption_from_txt(key, meta, brief_text)
+            caption = build_campaign_caption_from_brief(key, meta, brief)
         if not shorts_title:
-            shorts_title = build_campaign_shorts_title_from_txt(key, meta, brief_text)
+            shorts_title = build_campaign_shorts_title_from_brief(key, meta, brief)
         if not shorts_description:
-            shorts_description = build_campaign_shorts_description_from_txt(key, meta, brief_text)
+            shorts_description = build_campaign_shorts_description_from_brief(key, meta, brief)
 
     if not caption:
         caption = build_caption_from_meta(key, meta)
@@ -1073,6 +1191,7 @@ def publish(item, target_platforms=None):
     print("SOURCE_GROUP:", item.get("source_group"))
     print("TARGET_PLATFORMS:", target_platforms)
     print("TXT KEY:", item.get("brief_txt_key"))
+    print("BRIEF PARSED:", item.get("brief"))
     print("CAPTION:\n", caption)
     print("SHORTS TITLE:", shorts_title)
 
@@ -1149,7 +1268,7 @@ def should_process_item(st, item):
 
 def build_item_from_key(key):
     meta_key, meta = load_meta_for_video_key(key)
-    txt_key, brief_text = load_sidecar_txt_for_video_key(key)
+    txt_key, brief_raw_text, brief = load_and_parse_sidecar_brief(key)
 
     source_group = resolve_source_group(key, meta)
     game_name = resolve_game_name(key, meta)
@@ -1168,16 +1287,16 @@ def build_item_from_key(key):
     if candidate_score is None:
         candidate_score = 0.0
 
-    # si viene por priority con txt, le damos empujón editorial
-    if key.startswith(f"{PREFIX_PRIORITY}/") and brief_text:
+    if key.startswith(f"{PREFIX_PRIORITY}/") and brief:
         candidate_score = max(float(candidate_score or 0.0), 999.0)
 
     return {
         "key": key,
         "meta_key": meta_key,
         "meta": meta or {},
-        "brief_txt_key": txt_key if brief_text else None,
-        "brief_text": brief_text,
+        "brief_txt_key": txt_key if brief_raw_text else None,
+        "brief_text_raw": brief_raw_text,
+        "brief": brief,
         "source_group": source_group,
         "game_name": game_name,
         "candidate_score": float(candidate_score or 0.0),
@@ -1197,7 +1316,7 @@ def sort_queue_items(items):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: META_AWARE_SOURCE_GROUP_V3_TXT_BRIEF")
+    print("MODE B VERSION: META_AWARE_SOURCE_GROUP_V4_TXT_BRIEF")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
     print("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED:", B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED)
@@ -1303,6 +1422,7 @@ def run_mode_b():
                     "source_group": source_group,
                     "candidate_score": item.get("candidate_score"),
                     "brief_txt_key": item.get("brief_txt_key"),
+                    "brief": item.get("brief"),
                     "platform_results": result,
                 },
             )

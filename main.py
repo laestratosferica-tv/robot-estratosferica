@@ -2139,7 +2139,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     with open(local_img, "wb") as f:
                         f.write(img_bytes)
                     
-                                       use_runway = (
+                    use_runway = (
                         RUNWAY_ENABLED
                         and bool(RUNWAY_API_KEY)
                         and (

@@ -2138,16 +2138,15 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     local_img = os.path.join(td, f"news{img_ext}")
                     with open(local_img, "wb") as f:
                         f.write(img_bytes)
-
-                    use_runway = (
+                    
+                                       use_runway = (
                         RUNWAY_ENABLED
                         and bool(RUNWAY_API_KEY)
                         and (
-                            random.random()
-                            <= max(
-                                0.0,
-                                min(1.0, RUNWAY_PROBABILITY),
-                            )
+                            RUNWAY_FORCE
+                            or random.random() <= max(0.0, min(1.0, RUNWAY_PROBABILITY))
+                        )
+                    )
                         )
                     )
 

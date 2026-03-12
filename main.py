@@ -2276,11 +2276,11 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 yt_res = {"ok": False, "error": str(e)}
 
         tt_res = None
-        if reel_url and (not acct_dry_run):
-            tt_res = tiktok_publish_video_from_url(
-                reel_url,
-                build_instagram_caption(item, link),
-            )
+                if reel_url and (not acct_dry_run) and ENABLE_TIKTOK_PUBLISH:
+                    tt_res = tiktok_publish_video_from_url(
+                        reel_url,
+                        build_instagram_caption(item, link),
+                    )
 
         if threads_res and threads_res.get("ok") and not threads_res.get("dry_run"):
             mark_posted(state, link)

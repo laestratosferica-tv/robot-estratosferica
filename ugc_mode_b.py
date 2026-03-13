@@ -1,3 +1,5 @@
+# ===== ugc_mode_b.py =====
+
 import os
 import re
 import json
@@ -76,9 +78,12 @@ B_MIN_CANDIDATE_SCORE = env_float("B_MIN_CANDIDATE_SCORE", 0.55)
 B_ALLOW_LOW_SCORE_FOR_PRIORITY = env_bool("B_ALLOW_LOW_SCORE_FOR_PRIORITY", True)
 B_ALLOW_LOW_SCORE_FOR_MANUAL = env_bool("B_ALLOW_LOW_SCORE_FOR_MANUAL", True)
 
-# Nuevo: calidad editorial mínima
 B_BLOCK_WEAK_GENERIC_AUTO = env_bool("B_BLOCK_WEAK_GENERIC_AUTO", True)
 B_REQUIRE_EDITORIAL_SIGNALS = env_bool("B_REQUIRE_EDITORIAL_SIGNALS", True)
+
+# v6.1
+B_EDITORIAL_SCORE_MIN = env_float("B_EDITORIAL_SCORE_MIN", 1.25)
+B_ALLOW_STRONG_HOOK_OVERRIDE = env_bool("B_ALLOW_STRONG_HOOK_OVERRIDE", True)
 
 ENABLE_INSTAGRAM = env_bool("ENABLE_INSTAGRAM", True)
 ENABLE_FACEBOOK = env_bool("ENABLE_FACEBOOK", True)
@@ -343,7 +348,7 @@ def load_meta_for_video_key(key):
 def load_clip_meta_from_source_clip_key(source_clip_key):
     base = os.path.basename(source_clip_key).rsplit(".", 1)[0]
     clip_meta_key = f"ugc/meta/clips/{base}.json"
-    return load_json(clip_meta_key)
+    return clip_meta_key, load_json(clip_meta_key)
 
 
 def resolve_source_group(key, meta):
@@ -358,13 +363,45 @@ def resolve_source_group(key, meta):
 
         source_clip_key = meta.get("source_clip_key")
         if source_clip_key:
-            clip_meta = load_clip_meta_from_source_clip_key(source_clip_key)
+            _, clip_meta = load_clip_meta_from_source_clip_key(source_clip_key)
             if isinstance(clip_meta, dict):
                 sg2 = clip_meta.get("source_group") or clip_meta.get("source_video_id")
                 if sg2:
                     return str(sg2)
 
     return extract_source_group_from_key(key)
+
+
+def normalize_game_name(name):
+    t = str(name or "").strip().lower()
+
+    mapping = {
+        "granturismo": "Gran Turismo",
+        "gran turismo": "Gran Turismo",
+        "gt": "Gran Turismo",
+        "easportsfc": "EA Sports FC",
+        "ea sports fc": "EA Sports FC",
+        "fc": "EA Sports FC",
+        "leagueoflegends": "League of Legends",
+        "league of legends": "League of Legends",
+        "lol": "League of Legends",
+        "apex": "Apex Legends",
+        "apex legends": "Apex Legends",
+        "fortnite": "Fortnite",
+        "minecraft": "Minecraft",
+        "cs2": "CS2",
+        "counter strike": "CS2",
+        "counter-strike": "CS2",
+        "valorant": "Valorant",
+        "warzone": "Warzone",
+        "f1": "F1",
+        "simracing": "Gran Turismo",
+        "sim racing": "Gran Turismo",
+        "esports": "Esports",
+        "generic": "Generic",
+    }
+
+    return mapping.get(t, str(name).strip() or "Generic")
 
 
 def detect_game_from_key(key):
@@ -384,11 +421,10 @@ def detect_game_from_key(key):
         ("apex", "Apex Legends"),
         ("minecraft", "Minecraft"),
         ("ea sports fc", "EA Sports FC"),
+        ("easportsfc", "EA Sports FC"),
         ("fc 26", "EA Sports FC"),
         ("fc 25", "EA Sports FC"),
         ("fc pro", "EA Sports FC"),
-        ("vejrgang", "EA Sports FC"),
-        ("tekkz", "EA Sports FC"),
         ("f1", "F1"),
         ("gran turismo", "Gran Turismo"),
         ("granturismo", "Gran Turismo"),
@@ -413,7 +449,7 @@ def resolve_game_name(key, meta):
 
         source_clip_key = meta.get("source_clip_key")
         if source_clip_key:
-            clip_meta = load_clip_meta_from_source_clip_key(source_clip_key)
+            _, clip_meta = load_clip_meta_from_source_clip_key(source_clip_key)
             if isinstance(clip_meta, dict):
                 for field in ["game", "game_name"]:
                     value = clip_meta.get(field)
@@ -421,31 +457,6 @@ def resolve_game_name(key, meta):
                         return normalize_game_name(value)
 
     return detect_game_from_key(key)
-
-
-def normalize_game_name(name):
-    t = str(name or "").strip().lower()
-
-    mapping = {
-        "granturismo": "Gran Turismo",
-        "gran turismo": "Gran Turismo",
-        "easportsfc": "EA Sports FC",
-        "ea sports fc": "EA Sports FC",
-        "leagueoflegends": "League of Legends",
-        "league of legends": "League of Legends",
-        "apex": "Apex Legends",
-        "apex legends": "Apex Legends",
-        "fortnite": "Fortnite",
-        "minecraft": "Minecraft",
-        "cs2": "CS2",
-        "valorant": "Valorant",
-        "warzone": "Warzone",
-        "f1": "F1",
-        "esports": "Esports",
-        "generic": "Generic",
-    }
-
-    return mapping.get(t, str(name).strip() or "Generic")
 
 
 def diversify_queue(items):
@@ -457,11 +468,9 @@ def diversify_queue(items):
 
     for item in items:
         group = item.get("source_group") or "unknown"
-
         if group not in groups:
             groups[group] = []
             order.append(group)
-
         groups[group].append(item)
 
     diversified = []
@@ -535,7 +544,7 @@ GAME_HOOKS = {
         "Aquí pasó algo que no se puede dejar sin debate.",
     ],
     "Generic": [
-        "Esto venía fuerte, pero le falta contexto real.",
+        "Aquí hay algo, pero falta contexto real.",
     ],
 }
 
@@ -655,7 +664,6 @@ GAME_CTAS = {
     ],
 }
 
-
 GAME_HASHTAGS = {
     "Valorant": ["#Valorant", "#VCT", "#GamingLATAM", "#ValorantLATAM", "#EsportsLATAM"],
     "CS2": ["#CS2", "#CounterStrike", "#GamingLATAM", "#CS2LATAM", "#EsportsLATAM"],
@@ -698,14 +706,17 @@ def clean_signal(v):
     return str(v or "").strip()
 
 
+def is_invalid_numeric(v):
+    try:
+        f = float(v)
+        return math.isnan(f) or math.isinf(f)
+    except Exception:
+        return True
+
+
 def sanitize_candidate_score(raw_value):
     if raw_value is None:
-        return {
-            "score": 0.0,
-            "raw": raw_value,
-            "valid": False,
-            "reason": "missing",
-        }
+        return {"score": 0.0, "raw": raw_value, "valid": False, "reason": "missing"}
 
     try:
         f = float(raw_value)
@@ -735,6 +746,9 @@ def normalize_emotion(emotion):
         "calm": "calm",
         "clean": "clean",
         "rage": "rage",
+        "skill": "skill",
+        "mechanical": "skill",
+        "precision": "skill",
     }
     return aliases.get(t, t)
 
@@ -771,6 +785,10 @@ def normalize_moment_type(moment_type):
         "1v5": "clutch",
         "wipe": "ace",
         "team_wipe": "ace",
+        "moment": "highlight",
+        "action": "highlight",
+        "play": "highlight",
+        "highlight": "highlight",
     }
     return aliases.get(t, t or "highlight")
 
@@ -794,6 +812,98 @@ def extract_copy_signals(meta):
     }
 
 
+def should_fallback_field(value, kind="text"):
+    if kind == "score":
+        return value is None or is_invalid_numeric(value)
+    if kind == "game":
+        return is_weak_game_name(value)
+    return is_weak_text(value)
+
+
+def merge_meta_with_clip_fallback(final_meta, clip_meta):
+    final_meta = final_meta or {}
+    clip_meta = clip_meta or {}
+
+    merged = dict(final_meta)
+
+    for field in ["candidate_score", "emotion", "intensity", "moment_type"]:
+        if should_fallback_field(merged.get(field), "score" if field == "candidate_score" else "text"):
+            if clip_meta.get(field) is not None:
+                merged[field] = clip_meta.get(field)
+
+    for field in ["game", "game_name", "source_group", "source_video_id", "source_video_key"]:
+        if should_fallback_field(merged.get(field), "game" if field in ("game", "game_name") else "text"):
+            if clip_meta.get(field) is not None:
+                merged[field] = clip_meta.get(field)
+
+    for field in ["hook", "cta", "badge", "caption_base", "caption", "shorts_title", "shorts_description"]:
+        if should_fallback_field(merged.get(field), "text"):
+            if clip_meta.get(field) is not None:
+                merged[field] = clip_meta.get(field)
+
+    if not merged.get("source_clip_key") and clip_meta.get("source_clip_key"):
+        merged["source_clip_key"] = clip_meta.get("source_clip_key")
+
+    return merged
+
+
+def compute_editorial_score(item):
+    score = 0.0
+    game_name = item.get("game_name")
+    emotion = normalize_emotion(item.get("emotion"))
+    intensity = normalize_intensity(item.get("intensity"))
+    moment_type = normalize_moment_type(item.get("moment_type"))
+    candidate_score = safe_float(item.get("candidate_score"), 0.0)
+    copy_signals = item.get("copy_signals") or {}
+
+    if not is_weak_game_name(game_name):
+        score += 1.5
+
+    if candidate_score >= 0.80:
+        score += 1.75
+    elif candidate_score >= 0.65:
+        score += 1.25
+    elif candidate_score >= 0.55:
+        score += 0.75
+    elif candidate_score > 0:
+        score += 0.25
+
+    if emotion in ("skill", "clutch", "chaos", "insane", "tense", "hype", "clean"):
+        score += 0.75
+
+    if intensity == "high":
+        score += 0.9
+    elif intensity == "medium":
+        score += 0.55
+    elif intensity == "low":
+        score += 0.2
+
+    if moment_type in ("clutch", "ace", "final_circle", "goal", "last_second"):
+        score += 1.4
+    elif moment_type == "highlight":
+        score += 0.55
+
+    if clean_signal(copy_signals.get("hook")):
+        score += 1.0
+    if clean_signal(copy_signals.get("cta")):
+        score += 0.85
+    if clean_signal(copy_signals.get("badge")):
+        score += 0.2
+    if clean_signal(copy_signals.get("caption_base")):
+        score += 0.45
+
+    if game_name in ("Valorant", "Fortnite", "EA Sports FC", "Warzone", "CS2"):
+        score += 0.35
+
+    if is_weak_game_name(game_name):
+        score -= 1.8
+
+    if item.get("score_valid") is False:
+        score -= 1.2
+
+    return round(score, 4)
+
+
 def openai_text(prompt):
     if not OPENAI_API_KEY:
         raise RuntimeError("Falta OPENAI_API_KEY")
@@ -803,10 +913,7 @@ def openai_text(prompt):
         "Content-Type": "application/json",
     }
 
-    payload = {
-        "model": OPENAI_MODEL,
-        "input": prompt,
-    }
+    payload = {"model": OPENAI_MODEL, "input": prompt}
 
     r = requests.post(
         "https://api.openai.com/v1/responses",
@@ -921,9 +1028,7 @@ def ensure_game_in_caption(caption, game_name):
     caption = (caption or "").strip()
     game_name = (game_name or "").strip()
 
-    if not caption:
-        return caption
-    if not game_name:
+    if not caption or not game_name:
         return caption
     if game_name.lower() in caption.lower():
         return caption
@@ -940,12 +1045,10 @@ Eres editor viral premium de gaming y esports LATAM.
 Escribe un caption para una pieza PRIORITY.
 Debe sonar:
 - potente
-- publicable
 - emocional
-- nada genérico
-- no robótico
 - premium
 - comentable
+- nada genérico
 
 Contexto:
 Archivo: {os.path.basename(key)}
@@ -962,16 +1065,16 @@ Style: {brief.get('style') or ''}
 Intensity: {brief.get('intensity') or ''}
 Notes: {brief.get('notes') or ''}
 
-Devuelve SOLO el caption final.
 Reglas:
-- 1 hook fuerte al inicio
-- 2 a 4 líneas de desarrollo
-- 1 CTA o pregunta final
+- hook fuerte al inicio
+- 2 a 4 líneas
+- pregunta/cta final
 - incluir el juego sí o sí
 - 5 a 8 hashtags
 - máximo 120 palabras
-"""
 
+Devuelve solo el caption final.
+"""
     try:
         if OPENAI_API_KEY:
             text = openai_text(prompt).strip()
@@ -1018,7 +1121,6 @@ Intensity: {brief.get('intensity') or ''}
 
 Reglas:
 - máximo 80 caracteres antes de #Shorts
-- incluir el juego si ayuda
 - devolver solo el título final
 """
     try:
@@ -1054,7 +1156,6 @@ Notes: {brief.get('notes') or ''}
 Reglas:
 - 2 a 4 líneas
 - tono hype/premium
-- debe sonar publicable, gamer y específico
 - terminar con hashtags
 - devuelve solo el texto final
 """
@@ -1083,7 +1184,7 @@ Reglas:
 {" ".join(hashtags[:7])}""".strip()
 
 
-def build_caption_from_meta_v6(key, meta, item):
+def build_caption_from_meta_v61(key, meta, item):
     game_name = item.get("game_name") or resolve_game_name(key, meta)
     score = safe_float(item.get("candidate_score"), 0.0)
     emotion = normalize_emotion(item.get("emotion"))
@@ -1107,53 +1208,44 @@ Emotion: {emotion}
 Intensity: {intensity}
 Moment type: {moment_type}
 Candidate score: {score}
-Hook sugerido por packer: {hook_hint}
-CTA sugerido por packer: {cta_hint}
-Badge sugerido por packer: {badge_hint}
+Editorial score: {item.get("editorial_score")}
+Hook sugerido: {hook_hint}
+CTA sugerido: {cta_hint}
+Badge sugerido: {badge_hint}
 Caption base: {caption_base}
 Archivo: {os.path.basename(key)}
 
-Reglas editoriales:
+Reglas:
 - sonar gamer LATAM
-- sonar específico
-- sonar agresivo y comentable
+- sonar específico y comentable
 - cero tono corporativo
-- cero copy genérico de esports
-- meter conflicto
-- meter juicio o debate
 - incluir el nombre del juego sí o sí
-- si es shooter: clutch, lectura, lobby regalado vs mérito
-- si es EA Sports FC: golazo, defensa de plastilina, clase vs abuso
-- si es F1 o Gran Turismo: precisión, sangre fría, manejo, riesgo
-- si es Minecraft: caos, internet, momento absurdo pero real
-
-Formato:
-- línea 1: afirmación/hook fuerte
-- línea 2: contexto o lectura del momento
-- línea 3: pregunta final polarizante
-- línea 4: 4 a 6 hashtags
+- meter conflicto, juicio o debate
+- máximo 80 palabras
+- formato:
+  línea 1 hook
+  línea 2 lectura/contexto
+  línea 3 pregunta polarizante
+  línea 4 hashtags
 
 Prioriza:
-- hook de packer si viene fuerte
-- CTA de packer si ya está bueno
-- controversia
 - skill vs suerte
 - clutch
 - caos
-- final circle
-- ace
-- golazo
 - último segundo
+- precisión
+- golazo
+- round roto
+- lobby regalado vs mérito real
 
 Devuelve solo el caption final.
-Máximo 80 palabras.
 """
         try:
             text = openai_text(prompt).strip()
             if text:
                 return ensure_game_in_caption(text, game_name)
         except Exception as e:
-            print("OpenAI caption v6 fallback:", repr(e))
+            print("OpenAI caption v6.1 fallback:", repr(e))
 
     hashtags = " ".join(GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"])[:5])
 
@@ -1170,10 +1262,10 @@ Máximo 80 palabras.
             line1 = "EA Sports FC no perdona una locura así."
         elif moment_type == "last_second":
             line1 = f"En {game_name} un segundo basta para romper todo."
-        elif emotion == "chaos":
-            line1 = f"{game_name} cuando entra en caos real deja cosas así."
-        elif emotion == "clutch":
-            line1 = f"En {game_name} esto fue sangre fría de verdad."
+        elif emotion == "skill" and game_name in ("Valorant", "CS2", "Gran Turismo", "F1"):
+            line1 = f"En {game_name} esto no fue suerte: fue pura mano y lectura."
+        elif emotion == "skill":
+            line1 = f"{game_name} cuando aparece la mano real deja esto."
         else:
             line1 = pick_from_map(GAME_HOOKS, game_name)
 
@@ -1190,8 +1282,12 @@ Máximo 80 palabras.
             line2 = "Este gol no entra normal: entra para pelear en comentarios."
         elif moment_type == "last_second":
             line2 = "Parecía perdido hasta que alguien decidió aparecer de verdad."
-        elif intensity == "low" and game_name in ("Gran Turismo", "F1"):
-            line2 = "Aquí no hubo humo: hubo precisión, control y cabeza fría."
+        elif emotion == "skill" and game_name == "Gran Turismo":
+            line2 = "Aquí no hubo humo: hubo control fino, limpieza y sangre fría."
+        elif emotion == "skill" and game_name in ("Valorant", "CS2"):
+            line2 = "Esto separa al que pega tiros del que entiende el momento."
+        elif emotion == "skill":
+            line2 = "Se ve simple hasta que entiendes la lectura completa del momento."
         elif game_name == "Minecraft":
             line2 = "Parece absurdo, sí, y justo por eso internet se divide en dos."
         else:
@@ -1210,8 +1306,12 @@ Máximo 80 palabras.
             line3 = "🔥 ¿Golazo total o defensa de plastilina?"
         elif moment_type == "last_second":
             line3 = "🔥 ¿Mérito real o milagro de último segundo?"
-        elif emotion == "chaos":
-            line3 = "🔥 ¿Esto fue lectura brutal o pura suerte premium?"
+        elif emotion == "skill" and game_name in ("Valorant", "CS2"):
+            line3 = "🔥 ¿Pura lectura o el rival también colaboró demasiado?"
+        elif emotion == "skill" and game_name in ("Gran Turismo", "F1"):
+            line3 = "🔥 ¿Clase real o se ve más bonito de lo que fue?"
+        elif emotion == "skill":
+            line3 = "🔥 ¿Skill puro o también hubo bastante regalo?"
         else:
             line3 = f"🔥 {pick_from_map(GAME_CTAS, game_name)}"
 
@@ -1219,34 +1319,28 @@ Máximo 80 palabras.
     return ensure_game_in_caption(text, game_name)
 
 
-def build_shorts_title_from_meta_v6(key, meta, item):
+def build_shorts_title_from_meta_v61(key, meta, item):
     game_name = item.get("game_name") or resolve_game_name(key, meta)
-    score = safe_float(item.get("candidate_score"), 0.0)
-    emotion = normalize_emotion(item.get("emotion"))
     moment_type = normalize_moment_type(item.get("moment_type"))
-
+    emotion = normalize_emotion(item.get("emotion"))
     copy_signals = item.get("copy_signals") or {}
     hook_hint = clean_signal(copy_signals.get("hook"))
-    cta_hint = clean_signal(copy_signals.get("cta"))
 
     if OPENAI_API_KEY:
         prompt = f"""
 Crea título para YouTube Shorts gamer LATAM.
 
 Juego: {game_name}
-Score: {score}
 Emotion: {emotion}
 Moment type: {moment_type}
+Editorial score: {item.get("editorial_score")}
 Hook sugerido: {hook_hint}
-CTA sugerido: {cta_hint}
 Archivo: {os.path.basename(key)}
 
 Reglas:
 - corto
 - potente
-- no genérico
 - comentable
-- idealmente con conflicto
 - máximo 75 caracteres antes de #Shorts
 - devolver solo el título
 """
@@ -1257,10 +1351,10 @@ Reglas:
                     text = f"{text} #Shorts"
                 return text[:100]
         except Exception as e:
-            print("OpenAI shorts title v6 fallback:", repr(e))
+            print("OpenAI shorts title v6.1 fallback:", repr(e))
 
     if hook_hint and len(hook_hint) < 70:
-        title = hook_hint
+        title = ensure_game_in_caption(hook_hint, game_name)
     elif moment_type == "clutch":
         title = f"{game_name}: clutch real o regalo total?"
     elif moment_type == "final_circle":
@@ -1269,10 +1363,8 @@ Reglas:
         title = "EA Sports FC: golazo o defensa de plastilina?"
     elif moment_type == "ace":
         title = f"{game_name}: ace limpio o rival dormido?"
-    elif game_name == "Gran Turismo":
-        title = "Gran Turismo: precisión real o hype?"
-    elif game_name == "Minecraft":
-        title = "Minecraft: skill o clip maldito?"
+    elif emotion == "skill":
+        title = f"{game_name}: pura mano o mucho regalo?"
     else:
         title = f"{game_name}: skill real o mucho regalo?"
 
@@ -1281,13 +1373,10 @@ Reglas:
     return title[:100]
 
 
-def build_shorts_description_from_meta_v6(key, meta, item):
+def build_shorts_description_from_meta_v61(key, meta, item):
     game_name = item.get("game_name") or resolve_game_name(key, meta)
-    score = safe_float(item.get("candidate_score"), 0.0)
     emotion = normalize_emotion(item.get("emotion"))
-    intensity = normalize_intensity(item.get("intensity"))
     moment_type = normalize_moment_type(item.get("moment_type"))
-
     copy_signals = item.get("copy_signals") or {}
     cta_hint = clean_signal(copy_signals.get("cta"))
     caption_base = clean_signal(copy_signals.get("caption_base"))
@@ -1297,10 +1386,9 @@ def build_shorts_description_from_meta_v6(key, meta, item):
 Escribe descripción para YouTube Shorts gamer LATAM.
 
 Juego: {game_name}
-Score: {score}
 Emotion: {emotion}
-Intensity: {intensity}
 Moment type: {moment_type}
+Editorial score: {item.get("editorial_score")}
 CTA sugerido: {cta_hint}
 Caption base: {caption_base}
 Archivo: {os.path.basename(key)}
@@ -1308,8 +1396,6 @@ Archivo: {os.path.basename(key)}
 Reglas:
 - 2 líneas + hashtags
 - no sonar genérico
-- respetar el juego
-- sonar gamer, específico y debatible
 - máximo 350 caracteres
 - devolver solo el texto
 """
@@ -1318,7 +1404,7 @@ Reglas:
             if text:
                 return text[:5000]
         except Exception as e:
-            print("OpenAI shorts description v6 fallback:", repr(e))
+            print("OpenAI shorts description v6.1 fallback:", repr(e))
 
     line1 = caption_base or pick_from_map(GAME_CONTEXTS, game_name)
     line2 = cta_hint or pick_from_map(GAME_CTAS, game_name)
@@ -1356,10 +1442,7 @@ def ig_publish(video_url, caption):
     while True:
         status_resp = requests.get(
             f"{GRAPH_BASE}/{container}",
-            params={
-                "fields": "status_code",
-                "access_token": IG_ACCESS_TOKEN,
-            },
+            params={"fields": "status_code", "access_token": IG_ACCESS_TOKEN},
             timeout=HTTP_TIMEOUT,
         )
         status_resp.raise_for_status()
@@ -1380,10 +1463,7 @@ def ig_publish(video_url, caption):
 
     publish_resp = requests.post(
         f"{GRAPH_BASE}/{IG_USER_ID}/media_publish",
-        data={
-            "creation_id": container,
-            "access_token": IG_ACCESS_TOKEN,
-        },
+        data={"creation_id": container, "access_token": IG_ACCESS_TOKEN},
         timeout=HTTP_TIMEOUT,
     )
     publish_resp.raise_for_status()
@@ -1400,10 +1480,7 @@ def fb_publish(video_url, caption):
 
     start_resp = requests.post(
         f"{GRAPH_BASE}/{FB_PAGE_ID}/video_reels",
-        data={
-            "upload_phase": "START",
-            "access_token": FB_PAGE_ACCESS_TOKEN,
-        },
+        data={"upload_phase": "START", "access_token": FB_PAGE_ACCESS_TOKEN},
         timeout=HTTP_TIMEOUT,
     )
     start_resp.raise_for_status()
@@ -1419,10 +1496,7 @@ def fb_publish(video_url, caption):
 
     transfer_resp = requests.post(
         upload_url,
-        headers={
-            "Authorization": f"OAuth {FB_PAGE_ACCESS_TOKEN}",
-            "file_url": video_url,
-        },
+        headers={"Authorization": f"OAuth {FB_PAGE_ACCESS_TOKEN}", "file_url": video_url},
         timeout=HTTP_TIMEOUT,
     )
     transfer_resp.raise_for_status()
@@ -1551,10 +1625,21 @@ def allow_low_score(item):
     return False
 
 
+def strong_copy_present(item):
+    copy_signals = item.get("copy_signals") or {}
+    return bool(clean_signal(copy_signals.get("hook")) and clean_signal(copy_signals.get("cta")))
+
+
 def should_skip_for_score(item):
     score = safe_float(item.get("candidate_score"), 0.0)
+
     if allow_low_score(item):
         return False
+
+    if B_ALLOW_STRONG_HOOK_OVERRIDE and strong_copy_present(item):
+        if item.get("editorial_score", 0.0) >= max(B_EDITORIAL_SCORE_MIN, 2.5) and score > 0:
+            return False
+
     return score < B_MIN_CANDIDATE_SCORE
 
 
@@ -1564,19 +1649,21 @@ def should_skip_for_editorial_quality(item):
     if is_priority_key(key) or is_manual_key(key):
         return False, None
 
-    if not item.get("score_valid"):
-        return True, f"invalid_score:{item.get('score_reason')}"
-
     if B_BLOCK_WEAK_GENERIC_AUTO and is_weak_game_name(item.get("game_name")):
         return True, "weak_game"
 
     if B_REQUIRE_EDITORIAL_SIGNALS:
         signals = 0
-        if not is_weak_text(item.get("emotion")):
+
+        if normalize_emotion(item.get("emotion")) in ("skill", "clutch", "chaos", "insane", "tense", "hype", "clean"):
             signals += 1
-        if not is_weak_text(item.get("intensity")):
+
+        if normalize_intensity(item.get("intensity")) in ("low", "medium", "high"):
             signals += 1
-        if not is_weak_text(item.get("moment_type")):
+
+        if normalize_moment_type(item.get("moment_type")) in (
+            "clutch", "ace", "final_circle", "goal", "last_second", "highlight"
+        ):
             signals += 1
 
         copy_signals = item.get("copy_signals") or {}
@@ -1589,6 +1676,9 @@ def should_skip_for_editorial_quality(item):
 
         if signals == 0:
             return True, "weak_metadata"
+
+    if item.get("editorial_score", 0.0) < B_EDITORIAL_SCORE_MIN:
+        return True, f"low_editorial_score:{item.get('editorial_score')}"
 
     return False, None
 
@@ -1623,11 +1713,11 @@ def publish(item, target_platforms=None):
             shorts_description = build_campaign_shorts_description_from_brief(key, meta, brief)
 
     if not caption:
-        caption = build_caption_from_meta_v6(key, meta, item)
+        caption = build_caption_from_meta_v61(key, meta, item)
     if not shorts_title:
-        shorts_title = build_shorts_title_from_meta_v6(key, meta, item)
+        shorts_title = build_shorts_title_from_meta_v61(key, meta, item)
     if not shorts_description:
-        shorts_description = build_shorts_description_from_meta_v6(key, meta, item)
+        shorts_description = build_shorts_description_from_meta_v61(key, meta, item)
 
     caption = ensure_game_in_caption(caption, item.get("game_name"))
 
@@ -1639,14 +1729,11 @@ def publish(item, target_platforms=None):
     print("TXT KEY:", item.get("brief_txt_key"))
     print("BRIEF PARSED:", item.get("brief"))
     print("COPY SIGNALS:", item.get("copy_signals"))
+    print("EDITORIAL SCORE:", item.get("editorial_score"))
     print("CAPTION:\n", caption)
     print("SHORTS TITLE:", shorts_title)
 
-    results = {
-        "instagram": None,
-        "facebook": None,
-        "youtube_shorts": None,
-    }
+    results = {"instagram": None, "facebook": None, "youtube_shorts": None}
 
     if DRY_RUN:
         print("DRY_RUN activo: no se publica realmente")
@@ -1714,38 +1801,29 @@ def should_process_item(st, item):
 
 
 def build_item_from_key(key):
-    meta_key, meta = load_meta_for_video_key(key)
+    meta_key, final_meta = load_meta_for_video_key(key)
     txt_key, brief_raw_text, brief = load_and_parse_sidecar_brief(key)
+
+    source_clip_key = None
+    if isinstance(final_meta, dict):
+        source_clip_key = final_meta.get("source_clip_key")
+
+    clip_meta_key = None
+    clip_meta = None
+    if source_clip_key:
+        clip_meta_key, clip_meta = load_clip_meta_from_source_clip_key(source_clip_key)
+
+    meta = merge_meta_with_clip_fallback(final_meta or {}, clip_meta or {})
 
     source_group = resolve_source_group(key, meta)
     game_name = resolve_game_name(key, meta)
 
-    candidate_score = None
-    emotion = None
-    intensity = None
-    moment_type = None
+    candidate_score_raw = meta.get("candidate_score")
+    emotion = meta.get("emotion")
+    intensity = meta.get("intensity")
+    moment_type = meta.get("moment_type")
 
-    if isinstance(meta, dict):
-        candidate_score = meta.get("candidate_score")
-        emotion = meta.get("emotion")
-        intensity = meta.get("intensity")
-        moment_type = meta.get("moment_type")
-
-    if isinstance(meta, dict):
-        source_clip_key = meta.get("source_clip_key")
-        if source_clip_key:
-            clip_meta = load_clip_meta_from_source_clip_key(source_clip_key)
-            if isinstance(clip_meta, dict):
-                if candidate_score is None:
-                    candidate_score = clip_meta.get("candidate_score")
-                if emotion is None:
-                    emotion = clip_meta.get("emotion")
-                if intensity is None:
-                    intensity = clip_meta.get("intensity")
-                if moment_type is None:
-                    moment_type = clip_meta.get("moment_type")
-
-    score_info = sanitize_candidate_score(candidate_score)
+    score_info = sanitize_candidate_score(candidate_score_raw)
     candidate_score = score_info["score"]
     score_valid = score_info["valid"]
     score_reason = score_info["reason"]
@@ -1766,10 +1844,17 @@ def build_item_from_key(key):
     if is_weak_game_name(game_name) and copy_signals.get("game"):
         game_name = normalize_game_name(copy_signals.get("game"))
 
-    return {
+    emotion = normalize_emotion(emotion)
+    intensity = normalize_intensity(intensity)
+    moment_type = normalize_moment_type(moment_type)
+
+    item = {
         "key": key,
         "meta_key": meta_key,
+        "clip_meta_key": clip_meta_key,
         "meta": meta or {},
+        "final_meta_raw": final_meta or {},
+        "clip_meta_raw": clip_meta or {},
         "brief_txt_key": txt_key if brief_raw_text else None,
         "brief_text_raw": brief_raw_text,
         "brief": brief,
@@ -1783,13 +1868,27 @@ def build_item_from_key(key):
         "intensity": intensity,
         "moment_type": moment_type,
         "copy_signals": copy_signals,
+        "fallback_used": bool(clip_meta),
     }
+
+    item["editorial_score"] = compute_editorial_score(item)
+    return item
 
 
 def sort_queue_items(items):
+    def priority_rank(item):
+        key = item["key"]
+        if is_priority_key(key):
+            return 3
+        if is_manual_key(key):
+            return 2
+        return 1
+
     return sorted(
         items,
         key=lambda x: (
+            priority_rank(x),
+            safe_float(x.get("editorial_score"), 0.0),
             safe_float(x.get("candidate_score"), 0.0),
             x["key"],
         ),
@@ -1799,13 +1898,15 @@ def sort_queue_items(items):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: V6_EDITORIAL_INTELLIGENCE")
+    print("MODE B VERSION: V6_1_EDITORIAL_SCORE_FALLBACK")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
     print("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED:", B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED)
     print("B_MIN_CANDIDATE_SCORE:", B_MIN_CANDIDATE_SCORE)
     print("B_BLOCK_WEAK_GENERIC_AUTO:", B_BLOCK_WEAK_GENERIC_AUTO)
     print("B_REQUIRE_EDITORIAL_SIGNALS:", B_REQUIRE_EDITORIAL_SIGNALS)
+    print("B_EDITORIAL_SCORE_MIN:", B_EDITORIAL_SCORE_MIN)
+    print("B_ALLOW_STRONG_HOOK_OVERRIDE:", B_ALLOW_STRONG_HOOK_OVERRIDE)
     print("B_ONLY_KEYS_CONTAIN:", B_ONLY_KEYS_CONTAIN or "(vacío)")
     print("PREFIX_PRIORITY:", PREFIX_PRIORITY)
     print("PREFIX_MANUAL:", PREFIX_MANUAL)
@@ -1882,6 +1983,7 @@ def run_mode_b():
                 key,
                 "| score:", item.get("candidate_score"),
                 "| min:", B_MIN_CANDIDATE_SCORE,
+                "| editorial_score:", item.get("editorial_score"),
             )
             append_skip(
                 state,
@@ -1894,6 +1996,7 @@ def run_mode_b():
                     "candidate_score_raw": item.get("candidate_score_raw"),
                     "score_valid": item.get("score_valid"),
                     "score_reason": item.get("score_reason"),
+                    "editorial_score": item.get("editorial_score"),
                     "game_name": item.get("game_name"),
                 },
             )
@@ -1913,11 +2016,13 @@ def run_mode_b():
                     "candidate_score_raw": item.get("candidate_score_raw"),
                     "score_valid": item.get("score_valid"),
                     "score_reason": item.get("score_reason"),
+                    "editorial_score": item.get("editorial_score"),
                     "game_name": item.get("game_name"),
                     "emotion": item.get("emotion"),
                     "intensity": item.get("intensity"),
                     "moment_type": item.get("moment_type"),
                     "copy_signals": item.get("copy_signals"),
+                    "fallback_used": item.get("fallback_used"),
                 },
             )
             continue
@@ -1946,8 +2051,11 @@ def run_mode_b():
         print("EMOTION:", item.get("emotion"))
         print("INTENSITY:", item.get("intensity"))
         print("MOMENT TYPE:", item.get("moment_type"))
+        print("EDITORIAL SCORE:", item.get("editorial_score"))
+        print("FALLBACK USED:", item.get("fallback_used"))
         print("COPY SIGNALS:", item.get("copy_signals"))
         print("META KEY:", item.get("meta_key"))
+        print("CLIP META KEY:", item.get("clip_meta_key"))
         print("TXT KEY:", item.get("brief_txt_key"))
         print("MISSING PLATFORMS:", missing_platforms)
 
@@ -1981,12 +2089,14 @@ def run_mode_b():
                     "candidate_score_raw": item.get("candidate_score_raw"),
                     "score_valid": item.get("score_valid"),
                     "score_reason": item.get("score_reason"),
+                    "editorial_score": item.get("editorial_score"),
                     "game_name": item.get("game_name"),
                     "emotion": item.get("emotion"),
                     "intensity": item.get("intensity"),
                     "moment_type": item.get("moment_type"),
                     "copy_signals": item.get("copy_signals"),
-                    "editorial_mode": "v6",
+                    "fallback_used": item.get("fallback_used"),
+                    "editorial_mode": "v6.1",
                     "brief_txt_key": item.get("brief_txt_key"),
                     "brief": item.get("brief"),
                     "platform_results": result,

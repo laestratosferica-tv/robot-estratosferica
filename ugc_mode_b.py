@@ -81,7 +81,7 @@ B_ALLOW_LOW_SCORE_FOR_MANUAL = env_bool("B_ALLOW_LOW_SCORE_FOR_MANUAL", True)
 B_BLOCK_WEAK_GENERIC_AUTO = env_bool("B_BLOCK_WEAK_GENERIC_AUTO", True)
 B_REQUIRE_EDITORIAL_SIGNALS = env_bool("B_REQUIRE_EDITORIAL_SIGNALS", True)
 
-# v6.1
+# v6.1+
 B_EDITORIAL_SCORE_MIN = env_float("B_EDITORIAL_SCORE_MIN", 1.25)
 B_ALLOW_STRONG_HOOK_OVERRIDE = env_bool("B_ALLOW_STRONG_HOOK_OVERRIDE", True)
 
@@ -1630,10 +1630,54 @@ def strong_copy_present(item):
     return bool(clean_signal(copy_signals.get("hook")) and clean_signal(copy_signals.get("cta")))
 
 
+def can_override_invalid_score(item):
+    if is_priority_key(item["key"]) or is_manual_key(item["key"]):
+        return True
+
+    if is_weak_game_name(item.get("game_name")):
+        return False
+
+    score_reason = str(item.get("score_reason") or "").strip().lower()
+    if score_reason not in ("nan", "missing", "non_numeric", "inf"):
+        return False
+
+    editorial_score = safe_float(item.get("editorial_score"), 0.0)
+    if editorial_score < 3.5:
+        return False
+
+    copy_signals = item.get("copy_signals") or {}
+    if not clean_signal(copy_signals.get("hook")):
+        return False
+    if not clean_signal(copy_signals.get("cta")):
+        return False
+
+    moment_type = normalize_moment_type(item.get("moment_type"))
+    emotion = normalize_emotion(item.get("emotion"))
+
+    has_editorial_signal = (
+        moment_type in ("clutch", "ace", "final_circle", "goal", "last_second", "highlight")
+        or emotion in ("skill", "clutch", "chaos", "insane", "tense", "hype", "clean")
+    )
+
+    if not has_editorial_signal:
+        return False
+
+    return True
+
+
 def should_skip_for_score(item):
     score = safe_float(item.get("candidate_score"), 0.0)
 
     if allow_low_score(item):
+        return False
+
+    if can_override_invalid_score(item):
+        print(
+            "ALLOW invalid score override:",
+            item["key"],
+            "| score_reason:", item.get("score_reason"),
+            "| editorial_score:", item.get("editorial_score"),
+        )
         return False
 
     if B_ALLOW_STRONG_HOOK_OVERRIDE and strong_copy_present(item):
@@ -1898,7 +1942,7 @@ def sort_queue_items(items):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: V6_1_EDITORIAL_SCORE_FALLBACK")
+    print("MODE B VERSION: V6_1_1_EDITORIAL_SCORE_OVERRIDE")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
     print("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED:", B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED)
@@ -2096,7 +2140,7 @@ def run_mode_b():
                     "moment_type": item.get("moment_type"),
                     "copy_signals": item.get("copy_signals"),
                     "fallback_used": item.get("fallback_used"),
-                    "editorial_mode": "v6.1",
+                    "editorial_mode": "v6.1.1",
                     "brief_txt_key": item.get("brief_txt_key"),
                     "brief": item.get("brief"),
                     "platform_results": result,

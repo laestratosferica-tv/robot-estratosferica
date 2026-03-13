@@ -1,10 +1,9 @@
-# ===== INICIO: ugc_mode_b.py =====
-
 import os
 import re
 import json
 import math
 import tempfile
+import random
 from datetime import datetime, timezone
 
 import requests
@@ -73,10 +72,13 @@ B_ONLY_KEYS_CONTAIN = env_nonempty("B_ONLY_KEYS_CONTAIN", "")
 B_AVOID_SAME_SOURCE_PER_RUN = env_bool("B_AVOID_SAME_SOURCE_PER_RUN", True)
 B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED = env_bool("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED", True)
 
-# nuevo: filtro mínimo de score
 B_MIN_CANDIDATE_SCORE = env_float("B_MIN_CANDIDATE_SCORE", 0.55)
 B_ALLOW_LOW_SCORE_FOR_PRIORITY = env_bool("B_ALLOW_LOW_SCORE_FOR_PRIORITY", True)
 B_ALLOW_LOW_SCORE_FOR_MANUAL = env_bool("B_ALLOW_LOW_SCORE_FOR_MANUAL", True)
+
+# Nuevo: calidad editorial mínima
+B_BLOCK_WEAK_GENERIC_AUTO = env_bool("B_BLOCK_WEAK_GENERIC_AUTO", True)
+B_REQUIRE_EDITORIAL_SIGNALS = env_bool("B_REQUIRE_EDITORIAL_SIGNALS", True)
 
 ENABLE_INSTAGRAM = env_bool("ENABLE_INSTAGRAM", True)
 ENABLE_FACEBOOK = env_bool("ENABLE_FACEBOOK", True)
@@ -205,6 +207,7 @@ def load_state():
     st["published_source_groups"].setdefault("youtube_shorts", [])
 
     st.setdefault("history", [])
+    st.setdefault("skips", [])
 
     if not isinstance(st["published"]["instagram"], list):
         st["published"]["instagram"] = []
@@ -222,6 +225,9 @@ def load_state():
 
     if not isinstance(st["history"], list):
         st["history"] = []
+
+    if not isinstance(st["skips"], list):
+        st["skips"] = []
 
     return st
 
@@ -241,6 +247,7 @@ def save_state(st):
     st["published_source_groups"].setdefault("youtube_shorts", [])
 
     st.setdefault("history", [])
+    st.setdefault("skips", [])
 
     r2().put_object(
         Bucket=BUCKET_NAME,
@@ -284,6 +291,12 @@ def append_history(st, payload):
     st.setdefault("history", [])
     st["history"].append(payload)
     st["history"] = st["history"][-10000:]
+
+
+def append_skip(st, payload):
+    st.setdefault("skips", [])
+    st["skips"].append(payload)
+    st["skips"] = st["skips"][-10000:]
 
 
 def extract_source_group_from_key(key):
@@ -388,7 +401,7 @@ def detect_game_from_key(key):
         if needle in text:
             return label
 
-    return "Esports"
+    return "Generic"
 
 
 def resolve_game_name(key, meta):
@@ -429,10 +442,10 @@ def normalize_game_name(name):
         "warzone": "Warzone",
         "f1": "F1",
         "esports": "Esports",
-        "generic": "Esports",
+        "generic": "Generic",
     }
 
-    return mapping.get(t, str(name))
+    return mapping.get(t, str(name).strip() or "Generic")
 
 
 def diversify_queue(items):
@@ -465,194 +478,197 @@ def diversify_queue(items):
     return diversified
 
 
-# ========= COPY POR JUEGO =========
-
 GAME_HOOKS = {
     "Valorant": [
-        "Esto no fue un round normal.",
-        "Hay rounds que te cambian el mapa entero.",
-        "Esto en Valorant no se regala.",
+        "En Valorant esto no se juega: se sentencia.",
+        "Esto en Valorant no es aim, es lectura criminal.",
+        "Hay rounds que en Valorant te cambian toda la partida.",
     ],
     "CS2": [
-        "Esto fue puro timing y sangre fría.",
-        "Hay clips buenos y luego está esto.",
-        "Si pestañeaste, te lo perdiste.",
+        "En CS2 esto no fue highlight: fue castigo.",
+        "Si entiendes CS2, sabes lo feo que fue esto.",
+        "Esto en CS2 dura segundos, pero deja debate largo.",
     ],
     "League of Legends": [
-        "Hay peleas que cambian una serie entera.",
-        "Esto es LoL en modo cine competitivo.",
-        "Aquí hubo lectura total del momento.",
+        "En LoL una secuencia así no rompe una pelea: rompe la serie.",
+        "League of Legends cuando se pone serio deja esto.",
+        "Aquí no hubo humo: hubo lectura total del mapa.",
     ],
     "Fortnite": [
-        "Esto no se gana normalmente.",
-        "Hay mecánicas buenas y luego está esto.",
-        "Fortnite también sabe dar puro cine.",
+        "Fortnite en zona final no perdona a nadie.",
+        "Esto en Fortnite no se aplaude nomás: se discute.",
+        "Hay clips buenos y luego está esta barbaridad en Fortnite.",
     ],
     "Warzone": [
-        "Esto no era un cierre normal.",
-        "Warzone cuando se pone serio se vuelve caos puro.",
-        "Aquí hubo lectura, control y cero pánico.",
+        "Warzone cuando se pone serio se vuelve puro caos fino.",
+        "Esto en Warzone no es solo aim: es sangre fría.",
+        "Aquí alguien entendió mejor el desastre que todos los demás.",
     ],
     "Apex Legends": [
-        "Esto no fue solo aim.",
-        "Apex en su versión más salvaje.",
-        "Aquí hubo lectura total del caos.",
+        "Apex Legends premia a los que leen el caos de verdad.",
+        "Esto en Apex no fue suerte limpia, hubo cabeza pesada.",
+        "Hay clips que duran 10 segundos y se quedan toda la semana.",
     ],
     "Minecraft": [
-        "Minecraft también puede ser puro cine.",
-        "Esto no tenía ningún sentido y aun así pasó.",
-        "Hay momentos que parecen editados… pero no.",
+        "Minecraft acaba de regalar un momento completamente maldito.",
+        "Sí, Minecraft también puede dejar puro cine raro.",
+        "Esto parece editado, pero justo por eso prende tanto.",
     ],
     "EA Sports FC": [
-        "Hay goles buenos y luego está esta locura.",
-        "Esto en FC te pone a pelear en comentarios.",
-        "No me digas que esto es una jugada normal.",
+        "EA Sports FC no necesitaba otra jugada para pelear comentarios, pero aquí va.",
+        "Esto en FC no entra normal: entra a partir la comunidad.",
+        "Hay goles buenos y luego está esta locura en EA Sports FC.",
     ],
     "F1": [
-        "Esto fue una barbaridad de precisión.",
-        "Hay maniobras limpias y luego está esta locura.",
-        "F1 cuando se pone serio es arte puro.",
+        "En F1 una maniobra así no se intenta si no tienes nervios de acero.",
+        "Esto en F1 fue precisión con presión máxima.",
+        "Hay adelantamientos limpios y luego está esta barbaridad.",
     ],
     "Gran Turismo": [
-        "Esto no es solo velocidad: es precisión pura.",
-        "Hay vueltas rápidas y luego están las que se ganan con cabeza fría.",
         "Gran Turismo cuando se pone serio parece carrera real.",
+        "Aquí no hubo caos: hubo control fino y cabeza fría.",
+        "Esto en Gran Turismo es precisión pura, no adorno.",
     ],
     "Esports": [
         "Esto no fue una jugada cualquiera.",
-        "Hay clips que entretienen y otros que hacen comunidad.",
-        "Esto es exactamente por lo que seguimos viendo esports.",
+        "Hay clips que entretienen y otros que te obligan a comentar.",
+        "Aquí pasó algo que no se puede dejar sin debate.",
+    ],
+    "Generic": [
+        "Esto venía fuerte, pero le falta contexto real.",
     ],
 }
 
 GAME_CONTEXTS = {
     "Valorant": [
-        "En Valorant, una play así te cambia el mood de toda la partida.",
-        "Esto en competitivo no perdona: o lo lees bien o te pasan por encima.",
-        "Una secuencia así es la que separa el clip bueno del clip serio.",
+        "La ronda parece simple hasta que ves la lectura completa.",
+        "Aquí el rival también existe, pero el castigo fue serio.",
+        "Esto separa al que pega tiros del que entiende el momento.",
     ],
     "CS2": [
-        "En CS2, una decisión así vale más que mil highlights vacíos.",
-        "Esto es lo que pasa cuando aim, timing y cabeza se alinean.",
-        "Si entiendes CS2, sabes por qué esta jugada pesa tanto.",
+        "Aim, timing y cabeza alineados en el momento exacto.",
+        "Una decisión así vale más que tres highlights vacíos.",
+        "Si pestañeaste, te perdiste la parte donde destruye el round.",
     ],
     "League of Legends": [
-        "En LoL, una sola secuencia puede romper todo el mapa.",
-        "Este tipo de momento es el que termina marcando series enteras.",
         "Hay plays que no solo ganan la pelea: cambian la narrativa.",
+        "Esto pesa porque en LoL una ventana mínima decide todo.",
+        "Una sola lectura y el mapa queda roto.",
     ],
     "Fortnite": [
-        "En Fortnite, una mecánica así no solo se aplaude: se discute.",
-        "Esto es exactamente el tipo de clip que prende a toda la escena.",
-        "Hay finales buenos, pero esta clase de jugada se queda en la cabeza.",
+        "Esto no se siente como clip random: se siente como sentencia.",
+        "Mecánica, timing y caos bien leído en un mismo momento.",
+        "De esas jugadas que te obligan a discutir si fue locura o regalo.",
     ],
     "Warzone": [
-        "Warzone tiene caos, sí, pero esto ya fue lectura de élite.",
-        "Aquí no fue solo suerte: hubo timing, decisión y sangre fría.",
-        "Este tipo de clip es el que pone a debatir a toda la escena.",
+        "Aquí no fue solo suerte: hubo control del caos.",
+        "El cierre parecía roto hasta que alguien decidió entenderlo mejor.",
+        "Este tipo de momento prende la escena porque nadie se pone de acuerdo.",
     ],
     "Apex Legends": [
-        "Apex recompensa a los que leen el caos mejor que nadie.",
-        "Este tipo de momento define por qué Apex sigue siendo tan adictivo de ver.",
-        "Aquí hubo más que aim: hubo lectura completa de la situación.",
+        "Aquí hubo más que manos: hubo lectura total de la situación.",
+        "Apex premia al que no se ahoga cuando todo explota a la vez.",
+        "Una secuencia así siempre deja pelea entre mérito y fortuna.",
     ],
     "Minecraft": [
-        "Sí, Minecraft también puede dejar momentos absurdamente buenos.",
-        "Esto parece meme, pero justamente por eso funciona tanto.",
-        "Cuando Minecraft regala una escena así, internet hace su trabajo solo.",
+        "Es absurdo, sí, y justo por eso funciona tan bien.",
+        "Internet ve esto y automáticamente se divide en dos.",
+        "Parece meme perfecto, pero igual hay mérito en el timing.",
     ],
     "EA Sports FC": [
-        "En FC, una jugada así te pone a discutir con cualquiera.",
-        "Esto es justo el tipo de acción que parte a la comunidad en dos.",
-        "Hay goles que valen uno. Este vale conversación toda la semana.",
+        "De esas jugadas que convierten un gol en guerra de opiniones.",
+        "Aquí el rival ayuda, pero el castigo también tiene clase.",
+        "Esto vale un gol y una semana entera de comentarios.",
     ],
     "F1": [
-        "En F1, una maniobra así no se regala: se gana.",
-        "Esto es precisión pura con presión máxima.",
-        "Este tipo de adelantamiento explica por qué la escena engancha tanto.",
+        "Esto no sale limpio sin precisión y cero miedo al error.",
+        "Una maniobra así explica por qué esta escena engancha tanto.",
+        "Hay espacio mínimo y aun así decide atacar ahí.",
     ],
     "Gran Turismo": [
-        "En simracing, una diferencia mínima decide todo.",
-        "Aquí no hubo caos: hubo control fino, lectura y paciencia.",
-        "Esto es de esos momentos donde Gran Turismo se siente más carrera que juego.",
+        "En simracing una diferencia mínima decide todo.",
+        "Aquí ganó el control, no el show vacío.",
+        "Esto es de esos momentos donde el juego se siente carrera real.",
     ],
     "Esports": [
         "Este tipo de clip es el que hace que la gente vuelva a comentar.",
-        "Aquí no hubo relleno: solo una jugada que merece conversación.",
-        "Esto es justo el tipo de momento que construye comunidad.",
+        "No hubo relleno: hubo una jugada con conflicto real.",
+        "Esto merece conversación porque no se ve igual dos veces.",
     ],
 }
 
 GAME_CTAS = {
     "Valorant": [
-        "¿Esto fue puro skill o lectura del error rival?",
-        "¿Play de élite o defensa desastrosa?",
-        "¿Tú lo resuelves así o te comen vivo?",
+        "¿Clutch total o el rival se lo regaló demasiado?",
+        "¿Skill puro o error criminal del otro lado?",
+        "¿Tú ves élite o defensa dormida?",
     ],
     "CS2": [
         "¿Esto fue aim puro o IQ de otro planeta?",
-        "¿Skill real o regalo del rival?",
-        "¿Top play o la están inflando demasiado?",
+        "¿Play top o demasiado regalo rival?",
+        "¿La están inflando o sí estuvo criminal?",
     ],
     "League of Legends": [
-        "¿Play histórica o la defensa regaló demasiado?",
-        "¿Esto fue macro, manos o puro caos bien aprovechado?",
-        "¿Tú dirías que aquí se ganó mentalmente?",
+        "¿Esto fue macro, manos o caos bien leído?",
+        "¿Play histórica o ayuda demasiado generosa del rival?",
+        "¿Aquí se gana con cabeza o con puro momentum?",
     ],
     "Fortnite": [
-        "¿Esto fue locura mecánica o puro caos bien aprovechado?",
-        "¿La mejor play o una de esas que se inflan por el replay?",
-        "¿Esto es top o no tanto?",
+        "¿Locura mecánica o caos demasiado favorable?",
+        "¿Top play o replay que la infla más de la cuenta?",
+        "¿Esto es clutch real o puro milagro en zona?",
     ],
     "Warzone": [
-        "¿Esto fue puro control o caos favorable?",
         "¿Skill brutal o suerte con esteroides?",
-        "¿Tú lo llamas clutch o milagro?",
+        "¿Clutch o puro caos favorable?",
+        "¿Esto fue control total o milagro armado?",
     ],
     "Apex Legends": [
-        "¿Esto fue lectura de élite o error del lobby?",
-        "¿Top play o exageración de clip corto?",
-        "¿Apex puro o fortuna demasiado conveniente?",
+        "¿Lectura de élite o error del lobby?",
+        "¿Top play o el contexto la infla demasiado?",
+        "¿Apex puro o fortuna bastante conveniente?",
     ],
     "Minecraft": [
-        "¿Esto fue genialidad o casualidad total?",
-        "¿Play real o clip maldito de internet?",
-        "¿Tú le llamas skill o meme perfecto?",
+        "¿Genialidad real o casualidad perfecta de internet?",
+        "¿Skill o meme bendecido por el universo?",
+        "¿Esto fue cerebro o clip maldito nomás?",
     ],
     "EA Sports FC": [
         "¿Golazo puro o defensa de plastilina?",
-        "¿Esto es top mundial o el rival ayudó demasiado?",
-        "¿Tú a esto le llamas clase o puro abuso del juego?",
+        "¿Clase real o el rival ayudó demasiado?",
+        "¿Esto es top o puro abuso del juego?",
     ],
     "F1": [
         "¿Maniobra legendaria o riesgo innecesario?",
-        "¿Esto es talento puro o el rival dejó la puerta abierta?",
-        "¿Top adelantamiento o mucho hype para tan poco?",
+        "¿Talento puro o puerta abierta del rival?",
+        "¿Mucho hype o adelantamiento serio de verdad?",
     ],
     "Gran Turismo": [
-        "¿Manejo limpio o error del rival?",
-        "¿Precisión total o la están inflando de más?",
-        "¿Esto es clase real o solo se ve bonito?",
+        "¿Manejo limpio o error rival importante?",
+        "¿Clase real o se ve mejor de lo que fue?",
+        "¿Precisión total o hype de replay?",
     ],
     "Esports": [
-        "¿Skill puro o también hubo bastante fortuna?",
+        "¿Skill puro o bastante fortuna?",
         "¿Top play o clip inflado por el contexto?",
-        "¿Esto merece hype real o la están vendiendo demasiado?",
+        "¿Esto merece tanto hype como le están dando?",
     ],
 }
 
+
 GAME_HASHTAGS = {
-    "Valorant": ["#Valorant", "#VCT", "#EsportsLATAM", "#GamingLATAM", "#ValorantLATAM"],
-    "CS2": ["#CS2", "#CounterStrike", "#EsportsLATAM", "#GamingLATAM", "#CS2LATAM"],
-    "League of Legends": ["#LeagueOfLegends", "#LoL", "#EsportsLATAM", "#GamingLATAM", "#LoLLATAM"],
-    "Fortnite": ["#Fortnite", "#FortniteLATAM", "#EsportsLATAM", "#GamingLATAM", "#FortniteClips"],
-    "Warzone": ["#Warzone", "#CallOfDuty", "#EsportsLATAM", "#GamingLATAM", "#WarzoneLATAM"],
-    "Apex Legends": ["#ApexLegends", "#Apex", "#EsportsLATAM", "#GamingLATAM", "#ApexLATAM"],
+    "Valorant": ["#Valorant", "#VCT", "#GamingLATAM", "#ValorantLATAM", "#EsportsLATAM"],
+    "CS2": ["#CS2", "#CounterStrike", "#GamingLATAM", "#CS2LATAM", "#EsportsLATAM"],
+    "League of Legends": ["#LeagueOfLegends", "#LoL", "#GamingLATAM", "#LoLLATAM", "#EsportsLATAM"],
+    "Fortnite": ["#Fortnite", "#FortniteLATAM", "#GamingLATAM", "#FortniteClips", "#EsportsLATAM"],
+    "Warzone": ["#Warzone", "#CallOfDuty", "#GamingLATAM", "#WarzoneLATAM", "#EsportsLATAM"],
+    "Apex Legends": ["#ApexLegends", "#Apex", "#GamingLATAM", "#ApexLATAM", "#EsportsLATAM"],
     "Minecraft": ["#Minecraft", "#MinecraftLATAM", "#GamingLATAM", "#MinecraftClips", "#ReelsGaming"],
-    "EA Sports FC": ["#EASportsFC", "#FC", "#FCLATAM", "#GamingLATAM", "#EsportsLATAM"],
-    "F1": ["#F1", "#SimRacing", "#EsportsLATAM", "#GamingLATAM", "#F1Esports"],
+    "EA Sports FC": ["#EASportsFC", "#FCLATAM", "#GamingLATAM", "#EsportsLATAM", "#FCClips"],
+    "F1": ["#F1", "#SimRacing", "#GamingLATAM", "#F1Esports", "#EsportsLATAM"],
     "Gran Turismo": ["#GranTurismo", "#SimRacing", "#GTLATAM", "#GamingLATAM", "#ReelsGaming"],
     "Esports": ["#EsportsLATAM", "#GamingLATAM", "#Esports", "#Gaming", "#ReelsGaming"],
+    "Generic": ["#GamingLATAM", "#ReelsGaming", "#Gaming"],
 }
 
 
@@ -660,7 +676,6 @@ def pick_from_map(mapping, key_name, fallback="Esports"):
     options = mapping.get(key_name) or (mapping.get(fallback) if fallback is not None else None) or []
     if not options:
         return ""
-    import random
     return random.choice(options)
 
 
@@ -672,6 +687,111 @@ def safe_float(v, default=0.0):
         return f
     except Exception:
         return default
+
+
+def is_weak_text(v):
+    t = str(v or "").strip().lower()
+    return t in ("", "generic", "unknown", "misc", "none", "null", "n/a", "na")
+
+
+def clean_signal(v):
+    return str(v or "").strip()
+
+
+def sanitize_candidate_score(raw_value):
+    if raw_value is None:
+        return {
+            "score": 0.0,
+            "raw": raw_value,
+            "valid": False,
+            "reason": "missing",
+        }
+
+    try:
+        f = float(raw_value)
+        if math.isnan(f):
+            return {"score": 0.0, "raw": raw_value, "valid": False, "reason": "nan"}
+        if math.isinf(f):
+            return {"score": 0.0, "raw": raw_value, "valid": False, "reason": "inf"}
+        return {"score": f, "raw": raw_value, "valid": True, "reason": "ok"}
+    except Exception:
+        return {"score": 0.0, "raw": raw_value, "valid": False, "reason": "non_numeric"}
+
+
+def is_weak_game_name(game_name):
+    t = str(game_name or "").strip().lower()
+    return t in ("", "generic", "gaming", "unknown")
+
+
+def normalize_emotion(emotion):
+    t = str(emotion or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "clutch": "clutch",
+        "panic": "panic",
+        "hype": "hype",
+        "chaos": "chaos",
+        "insane": "insane",
+        "tense": "tense",
+        "calm": "calm",
+        "clean": "clean",
+        "rage": "rage",
+    }
+    return aliases.get(t, t)
+
+
+def normalize_intensity(intensity):
+    t = str(intensity or "").strip().lower()
+    aliases = {
+        "very_high": "high",
+        "high": "high",
+        "mid": "medium",
+        "medium": "medium",
+        "low": "low",
+    }
+    return aliases.get(t, t)
+
+
+def normalize_moment_type(moment_type):
+    t = str(moment_type or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "finalcircle": "final_circle",
+        "final_circle": "final_circle",
+        "zone": "final_circle",
+        "endgame": "final_circle",
+        "clutch": "clutch",
+        "ace": "ace",
+        "goal": "goal",
+        "gol": "goal",
+        "last_second": "last_second",
+        "ultimo_segundo": "last_second",
+        "overtime": "last_second",
+        "1v2": "clutch",
+        "1v3": "clutch",
+        "1v4": "clutch",
+        "1v5": "clutch",
+        "wipe": "ace",
+        "team_wipe": "ace",
+    }
+    return aliases.get(t, t or "highlight")
+
+
+def extract_copy_signals(meta):
+    if not isinstance(meta, dict):
+        return {}
+
+    return {
+        "hook": clean_signal(meta.get("hook") or meta.get("hook_text") or meta.get("title_hook")),
+        "cta": clean_signal(meta.get("cta") or meta.get("cta_text")),
+        "badge": clean_signal(meta.get("badge") or meta.get("badge_text")),
+        "caption_base": clean_signal(meta.get("caption_base") or meta.get("base_caption")),
+        "caption": clean_signal(meta.get("caption")),
+        "shorts_title": clean_signal(meta.get("shorts_title")),
+        "shorts_description": clean_signal(meta.get("shorts_description")),
+        "emotion": clean_signal(meta.get("emotion")),
+        "intensity": clean_signal(meta.get("intensity")),
+        "moment_type": clean_signal(meta.get("moment_type")),
+        "game": clean_signal(meta.get("game") or meta.get("game_name")),
+    }
 
 
 def openai_text(prompt):
@@ -797,6 +917,20 @@ def load_and_parse_sidecar_brief(key):
     return txt_key, raw_txt, parsed
 
 
+def ensure_game_in_caption(caption, game_name):
+    caption = (caption or "").strip()
+    game_name = (game_name or "").strip()
+
+    if not caption:
+        return caption
+    if not game_name:
+        return caption
+    if game_name.lower() in caption.lower():
+        return caption
+
+    return f"{game_name}: {caption}"
+
+
 def build_campaign_caption_from_brief(key, meta, brief):
     game_name = brief.get("game") or resolve_game_name(key, meta) or "gaming"
 
@@ -810,7 +944,8 @@ Debe sonar:
 - emocional
 - nada genérico
 - no robótico
-- si es sponsor, que se sienta premium
+- premium
+- comentable
 
 Contexto:
 Archivo: {os.path.basename(key)}
@@ -832,14 +967,16 @@ Reglas:
 - 1 hook fuerte al inicio
 - 2 a 4 líneas de desarrollo
 - 1 CTA o pregunta final
+- incluir el juego sí o sí
 - 5 a 8 hashtags
 - máximo 120 palabras
 """
+
     try:
         if OPENAI_API_KEY:
             text = openai_text(prompt).strip()
             if text:
-                return text
+                return ensure_game_in_caption(text, game_name)
     except Exception as e:
         print("OpenAI brief caption fallback:", repr(e))
 
@@ -850,9 +987,9 @@ Reglas:
         hashtags.append(f"#{str(game_name).replace(' ', '')}")
     hashtags.extend(["#GamingLATAM", "#EsportsLATAM", "#ReelsGaming"])
 
-    hook = brief.get("hook") or "Esto se ve demasiado brutal para ignorarlo."
-    angle = brief.get("angle") or "pieza premium con potencial de conversación"
-    cta = brief.get("cta") or "¿Tu setup aguanta esto o ya toca upgrade?"
+    hook = brief.get("hook") or f"{game_name} no necesitaba hablar tan fuerte, pero aquí está."
+    angle = brief.get("angle") or "Pieza premium con conflicto real."
+    cta = brief.get("cta") or "¿Esto te gana o te parece demasiado vendible?"
 
     return f"""{hook}
 
@@ -869,7 +1006,7 @@ def build_campaign_shorts_title_from_brief(key, meta, brief):
     prompt = f"""
 Eres editor de Shorts gaming LATAM.
 
-Crea un título corto, fuerte y premium.
+Crea un título corto, fuerte, premium y comentable.
 
 Archivo: {os.path.basename(key)}
 Juego: {game_name}
@@ -881,7 +1018,8 @@ Intensity: {brief.get('intensity') or ''}
 
 Reglas:
 - máximo 80 caracteres antes de #Shorts
-- devuelve solo el título final
+- incluir el juego si ayuda
+- devolver solo el título final
 """
     try:
         if OPENAI_API_KEY:
@@ -893,7 +1031,7 @@ Reglas:
     except Exception as e:
         print("OpenAI brief shorts title fallback:", repr(e))
 
-    base = brief.get("hook") or f"{game_name} se ve RIDÍCULO"
+    base = brief.get("hook") or f"{game_name}: demasiado fuerte para ignorarlo"
     if "#Shorts" not in base:
         base = f"{base} #Shorts"
     return base[:100]
@@ -916,6 +1054,7 @@ Notes: {brief.get('notes') or ''}
 Reglas:
 - 2 a 4 líneas
 - tono hype/premium
+- debe sonar publicable, gamer y específico
 - terminar con hashtags
 - devuelve solo el texto final
 """
@@ -934,8 +1073,8 @@ Reglas:
         hashtags.append(f"#{str(game_name).replace(' ', '')}")
     hashtags.extend(["#GamingLATAM", "#EsportsLATAM", "#ReelsGaming"])
 
-    angle = brief.get("angle") or "pieza premium gaming"
-    cta = brief.get("cta") or "¿La montarías en tu setup?"
+    angle = brief.get("angle") or "Pieza premium gaming"
+    cta = brief.get("cta") or "¿La comprarías o puro humo?"
 
     return f"""{angle}
 
@@ -944,78 +1083,151 @@ Reglas:
 {" ".join(hashtags[:7])}""".strip()
 
 
-def build_caption_from_meta(key, meta, item):
-    game_name = resolve_game_name(key, meta)
+def build_caption_from_meta_v6(key, meta, item):
+    game_name = item.get("game_name") or resolve_game_name(key, meta)
     score = safe_float(item.get("candidate_score"), 0.0)
-    emotion = str(item.get("emotion") or "").strip().lower()
-    intensity = str(item.get("intensity") or "").strip().lower()
-    moment_type = str(item.get("moment_type") or "").strip().lower()
+    emotion = normalize_emotion(item.get("emotion"))
+    intensity = normalize_intensity(item.get("intensity"))
+    moment_type = normalize_moment_type(item.get("moment_type"))
 
-    # si hay OpenAI, mejoramos mucho el tono
+    copy_signals = item.get("copy_signals") or {}
+    hook_hint = clean_signal(copy_signals.get("hook"))
+    cta_hint = clean_signal(copy_signals.get("cta"))
+    badge_hint = clean_signal(copy_signals.get("badge"))
+    caption_base = clean_signal(copy_signals.get("caption_base"))
+
     if OPENAI_API_KEY:
         prompt = f"""
-Eres editor gamer LATAM de Estratosférica TV.
+Eres copywriter viral de gaming LATAM.
+Tu trabajo es hacer captions que generen comentarios en 3 segundos.
 
-Escribe caption para reel corto.
-No sonar genérico.
-No sonar corporativo.
-No sonar como bot.
-
-Datos:
+Contexto del clip:
 Juego: {game_name}
-Score: {score}
 Emotion: {emotion}
 Intensity: {intensity}
 Moment type: {moment_type}
+Candidate score: {score}
+Hook sugerido por packer: {hook_hint}
+CTA sugerido por packer: {cta_hint}
+Badge sugerido por packer: {badge_hint}
+Caption base: {caption_base}
 Archivo: {os.path.basename(key)}
 
-Reglas:
-- 1 hook fuerte
-- 1 o 2 líneas de contexto
-- 1 pregunta final
-- 4 a 6 hashtags
-- máximo 85 palabras
-- respetar el lenguaje del juego
-- si es Gran Turismo o F1, sonar a precisión/simracing
-- si es Minecraft, sonar más internet/caos/momento absurdo
-- si es shooter, sonar más clutch/lectura/skill
+Reglas editoriales:
+- sonar gamer LATAM
+- sonar específico
+- sonar agresivo y comentable
+- cero tono corporativo
+- cero copy genérico de esports
+- meter conflicto
+- meter juicio o debate
+- incluir el nombre del juego sí o sí
+- si es shooter: clutch, lectura, lobby regalado vs mérito
+- si es EA Sports FC: golazo, defensa de plastilina, clase vs abuso
+- si es F1 o Gran Turismo: precisión, sangre fría, manejo, riesgo
+- si es Minecraft: caos, internet, momento absurdo pero real
+
+Formato:
+- línea 1: afirmación/hook fuerte
+- línea 2: contexto o lectura del momento
+- línea 3: pregunta final polarizante
+- línea 4: 4 a 6 hashtags
+
+Prioriza:
+- hook de packer si viene fuerte
+- CTA de packer si ya está bueno
+- controversia
+- skill vs suerte
+- clutch
+- caos
+- final circle
+- ace
+- golazo
+- último segundo
+
 Devuelve solo el caption final.
+Máximo 80 palabras.
 """
         try:
             text = openai_text(prompt).strip()
             if text:
-                return text
+                return ensure_game_in_caption(text, game_name)
         except Exception as e:
-            print("OpenAI caption fallback:", repr(e))
+            print("OpenAI caption v6 fallback:", repr(e))
 
-    hook = pick_from_map(GAME_HOOKS, game_name)
-    context = pick_from_map(GAME_CONTEXTS, game_name)
-    cta = pick_from_map(GAME_CTAS, game_name)
-    hashtags = " ".join(GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"]))
+    hashtags = " ".join(GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"])[:5])
 
-    if score >= 0.82:
-        context = context.replace(".", " de verdad.", 1) if "." in context else context
+    if hook_hint and len(hook_hint) <= 95:
+        line1 = ensure_game_in_caption(hook_hint, game_name)
+    else:
+        if moment_type == "clutch":
+            line1 = f"En {game_name} esto no se juega: se sentencia."
+        elif moment_type == "final_circle":
+            line1 = f"{game_name} en zona final separa a los buenos de los serios."
+        elif moment_type == "ace":
+            line1 = f"En {game_name} esto ya no es highlight: es abuso."
+        elif moment_type == "goal" and game_name == "EA Sports FC":
+            line1 = "EA Sports FC no perdona una locura así."
+        elif moment_type == "last_second":
+            line1 = f"En {game_name} un segundo basta para romper todo."
+        elif emotion == "chaos":
+            line1 = f"{game_name} cuando entra en caos real deja cosas así."
+        elif emotion == "clutch":
+            line1 = f"En {game_name} esto fue sangre fría de verdad."
+        else:
+            line1 = pick_from_map(GAME_HOOKS, game_name)
 
-    if emotion == "clutch" and game_name in ("CS2", "Valorant", "Apex Legends", "Fortnite", "Warzone"):
-        cta = "¿Esto fue clutch puro o lectura total del rival?"
-    elif intensity == "low" and game_name == "Gran Turismo":
-        cta = "¿Limpieza total o lo estás viendo demasiado bonito?"
-    elif intensity == "low" and game_name == "Minecraft":
-        cta = "¿Esto fue skill real o puro momento maldito?"
+    if caption_base and len(caption_base) <= 120:
+        line2 = caption_base
+    else:
+        if moment_type == "clutch":
+            line2 = "Lo hizo ver fácil, pero aquí hubo lectura, manos y cero pánico."
+        elif moment_type == "final_circle":
+            line2 = "Aquí no ganó el más loco: ganó el que entendió el caos."
+        elif moment_type == "ace":
+            line2 = "Una secuencia así no solo rompe la ronda: rompe comentarios."
+        elif moment_type == "goal" and game_name == "EA Sports FC":
+            line2 = "Este gol no entra normal: entra para pelear en comentarios."
+        elif moment_type == "last_second":
+            line2 = "Parecía perdido hasta que alguien decidió aparecer de verdad."
+        elif intensity == "low" and game_name in ("Gran Turismo", "F1"):
+            line2 = "Aquí no hubo humo: hubo precisión, control y cabeza fría."
+        elif game_name == "Minecraft":
+            line2 = "Parece absurdo, sí, y justo por eso internet se divide en dos."
+        else:
+            line2 = pick_from_map(GAME_CONTEXTS, game_name)
 
-    return f"""{hook}
+    if cta_hint and len(cta_hint) <= 100:
+        line3 = f"🔥 {cta_hint}"
+    else:
+        if moment_type == "clutch":
+            line3 = "🔥 ¿Clutch total o el rival regaló demasiado?"
+        elif moment_type == "final_circle":
+            line3 = "🔥 ¿Skill puro o círculo demasiado favorable?"
+        elif moment_type == "ace":
+            line3 = "🔥 ¿Ace limpio o defensa completamente dormida?"
+        elif moment_type == "goal" and game_name == "EA Sports FC":
+            line3 = "🔥 ¿Golazo total o defensa de plastilina?"
+        elif moment_type == "last_second":
+            line3 = "🔥 ¿Mérito real o milagro de último segundo?"
+        elif emotion == "chaos":
+            line3 = "🔥 ¿Esto fue lectura brutal o pura suerte premium?"
+        else:
+            line3 = f"🔥 {pick_from_map(GAME_CTAS, game_name)}"
 
-{context}
-
-🔥 {cta}
-
-{hashtags}""".strip()
+    text = f"{line1}\n\n{line2}\n\n{line3}\n\n{hashtags}".strip()
+    return ensure_game_in_caption(text, game_name)
 
 
-def build_shorts_title_from_meta(key, meta, item):
-    game_name = resolve_game_name(key, meta)
+def build_shorts_title_from_meta_v6(key, meta, item):
+    game_name = item.get("game_name") or resolve_game_name(key, meta)
     score = safe_float(item.get("candidate_score"), 0.0)
-    moment_type = str(item.get("moment_type") or "").strip().lower()
+    emotion = normalize_emotion(item.get("emotion"))
+    moment_type = normalize_moment_type(item.get("moment_type"))
+
+    copy_signals = item.get("copy_signals") or {}
+    hook_hint = clean_signal(copy_signals.get("hook"))
+    cta_hint = clean_signal(copy_signals.get("cta"))
 
     if OPENAI_API_KEY:
         prompt = f"""
@@ -1023,13 +1235,18 @@ Crea título para YouTube Shorts gamer LATAM.
 
 Juego: {game_name}
 Score: {score}
+Emotion: {emotion}
 Moment type: {moment_type}
+Hook sugerido: {hook_hint}
+CTA sugerido: {cta_hint}
 Archivo: {os.path.basename(key)}
 
 Reglas:
 - corto
 - potente
 - no genérico
+- comentable
+- idealmente con conflicto
 - máximo 75 caracteres antes de #Shorts
 - devolver solo el título
 """
@@ -1040,27 +1257,40 @@ Reglas:
                     text = f"{text} #Shorts"
                 return text[:100]
         except Exception as e:
-            print("OpenAI shorts title fallback:", repr(e))
+            print("OpenAI shorts title v6 fallback:", repr(e))
 
-    if game_name == "Gran Turismo":
-        title = "Gran Turismo en modo precisión total"
+    if hook_hint and len(hook_hint) < 70:
+        title = hook_hint
+    elif moment_type == "clutch":
+        title = f"{game_name}: clutch real o regalo total?"
+    elif moment_type == "final_circle":
+        title = f"{game_name}: zona final o puro milagro?"
+    elif moment_type == "goal" and game_name == "EA Sports FC":
+        title = "EA Sports FC: golazo o defensa de plastilina?"
+    elif moment_type == "ace":
+        title = f"{game_name}: ace limpio o rival dormido?"
+    elif game_name == "Gran Turismo":
+        title = "Gran Turismo: precisión real o hype?"
     elif game_name == "Minecraft":
-        title = "Minecraft acaba de regalar puro cine"
-    elif game_name == "EA Sports FC":
-        title = "Esto en FC te parte la comunidad"
+        title = "Minecraft: skill o clip maldito?"
     else:
-        title = pick_from_map(GAME_HOOKS, game_name)
+        title = f"{game_name}: skill real o mucho regalo?"
 
     if "#Shorts" not in title:
         title = f"{title} #Shorts"
     return title[:100]
 
 
-def build_shorts_description_from_meta(key, meta, item):
-    game_name = resolve_game_name(key, meta)
+def build_shorts_description_from_meta_v6(key, meta, item):
+    game_name = item.get("game_name") or resolve_game_name(key, meta)
     score = safe_float(item.get("candidate_score"), 0.0)
-    emotion = str(item.get("emotion") or "").strip().lower()
-    intensity = str(item.get("intensity") or "").strip().lower()
+    emotion = normalize_emotion(item.get("emotion"))
+    intensity = normalize_intensity(item.get("intensity"))
+    moment_type = normalize_moment_type(item.get("moment_type"))
+
+    copy_signals = item.get("copy_signals") or {}
+    cta_hint = clean_signal(copy_signals.get("cta"))
+    caption_base = clean_signal(copy_signals.get("caption_base"))
 
     if OPENAI_API_KEY:
         prompt = f"""
@@ -1070,12 +1300,16 @@ Juego: {game_name}
 Score: {score}
 Emotion: {emotion}
 Intensity: {intensity}
+Moment type: {moment_type}
+CTA sugerido: {cta_hint}
+Caption base: {caption_base}
 Archivo: {os.path.basename(key)}
 
 Reglas:
 - 2 líneas + hashtags
 - no sonar genérico
 - respetar el juego
+- sonar gamer, específico y debatible
 - máximo 350 caracteres
 - devolver solo el texto
 """
@@ -1084,15 +1318,15 @@ Reglas:
             if text:
                 return text[:5000]
         except Exception as e:
-            print("OpenAI shorts description fallback:", repr(e))
+            print("OpenAI shorts description v6 fallback:", repr(e))
 
-    context = pick_from_map(GAME_CONTEXTS, game_name)
-    cta = pick_from_map(GAME_CTAS, game_name)
-    hashtags = " ".join(GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"]))
+    line1 = caption_base or pick_from_map(GAME_CONTEXTS, game_name)
+    line2 = cta_hint or pick_from_map(GAME_CTAS, game_name)
+    hashtags = " ".join(GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"])[:5])
 
-    return f"""{context}
+    return f"""{line1}
 
-{cta}
+{line2}
 
 {hashtags}""".strip()
 
@@ -1324,6 +1558,41 @@ def should_skip_for_score(item):
     return score < B_MIN_CANDIDATE_SCORE
 
 
+def should_skip_for_editorial_quality(item):
+    key = item["key"]
+
+    if is_priority_key(key) or is_manual_key(key):
+        return False, None
+
+    if not item.get("score_valid"):
+        return True, f"invalid_score:{item.get('score_reason')}"
+
+    if B_BLOCK_WEAK_GENERIC_AUTO and is_weak_game_name(item.get("game_name")):
+        return True, "weak_game"
+
+    if B_REQUIRE_EDITORIAL_SIGNALS:
+        signals = 0
+        if not is_weak_text(item.get("emotion")):
+            signals += 1
+        if not is_weak_text(item.get("intensity")):
+            signals += 1
+        if not is_weak_text(item.get("moment_type")):
+            signals += 1
+
+        copy_signals = item.get("copy_signals") or {}
+        if clean_signal(copy_signals.get("hook")):
+            signals += 1
+        if clean_signal(copy_signals.get("cta")):
+            signals += 1
+        if clean_signal(copy_signals.get("caption_base")):
+            signals += 1
+
+        if signals == 0:
+            return True, "weak_metadata"
+
+    return False, None
+
+
 def publish(item, target_platforms=None):
     if target_platforms is None:
         target_platforms = ["instagram", "facebook", "youtube_shorts"]
@@ -1337,10 +1606,12 @@ def publish(item, target_platforms=None):
     shorts_title = None
     shorts_description = None
 
+    copy_signals = item.get("copy_signals") or {}
+
     if isinstance(meta, dict):
-        caption = meta.get("caption")
-        shorts_title = meta.get("shorts_title")
-        shorts_description = meta.get("shorts_description")
+        caption = clean_signal(meta.get("caption")) or clean_signal(copy_signals.get("caption"))
+        shorts_title = clean_signal(meta.get("shorts_title")) or clean_signal(copy_signals.get("shorts_title"))
+        shorts_description = clean_signal(meta.get("shorts_description")) or clean_signal(copy_signals.get("shorts_description"))
 
     if brief:
         print("BRIEF TXT DETECTADO -> modo campaign/priority")
@@ -1352,11 +1623,13 @@ def publish(item, target_platforms=None):
             shorts_description = build_campaign_shorts_description_from_brief(key, meta, brief)
 
     if not caption:
-        caption = build_caption_from_meta(key, meta, item)
+        caption = build_caption_from_meta_v6(key, meta, item)
     if not shorts_title:
-        shorts_title = build_shorts_title_from_meta(key, meta, item)
+        shorts_title = build_shorts_title_from_meta_v6(key, meta, item)
     if not shorts_description:
-        shorts_description = build_shorts_description_from_meta(key, meta, item)
+        shorts_description = build_shorts_description_from_meta_v6(key, meta, item)
+
+    caption = ensure_game_in_caption(caption, item.get("game_name"))
 
     print("PUBLICANDO VIDEO:")
     print("KEY:", key)
@@ -1365,6 +1638,7 @@ def publish(item, target_platforms=None):
     print("TARGET_PLATFORMS:", target_platforms)
     print("TXT KEY:", item.get("brief_txt_key"))
     print("BRIEF PARSED:", item.get("brief"))
+    print("COPY SIGNALS:", item.get("copy_signals"))
     print("CAPTION:\n", caption)
     print("SHORTS TITLE:", shorts_title)
 
@@ -1471,10 +1745,26 @@ def build_item_from_key(key):
                 if moment_type is None:
                     moment_type = clip_meta.get("moment_type")
 
-    candidate_score = safe_float(candidate_score, 0.0)
+    score_info = sanitize_candidate_score(candidate_score)
+    candidate_score = score_info["score"]
+    score_valid = score_info["valid"]
+    score_reason = score_info["reason"]
 
     if is_priority_key(key) and brief:
         candidate_score = max(candidate_score, 999.0)
+        score_valid = True
+        score_reason = "priority_override"
+
+    copy_signals = extract_copy_signals(meta)
+
+    if is_weak_text(emotion):
+        emotion = copy_signals.get("emotion") or emotion
+    if is_weak_text(intensity):
+        intensity = copy_signals.get("intensity") or intensity
+    if is_weak_text(moment_type):
+        moment_type = copy_signals.get("moment_type") or moment_type
+    if is_weak_game_name(game_name) and copy_signals.get("game"):
+        game_name = normalize_game_name(copy_signals.get("game"))
 
     return {
         "key": key,
@@ -1486,9 +1776,13 @@ def build_item_from_key(key):
         "source_group": source_group,
         "game_name": game_name,
         "candidate_score": candidate_score,
+        "candidate_score_raw": score_info["raw"],
+        "score_valid": score_valid,
+        "score_reason": score_reason,
         "emotion": emotion,
         "intensity": intensity,
         "moment_type": moment_type,
+        "copy_signals": copy_signals,
     }
 
 
@@ -1505,11 +1799,13 @@ def sort_queue_items(items):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: META_AWARE_SOURCE_GROUP_V5_GAME_AWARE")
+    print("MODE B VERSION: V6_EDITORIAL_INTELLIGENCE")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
     print("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED:", B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED)
     print("B_MIN_CANDIDATE_SCORE:", B_MIN_CANDIDATE_SCORE)
+    print("B_BLOCK_WEAK_GENERIC_AUTO:", B_BLOCK_WEAK_GENERIC_AUTO)
+    print("B_REQUIRE_EDITORIAL_SIGNALS:", B_REQUIRE_EDITORIAL_SIGNALS)
     print("B_ONLY_KEYS_CONTAIN:", B_ONLY_KEYS_CONTAIN or "(vacío)")
     print("PREFIX_PRIORITY:", PREFIX_PRIORITY)
     print("PREFIX_MANUAL:", PREFIX_MANUAL)
@@ -1569,6 +1865,15 @@ def run_mode_b():
 
         if B_AVOID_SAME_SOURCE_PER_RUN and source_group in used_source_groups_this_run:
             print("SKIP same source group in this run:", source_group, "|", key)
+            append_skip(
+                state,
+                {
+                    "skipped_at": iso_now_full(),
+                    "key": key,
+                    "source_group": source_group,
+                    "reason": "same_source_group_this_run",
+                },
+            )
             continue
 
         if should_skip_for_score(item):
@@ -1578,20 +1883,70 @@ def run_mode_b():
                 "| score:", item.get("candidate_score"),
                 "| min:", B_MIN_CANDIDATE_SCORE,
             )
+            append_skip(
+                state,
+                {
+                    "skipped_at": iso_now_full(),
+                    "key": key,
+                    "source_group": source_group,
+                    "reason": "low_candidate_score",
+                    "candidate_score": item.get("candidate_score"),
+                    "candidate_score_raw": item.get("candidate_score_raw"),
+                    "score_valid": item.get("score_valid"),
+                    "score_reason": item.get("score_reason"),
+                    "game_name": item.get("game_name"),
+                },
+            )
+            continue
+
+        skip_editorial, editorial_reason = should_skip_for_editorial_quality(item)
+        if skip_editorial:
+            print("SKIP editorial quality:", key, "|", editorial_reason)
+            append_skip(
+                state,
+                {
+                    "skipped_at": iso_now_full(),
+                    "key": key,
+                    "source_group": source_group,
+                    "reason": editorial_reason,
+                    "candidate_score": item.get("candidate_score"),
+                    "candidate_score_raw": item.get("candidate_score_raw"),
+                    "score_valid": item.get("score_valid"),
+                    "score_reason": item.get("score_reason"),
+                    "game_name": item.get("game_name"),
+                    "emotion": item.get("emotion"),
+                    "intensity": item.get("intensity"),
+                    "moment_type": item.get("moment_type"),
+                    "copy_signals": item.get("copy_signals"),
+                },
+            )
             continue
 
         process, missing_platforms = should_process_item(state, item)
         if not process:
             print("SKIP already published / blocked by source group:", key)
+            append_skip(
+                state,
+                {
+                    "skipped_at": iso_now_full(),
+                    "key": key,
+                    "source_group": source_group,
+                    "reason": "already_published_or_source_group_blocked",
+                },
+            )
             continue
 
         print("Procesando:", key)
         print("SOURCE GROUP:", source_group)
         print("GAME DETECTED:", item.get("game_name"))
         print("CANDIDATE SCORE:", item.get("candidate_score"))
+        print("CANDIDATE SCORE RAW:", item.get("candidate_score_raw"))
+        print("SCORE VALID:", item.get("score_valid"))
+        print("SCORE REASON:", item.get("score_reason"))
         print("EMOTION:", item.get("emotion"))
         print("INTENSITY:", item.get("intensity"))
         print("MOMENT TYPE:", item.get("moment_type"))
+        print("COPY SIGNALS:", item.get("copy_signals"))
         print("META KEY:", item.get("meta_key"))
         print("TXT KEY:", item.get("brief_txt_key"))
         print("MISSING PLATFORMS:", missing_platforms)
@@ -1623,10 +1978,15 @@ def run_mode_b():
                     "key": key,
                     "source_group": source_group,
                     "candidate_score": item.get("candidate_score"),
+                    "candidate_score_raw": item.get("candidate_score_raw"),
+                    "score_valid": item.get("score_valid"),
+                    "score_reason": item.get("score_reason"),
                     "game_name": item.get("game_name"),
                     "emotion": item.get("emotion"),
                     "intensity": item.get("intensity"),
                     "moment_type": item.get("moment_type"),
+                    "copy_signals": item.get("copy_signals"),
+                    "editorial_mode": "v6",
                     "brief_txt_key": item.get("brief_txt_key"),
                     "brief": item.get("brief"),
                     "platform_results": result,
@@ -1641,6 +2001,16 @@ def run_mode_b():
 
         except Exception as e:
             print("ERROR publicando:", repr(e))
+            append_skip(
+                state,
+                {
+                    "skipped_at": iso_now_full(),
+                    "key": key,
+                    "source_group": source_group,
+                    "reason": "publish_exception",
+                    "error": str(e),
+                },
+            )
 
     save_state(state)
 
@@ -1650,5 +2020,3 @@ def run_mode_b():
 
 if __name__ == "__main__":
     run_mode_b()
-
-# ===== FIN: ugc_mode_b.py =====

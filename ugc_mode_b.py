@@ -70,10 +70,12 @@ META_FINAL_PREFIX = (
 STATE_KEY = env_nonempty("B_STATE_KEY", "ugc/state/mode_b_state.json")
 
 B_MAX_PUBLISH_PER_RUN = env_int("B_MAX_PUBLISH_PER_RUN", 2)
+B_MAX_PER_SOURCE_GROUP_PER_RUN = env_int("B_MAX_PER_SOURCE_GROUP_PER_RUN", 2)
+
 B_ONLY_KEYS_CONTAIN = env_nonempty("B_ONLY_KEYS_CONTAIN", "")
 B_AVOID_SAME_SOURCE_PER_RUN = env_bool("B_AVOID_SAME_SOURCE_PER_RUN", True)
 
-# AJUSTE NUEVO: por defecto FALSE
+# Por defecto FALSE
 B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED = env_bool("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED", False)
 
 B_MIN_CANDIDATE_SCORE = env_float("B_MIN_CANDIDATE_SCORE", 0.55)
@@ -668,13 +670,6 @@ GENERIC_HOOKS = [
 ]
 
 
-def pick_from_map(mapping, key_name, fallback="Esports"):
-    options = mapping.get(key_name) or (mapping.get(fallback) if fallback is not None else None) or []
-    if not options:
-        return ""
-    return random.choice(options)
-
-
 def pick_game_hook(game_name, emotion=None, moment_type=None):
     g = str(game_name or "").strip().lower()
     emotion = normalize_emotion(emotion)
@@ -1054,22 +1049,6 @@ def ensure_game_in_caption(caption, game_name):
     return f"{game_name}: {caption}"
 
 
-def prefix_game_if_needed(text, game_name):
-    text = (text or "").strip()
-    game_name = (game_name or "").strip()
-
-    if not text or not game_name:
-        return text
-
-    normalized = text.lower()
-    if normalized.startswith(f"{game_name.lower()}:"):
-        return text
-    if game_name.lower() in normalized[: len(game_name) + 20]:
-        return text
-
-    return f"{game_name}: {text}"
-
-
 def build_campaign_caption_from_brief(key, meta, brief):
     game_name = brief.get("game") or resolve_game_name(key, meta) or "gaming"
 
@@ -1226,7 +1205,6 @@ def build_caption_from_meta_v62(key, meta, item):
     moment_type = normalize_moment_type(item.get("moment_type"))
 
     copy_signals = item.get("copy_signals") or {}
-    hook_hint = clean_signal(copy_signals.get("hook"))
     cta_hint = clean_signal(copy_signals.get("cta"))
     caption_base = clean_signal(copy_signals.get("caption_base"))
 
@@ -1242,7 +1220,6 @@ Intensity: {intensity}
 Moment type: {moment_type}
 Candidate score: {score}
 Editorial score: {item.get("editorial_score")}
-Hook sugerido por H: {hook_hint}
 CTA sugerido por H: {cta_hint}
 Caption base: {caption_base}
 Archivo: {os.path.basename(key)}
@@ -1252,7 +1229,7 @@ Reglas:
 - sonar específico y confrontativo
 - cero tono corporativo
 - incluir el nombre del juego sí o sí
-- hook más agresivo que en v6.1
+- hook agresivo
 - línea 2 con análisis o tensión
 - línea 3 pregunta polarizante
 - máximo 75 palabras
@@ -1505,6 +1482,7 @@ def youtube_publish(video_url, title, description):
     from google.oauth2.credentials import Credentials
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
+    from googleapiclient.errors import HttpError
 
     with tempfile.TemporaryDirectory() as td:
         local_path = os.path.join(td, "short.mp4")
@@ -1554,10 +1532,16 @@ def youtube_publish(video_url, title, description):
         )
 
         response = None
-        while response is None:
-            status, response = request.next_chunk()
-            if status:
-                print(f"YT upload progress: {int(status.progress() * 100)}%")
+        try:
+            while response is None:
+                status, response = request.next_chunk()
+                if status:
+                    print(f"YT upload progress: {int(status.progress() * 100)}%")
+        except HttpError as e:
+            msg = str(e)
+            if "uploadLimitExceeded" in msg or "exceeded the number of videos" in msg:
+                raise RuntimeError("YOUTUBE_UPLOAD_LIMIT_EXCEEDED")
+            raise
 
         if "id" not in response:
             raise RuntimeError(f"YouTube upload error: {response}")
@@ -1782,8 +1766,13 @@ def publish(item, target_platforms=None):
             print("YT OK:", yt)
             results["youtube_shorts"] = {"ok": True, "response": yt}
         except Exception as e:
-            print("YT ERROR:", repr(e))
-            results["youtube_shorts"] = {"ok": False, "error": str(e)}
+            msg = str(e)
+            if "YOUTUBE_UPLOAD_LIMIT_EXCEEDED" in msg:
+                print("YT SKIP CONTROLADO: upload limit exceeded")
+                results["youtube_shorts"] = {"ok": False, "error": "upload_limit_exceeded", "controlled": True}
+            else:
+                print("YT ERROR:", repr(e))
+                results["youtube_shorts"] = {"ok": False, "error": str(e)}
 
     print("Publicado OK\n")
     return results
@@ -1907,8 +1896,9 @@ def sort_queue_items(items):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: V6_2_GAME_COPY_ENGINE_DEFAULT_FALSE")
+    print("MODE B VERSION: V6_2_1_YT_LIMIT_AND_SOURCE_GROUP")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
+    print("B_MAX_PER_SOURCE_GROUP_PER_RUN:", B_MAX_PER_SOURCE_GROUP_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
     print("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED:", B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED)
     print("B_MIN_CANDIDATE_SCORE:", B_MIN_CANDIDATE_SCORE)
@@ -1964,7 +1954,7 @@ def run_mode_b():
     print("Queue final diversificada:", len(queue_items))
 
     count = 0
-    used_source_groups_this_run = set()
+    used_source_groups_this_run = {}
 
     for item in queue_items:
         if count >= B_MAX_PUBLISH_PER_RUN:
@@ -1973,18 +1963,20 @@ def run_mode_b():
         key = item["key"]
         source_group = item.get("source_group") or "unknown"
 
-        if B_AVOID_SAME_SOURCE_PER_RUN and source_group in used_source_groups_this_run:
-            print("SKIP same source group in this run:", source_group, "|", key)
-            append_skip(
-                state,
-                {
-                    "skipped_at": iso_now_full(),
-                    "key": key,
-                    "source_group": source_group,
-                    "reason": "same_source_group_this_run",
-                },
-            )
-            continue
+        if B_AVOID_SAME_SOURCE_PER_RUN:
+            current_count = used_source_groups_this_run.get(source_group, 0)
+            if current_count >= B_MAX_PER_SOURCE_GROUP_PER_RUN:
+                print("SKIP max source group per run:", source_group, "|", key)
+                append_skip(
+                    state,
+                    {
+                        "skipped_at": iso_now_full(),
+                        "key": key,
+                        "source_group": source_group,
+                        "reason": "max_source_group_per_run",
+                    },
+                )
+                continue
 
         if should_skip_for_score(item):
             print(
@@ -2105,7 +2097,7 @@ def run_mode_b():
                     "moment_type": item.get("moment_type"),
                     "copy_signals": item.get("copy_signals"),
                     "fallback_used": item.get("fallback_used"),
-                    "editorial_mode": "v6.2",
+                    "editorial_mode": "v6.2.1",
                     "brief_txt_key": item.get("brief_txt_key"),
                     "brief": item.get("brief"),
                     "platform_results": result,
@@ -2115,7 +2107,7 @@ def run_mode_b():
             save_state(state)
 
             if success_any:
-                used_source_groups_this_run.add(source_group)
+                used_source_groups_this_run[source_group] = used_source_groups_this_run.get(source_group, 0) + 1
                 count += 1
 
         except Exception as e:

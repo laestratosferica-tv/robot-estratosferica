@@ -72,6 +72,8 @@ STATE_KEY = env_nonempty("B_STATE_KEY", "ugc/state/mode_b_state.json")
 B_MAX_PUBLISH_PER_RUN = env_int("B_MAX_PUBLISH_PER_RUN", 2)
 B_ONLY_KEYS_CONTAIN = env_nonempty("B_ONLY_KEYS_CONTAIN", "")
 B_AVOID_SAME_SOURCE_PER_RUN = env_bool("B_AVOID_SAME_SOURCE_PER_RUN", True)
+
+# AJUSTE NUEVO: por defecto FALSE
 B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED = env_bool("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED", False)
 
 B_MIN_CANDIDATE_SCORE = env_float("B_MIN_CANDIDATE_SCORE", 0.55)
@@ -1052,6 +1054,22 @@ def ensure_game_in_caption(caption, game_name):
     return f"{game_name}: {caption}"
 
 
+def prefix_game_if_needed(text, game_name):
+    text = (text or "").strip()
+    game_name = (game_name or "").strip()
+
+    if not text or not game_name:
+        return text
+
+    normalized = text.lower()
+    if normalized.startswith(f"{game_name.lower()}:"):
+        return text
+    if game_name.lower() in normalized[: len(game_name) + 20]:
+        return text
+
+    return f"{game_name}: {text}"
+
+
 def build_campaign_caption_from_brief(key, meta, brief):
     game_name = brief.get("game") or resolve_game_name(key, meta) or "gaming"
 
@@ -1233,7 +1251,7 @@ Reglas:
 - sonar gamer LATAM
 - sonar específico y confrontativo
 - cero tono corporativo
-- incluir el juego sí o sí
+- incluir el nombre del juego sí o sí
 - hook más agresivo que en v6.1
 - línea 2 con análisis o tensión
 - línea 3 pregunta polarizante
@@ -1253,7 +1271,11 @@ Devuelve solo el caption final.
         except Exception as e:
             print("OpenAI caption v6.2 fallback:", repr(e))
 
-    line1 = f"{game_name}: {pick_game_hook(game_name, emotion, moment_type)}"
+    hook = pick_game_hook(game_name, emotion, moment_type)
+    if game_name and game_name.lower() in hook.lower():
+        line1 = hook
+    else:
+        line1 = f"{game_name}: {hook}"
 
     if caption_base and len(caption_base) <= 110:
         line2 = caption_base
@@ -1308,9 +1330,12 @@ Reglas:
             print("OpenAI shorts title v6.2 fallback:", repr(e))
 
     if hook_hint and len(hook_hint) < 70:
-        title = ensure_game_in_caption(hook_hint, game_name)
+        title = hook_hint
     else:
-        title = f"{game_name}: {pick_game_hook(game_name, emotion, moment_type)}"
+        title = pick_game_hook(game_name, emotion, moment_type)
+
+    if game_name and game_name.lower() not in title.lower():
+        title = f"{game_name}: {title}"
 
     if "#Shorts" not in title:
         title = f"{title} #Shorts"
@@ -1882,7 +1907,7 @@ def sort_queue_items(items):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: V6_2_GAME_COPY_ENGINE")
+    print("MODE B VERSION: V6_2_GAME_COPY_ENGINE_DEFAULT_FALSE")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
     print("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED:", B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED)

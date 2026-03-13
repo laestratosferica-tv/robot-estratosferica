@@ -2,7 +2,9 @@
 
 import os
 import json
+import math
 import hashlib
+import random
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -87,65 +89,63 @@ DEBUG_FINAL_NAME = env_nonempty("DEBUG_FINAL_NAME", "debug_final_reel.mp4") or "
 
 
 GENERIC_HOOKS = [
-    "ESTO ES ABSURDO",
+    "ESTO FUE CINE",
     "NAH, MIRA ESTO",
     "NO ES NORMAL",
-    "ESTÁ ROTÍSIMO",
-    "ESTO NO TIENE SENTIDO",
-    "OJO CON ESTA PLAY",
-    "ESTO FUE CINE",
+    "ESTO NO TENÍA SENTIDO",
     "QUÉ ACABO DE VER",
+    "OJO CON ESTA PLAY",
 ]
 
 GAME_HOOKS = {
     "valorant": [
-        "ESTE CLUTCH ES ILEGAL",
-        "ESO FUE UN ACE GRATIS",
+        "ESTE ROUND ES ILEGAL",
         "VALORANT EN SU PEAK",
+        "ESO FUE LECTURA TOTAL",
     ],
     "cs2": [
         "CS2 ENFERMÍSIMO",
-        "ESTO ES PURO AIM",
+        "ESO FUE PURO TIMING",
         "CLUTCH DE OTRO PLANETA",
     ],
     "leagueoflegends": [
         "ESTA TEAMFIGHT FUE CINE",
-        "LOL EN SU MEJOR MOMENTO",
-        "ESTO CAMBIA TODA LA PARTIDA",
+        "LOL EN MODO SERIO",
+        "ESTO CAMBIA LA PARTIDA",
     ],
     "fortnite": [
-        "EDITS DE OTRO MUNDO",
-        "FORTNITE ESTÁ ROTO",
-        "BUGHA MODE ACTIVADO",
+        "FORTNITE ESTÁ LOQUÍSIMO",
+        "EDITS DE OTRO NIVEL",
+        "ESTO NO SE DEBÍA GANAR",
     ],
     "warzone": [
-        "WARZONE ESTÁ LOQUÍSIMO",
-        "ESTO NO ERA GANABLE",
         "QUÉ CIERRE TAN SUCIO",
+        "WARZONE EN MODO BESTIA",
+        "ESTO ERA INJUGABLE",
     ],
     "apex": [
-        "APEX EN MODO BESTIA",
+        "APEX EN SU VERSIÓN MÁS SALVAJE",
+        "ESTO NO FUE SOLO AIM",
         "FINAL CIRCLE DE LOCOS",
-        "ESTO ES PURO MOVEMENT",
     ],
     "minecraft": [
-        "MINECRAFT PERO ES CINE",
-        "ESTO ES MUY MALA SUERTE",
+        "MINECRAFT TAMBIÉN ES PURO CINE",
+        "ESTO PARECE FAKE",
         "NAH, QUÉ MOMENTO",
     ],
     "easportsfc": [
         "ESO ES GOLAZO",
         "FC ESTÁ DEMENCIAL",
-        "ESTE GOL ES RIDÍCULO",
+        "ESTA JUGADA TE HACE PELEAR",
     ],
     "f1": [
         "ADELANTAMIENTO DE CINE",
-        "ESO FUE PURO SKILL",
+        "ESO FUE PRECISIÓN PURA",
         "F1 EN MODO BESTIA",
     ],
     "granturismo": [
-        "ESTA ÚLTIMA VUELTA FUE CINE",
-        "GT ESTÁ HERMOSO",
+        "ESTO NO ES SUERTE, ES MANEJO",
+        "GT EN MODO PRECISIÓN TOTAL",
         "QUÉ FINAL TAN LIMPIO",
     ],
 }
@@ -178,11 +178,64 @@ EMOTION_HOOKS = {
     ],
 }
 
+GAME_CTA = {
+    "valorant": [
+        "¿LECTURA TOTAL O ERROR RIVAL?",
+        "¿ESTO ES SKILL O REGALO?",
+        "¿TÚ LO RESUELVES ASÍ?",
+    ],
+    "cs2": [
+        "¿AIM PURO O IQ TOTAL?",
+        "¿TOP PLAY O MUCHO HYPE?",
+        "¿ESTO ES SKILL REAL O REGALO?",
+    ],
+    "leagueoflegends": [
+        "¿MANOS, MACRO O CAOS BIEN LEÍDO?",
+        "¿ESTO CAMBIA LA PARTIDA O NO?",
+        "¿PLAY SERIA O MUCHO REPLAY?",
+    ],
+    "fortnite": [
+        "¿MECÁNICA PURA O CAOS FAVORABLE?",
+        "¿TOP O MUY INFLADO?",
+        "¿ESTO ES CINE O NO?",
+    ],
+    "warzone": [
+        "¿CLUTCH O MILAGRO?",
+        "¿SKILL BRUTAL O CAOS FAVORABLE?",
+        "¿TÚ LO CERRABAS ASÍ?",
+    ],
+    "apex": [
+        "¿LECTURA TOTAL O ERROR DEL LOBBY?",
+        "¿TOP PLAY O CLIP CORTO ENGAÑOSO?",
+        "¿ESTO FUE AIM O CABEZA?",
+    ],
+    "minecraft": [
+        "¿ESTO FUE SKILL O MOMENTO MALDITO?",
+        "¿GENIALIDAD O CASUALIDAD TOTAL?",
+        "¿PLAY REAL O INTERNET PURO?",
+    ],
+    "easportsfc": [
+        "¿GOLAZO O DEFENSA DE PLASTILINA?",
+        "¿CLASE REAL O EL RIVAL AYUDÓ?",
+        "¿ESTO ES TOP O NO TANTO?",
+    ],
+    "f1": [
+        "¿MANIOBRA LEGENDARIA O RIESGO DEMÁS?",
+        "¿PRECISIÓN PURA O PUERTA ABIERTA?",
+        "¿TOP ADELANTAMIENTO O NO?",
+    ],
+    "granturismo": [
+        "¿MANEJO LIMPIO O ERROR DEL RIVAL?",
+        "¿PRECISIÓN TOTAL O MUCHO HYPE?",
+        "¿ESTO ES CLASE REAL O NO?",
+    ],
+}
+
 INTENSITY_CTA = {
     "estratosferico": [
-        "¿ESTO ES LEGAL?",
-        "¿TOP DEL MES O NO?",
         "¿ESTO YA ES HISTORIA?",
+        "¿TOP DEL MES O QUÉ?",
+        "¿ESTO ES LEGAL?",
     ],
     "high": [
         "¿TOP O HUMO?",
@@ -190,25 +243,35 @@ INTENSITY_CTA = {
         "¿TÚ LO SACABAS?",
     ],
     "medium": [
-        "¿W O BASURA?",
         "¿ESTO ES CINE O NO?",
         "¿MEJOR JUGADA O NO?",
+        "¿W O BASURA?",
     ],
     "low": [
-        "¿TE GUSTA O NO?",
-        "¿LA COMPRAS O NO?",
-        "¿ESTÁ BIEN O NO?",
+        "¿TE COMPRÓ O NO?",
+        "¿BUENA O SOBREVALORADA?",
+        "¿TE LA CREES O NO?",
     ],
 }
 
 DEFAULT_CTAS = [
     "¿TOP O HUMO?",
     "¿SKILL O SUERTE?",
-    "¿TÚ LO SACABAS?",
-    "¿W O BASURA?",
     "¿ESTO ES CINE O NO?",
-    "¿MEJOR JUGADA O NO?",
 ]
+
+BADGE_BY_GAME = {
+    "cs2": "CS2",
+    "easportsfc": "FC",
+    "granturismo": "GT",
+    "leagueoflegends": "LOL",
+    "valorant": "VALORANT",
+    "fortnite": "FORTNITE",
+    "warzone": "WARZONE",
+    "apex": "APEX",
+    "minecraft": "MINECRAFT",
+    "f1": "F1",
+}
 
 
 def now_utc():
@@ -227,6 +290,16 @@ def safe_json_dumps(obj):
     return json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
 
 
+def safe_float(v, default=0.0):
+    try:
+        f = float(v)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
+    except Exception:
+        return default
+
+
 def list_mp3_files(search_dir):
     files = []
     if search_dir and os.path.isdir(search_dir):
@@ -238,8 +311,6 @@ def list_mp3_files(search_dir):
 
 
 def pick_music():
-    import random
-
     if random.random() > max(0.0, min(1.0, MUSIC_PROBABILITY)):
         return None
 
@@ -260,8 +331,6 @@ def pick_music():
 
 
 def pick_hud_overlay():
-    import random
-
     if not ENABLE_HUD:
         return None
 
@@ -352,11 +421,39 @@ def get_video_duration(path):
 
 
 def pick_from_list(options, fallback=""):
-    import random
-
     if not options:
         return fallback
     return random.choice(options)
+
+
+def normalize_game_name(value):
+    t = str(value or "").strip().lower()
+
+    mapping = {
+        "ea sports fc": "easportsfc",
+        "easportsfc": "easportsfc",
+        "fc 25": "easportsfc",
+        "fc 26": "easportsfc",
+        "gran turismo": "granturismo",
+        "granturismo": "granturismo",
+        "gt": "granturismo",
+        "league of legends": "leagueoflegends",
+        "leagueoflegends": "leagueoflegends",
+        "lol": "leagueoflegends",
+        "counter strike": "cs2",
+        "counter-strike": "cs2",
+        "cs2": "cs2",
+        "valorant": "valorant",
+        "fortnite": "fortnite",
+        "warzone": "warzone",
+        "apex": "apex",
+        "apex legends": "apex",
+        "minecraft": "minecraft",
+        "f1": "f1",
+        "generic": "generic",
+    }
+
+    return mapping.get(t, t)
 
 
 def game_from_key(key):
@@ -365,7 +462,10 @@ def game_from_key(key):
 
     checks = [
         ("ea sports fc", "easportsfc"),
+        ("fc 26", "easportsfc"),
+        ("fc 25", "easportsfc"),
         ("gran turismo", "granturismo"),
+        ("granturismo", "granturismo"),
         ("league of legends", "leagueoflegends"),
         ("counter strike", "cs2"),
         ("counter-strike", "cs2"),
@@ -386,38 +486,105 @@ def game_from_key(key):
     return "generic"
 
 
+def resolve_game_name(clip_key, clip_meta):
+    if isinstance(clip_meta, dict):
+        for field in ["game", "game_name"]:
+            val = clip_meta.get(field)
+            if val:
+                return normalize_game_name(val)
+    return game_from_key(clip_key)
+
+
+def score_band(score):
+    s = safe_float(score, 0.0)
+    if s >= 0.85:
+        return "elite"
+    if s >= 0.70:
+        return "strong"
+    if s >= 0.55:
+        return "solid"
+    return "weak"
+
+
 def pick_hook(game_name, clip_meta):
     emotion = (clip_meta.get("emotion") or "").lower() if isinstance(clip_meta, dict) else ""
-    if emotion in EMOTION_HOOKS:
+    intensity = (clip_meta.get("intensity") or "").lower() if isinstance(clip_meta, dict) else ""
+    score = safe_float((clip_meta or {}).get("candidate_score"), 0.0)
+    band = score_band(score)
+
+    if emotion in EMOTION_HOOKS and band in ("elite", "strong"):
         return pick_from_list(EMOTION_HOOKS[emotion], fallback="ESTO FUE CINE")
 
     g = (game_name or "").lower()
     options = GAME_HOOKS.get(g) or GENERIC_HOOKS
+
+    # clips flojos o medios: mejor no exagerar tanto
+    if band == "weak":
+        toned_down = {
+            "granturismo": ["QUÉ FINAL TAN LIMPIO", "GT EN MODO PRECISIÓN TOTAL"],
+            "f1": ["ESO FUE PRECISIÓN PURA", "ADELANTAMIENTO DE CINE"],
+            "minecraft": ["NAH, QUÉ MOMENTO", "MINECRAFT TAMBIÉN ES PURO CINE"],
+        }
+        if g in toned_down:
+            return pick_from_list(toned_down[g], fallback=pick_from_list(options, fallback="ESTO FUE CINE"))
+
+    if intensity == "estratosferico" and g == "cs2":
+        return "CLUTCH DE OTRO PLANETA"
+    if intensity == "estratosferico" and g == "valorant":
+        return "ESTE ROUND ES ILEGAL"
+
     return pick_from_list(options, fallback="ESTO FUE CINE")
 
 
-def pick_cta(clip_meta):
+def pick_cta(game_name, clip_meta):
     intensity = (clip_meta.get("intensity") or "").lower() if isinstance(clip_meta, dict) else ""
-    if intensity in INTENSITY_CTA:
-        return pick_from_list(INTENSITY_CTA[intensity], fallback="¿TOP O HUMO?")
+    score = safe_float((clip_meta or {}).get("candidate_score"), 0.0)
+    g = (game_name or "").lower()
+
+    game_ctas = GAME_CTA.get(g) or []
+
+    if intensity in ("estratosferico", "high"):
+        if game_ctas:
+            return pick_from_list(game_ctas, fallback="¿TOP O HUMO?")
+        return pick_from_list(INTENSITY_CTA.get(intensity, DEFAULT_CTAS), fallback="¿TOP O HUMO?")
+
+    if intensity == "medium":
+        if g in ("granturismo", "f1", "minecraft", "easportsfc") and game_ctas:
+            return pick_from_list(game_ctas, fallback="¿ESTO ES CINE O NO?")
+        return pick_from_list(INTENSITY_CTA.get("medium", DEFAULT_CTAS), fallback="¿ESTO ES CINE O NO?")
+
+    # low / weak: mejor CTA menos vendehumo
+    if score < 0.50:
+        low_specific = {
+            "granturismo": [
+                "¿MANEJO LIMPIO O MUCHO HYPE?",
+                "¿TE PARECE FINO O NORMALITO?",
+            ],
+            "f1": [
+                "¿BUENA MANIOBRA O MUCHO REPLAY?",
+                "¿TE COMPRÓ O NO?",
+            ],
+            "minecraft": [
+                "¿TE DIO RISA O TE IMPRESIONÓ?",
+                "¿MOMENTO REAL O PURO INTERNET?",
+            ],
+            "easportsfc": [
+                "¿BUENA JUGADA O DEFENSA MALÍSIMA?",
+                "¿TE COMPRÓ O NO?",
+            ],
+        }
+        if g in low_specific:
+            return pick_from_list(low_specific[g], fallback="¿TE COMPRÓ O NO?")
+
+    if game_ctas:
+        return pick_from_list(game_ctas, fallback="¿TOP O HUMO?")
+
     return pick_from_list(DEFAULT_CTAS, fallback="¿TOP O HUMO?")
 
 
 def pick_badge(game_name):
     g = (game_name or "").lower()
-    mapping = {
-        "cs2": "CS2",
-        "easportsfc": "FC",
-        "granturismo": "GT",
-        "leagueoflegends": "LOL",
-        "valorant": "VALORANT",
-        "fortnite": "FORTNITE",
-        "warzone": "WARZONE",
-        "apex": "APEX",
-        "minecraft": "MINECRAFT",
-        "f1": "F1",
-    }
-    return mapping.get(g, "GAMER")
+    return BADGE_BY_GAME.get(g, "GAMER")
 
 
 def r2_client():
@@ -716,6 +883,7 @@ def build_final_meta(
         "game": clip_meta.get("game") or game_name,
         "emotion": clip_meta.get("emotion"),
         "intensity": clip_meta.get("intensity"),
+        "moment_type": clip_meta.get("moment_type"),
         "angle": clip_meta.get("angle"),
         "caption": clip_meta.get("caption"),
         "shorts_title": clip_meta.get("shorts_title"),
@@ -777,9 +945,9 @@ def run_mode_h():
         print("INPUT META KEY:", input_meta_key)
         print("CLIP META FOUND:", bool(clip_meta))
 
-        game_name = (clip_meta.get("game") or game_from_key(key)).lower()
+        game_name = resolve_game_name(key, clip_meta)
         hook = pick_hook(game_name, clip_meta)
-        cta = pick_cta(clip_meta)
+        cta = pick_cta(game_name, clip_meta)
         badge = pick_badge(game_name)
         music = pick_music()
         hud = pick_hud_overlay()
@@ -790,6 +958,7 @@ def run_mode_h():
         print("CANDIDATE_SCORE:", clip_meta.get("candidate_score"))
         print("EMOTION:", clip_meta.get("emotion"))
         print("INTENSITY:", clip_meta.get("intensity"))
+        print("MOMENT_TYPE:", clip_meta.get("moment_type"))
         print("HOOK:", hook)
         print("CTA:", cta)
         print("BADGE:", badge)

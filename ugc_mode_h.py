@@ -1,4 +1,4 @@
-# ===== INICIO: ugc_mode_h.py =====
+# ===== ugc_mode_h.py =====
 
 import os
 import json
@@ -87,6 +87,11 @@ ENABLE_CTA_TEXT = env_bool("ENABLE_CTA_TEXT", False)
 SAVE_DEBUG_FINAL = env_bool("SAVE_DEBUG_FINAL", True)
 DEBUG_FINAL_NAME = env_nonempty("DEBUG_FINAL_NAME", "debug_final_reel.mp4") or "debug_final_reel.mp4"
 
+# nuevo: auditoría
+MODE_H_SAVE_RENDER_DEBUG = env_bool("MODE_H_SAVE_RENDER_DEBUG", True)
+MODE_H_REJECT_SUSPICIOUS_HUD = env_bool("MODE_H_REJECT_SUSPICIOUS_HUD", True)
+MODE_H_FORCE_DISABLE_HUD = env_bool("MODE_H_FORCE_DISABLE_HUD", False)
+MODE_H_FORCE_DISABLE_TEXT = env_bool("MODE_H_FORCE_DISABLE_TEXT", False)
 
 GENERIC_HOOKS = [
     "ESTO FUE CINE",
@@ -330,70 +335,6 @@ def pick_music():
     return random.choice(good)
 
 
-def pick_hud_overlay():
-    if not ENABLE_HUD:
-        return None
-
-    if not os.path.isdir(HUD_DIR):
-        return None
-
-    files = []
-    for f in os.listdir(HUD_DIR):
-        name = f.lower()
-
-        if not name.startswith(HUD_PREFIX.lower()):
-            continue
-        if not name.endswith(".png"):
-            continue
-        if (
-            "safearea" in name
-            or "guide" in name
-            or "guides" in name
-            or "template" in name
-            or "layout" in name
-            or "grid" in name
-        ):
-            continue
-
-        files.append(os.path.join(HUD_DIR, f))
-
-    if not files:
-        return None
-
-    return random.choice(files)
-
-
-def wrap_text(text, max_chars_per_line=18, max_lines=2):
-    t = (text or "").strip().replace("\n", " ")
-    words = t.split()
-    if not words:
-        return ""
-
-    lines = []
-    cur = ""
-
-    for w in words:
-        if not cur:
-            cur = w
-            continue
-
-        if len(cur) + 1 + len(w) <= max_chars_per_line:
-            cur = cur + " " + w
-        else:
-            lines.append(cur)
-            cur = w
-            if len(lines) >= max_lines:
-                break
-
-    if len(lines) < max_lines and cur:
-        lines.append(cur)
-
-    if lines:
-        lines[-1] = lines[-1][:max_chars_per_line].rstrip()
-
-    return "\n".join(lines).strip()
-
-
 def ffprobe_json(path):
     cmd = [
         "ffprobe",
@@ -418,6 +359,23 @@ def get_video_duration(path):
         return float(info.get("format", {}).get("duration", 0.0) or 0.0)
     except Exception:
         return 0.0
+
+
+def get_video_stream_info(path):
+    info = ffprobe_json(path)
+    for s in info.get("streams", []):
+        if s.get("codec_type") == "video":
+            return {
+                "width": s.get("width"),
+                "height": s.get("height"),
+                "pix_fmt": s.get("pix_fmt"),
+                "codec_name": s.get("codec_name"),
+            }
+    return {}
+
+
+def get_image_stream_info(path):
+    return get_video_stream_info(path)
 
 
 def pick_from_list(options, fallback=""):
@@ -518,7 +476,6 @@ def pick_hook(game_name, clip_meta):
     g = (game_name or "").lower()
     options = GAME_HOOKS.get(g) or GENERIC_HOOKS
 
-    # clips flojos o medios: mejor no exagerar tanto
     if band == "weak":
         toned_down = {
             "granturismo": ["QUÉ FINAL TAN LIMPIO", "GT EN MODO PRECISIÓN TOTAL"],
@@ -553,7 +510,6 @@ def pick_cta(game_name, clip_meta):
             return pick_from_list(game_ctas, fallback="¿ESTO ES CINE O NO?")
         return pick_from_list(INTENSITY_CTA.get("medium", DEFAULT_CTAS), fallback="¿ESTO ES CINE O NO?")
 
-    # low / weak: mejor CTA menos vendehumo
     if score < 0.50:
         low_specific = {
             "granturismo": [
@@ -691,6 +647,93 @@ def load_clip_meta(clip_key):
     return meta_key, meta or {}
 
 
+def pick_hud_overlay():
+    if not ENABLE_HUD:
+        return None
+
+    if MODE_H_FORCE_DISABLE_HUD:
+        return None
+
+    if not os.path.isdir(HUD_DIR):
+        return None
+
+    files = []
+    for f in os.listdir(HUD_DIR):
+        name = f.lower()
+
+        if not name.startswith(HUD_PREFIX.lower()):
+            continue
+        if not name.endswith(".png"):
+            continue
+        if (
+            "safearea" in name
+            or "guide" in name
+            or "guides" in name
+            or "template" in name
+            or "layout" in name
+            or "grid" in name
+        ):
+            continue
+
+        files.append(os.path.join(HUD_DIR, f))
+
+    if not files:
+        return None
+
+    choice = random.choice(files)
+
+    if MODE_H_REJECT_SUSPICIOUS_HUD:
+        info = get_image_stream_info(choice)
+        w = int(info.get("width") or 0)
+        h = int(info.get("height") or 0)
+        pix_fmt = str(info.get("pix_fmt") or "").lower()
+
+        suspicious = False
+        if w <= 0 or h <= 0:
+            suspicious = True
+        if w < 400 or h < 700:
+            suspicious = True
+        if "rgba" not in pix_fmt and "bgra" not in pix_fmt and "argb" not in pix_fmt:
+            suspicious = True
+
+        if suspicious:
+            print("HUD RECHAZADO POR AUDITORÍA:", choice, "| info:", info)
+            return None
+
+    return choice
+
+
+def wrap_text(text, max_chars_per_line=18, max_lines=2):
+    t = (text or "").strip().replace("\n", " ")
+    words = t.split()
+    if not words:
+        return ""
+
+    lines = []
+    cur = ""
+
+    for w in words:
+        if not cur:
+            cur = w
+            continue
+
+        if len(cur) + 1 + len(w) <= max_chars_per_line:
+            cur = cur + " " + w
+        else:
+            lines.append(cur)
+            cur = w
+            if len(lines) >= max_lines:
+                break
+
+    if len(lines) < max_lines and cur:
+        lines.append(cur)
+
+    if lines:
+        lines[-1] = lines[-1][:max_chars_per_line].rstrip()
+
+    return "\n".join(lines).strip()
+
+
 def build_hype_reel(
     input_video,
     output_video,
@@ -706,6 +749,25 @@ def build_hype_reel(
     hook_wrapped = wrap_text(hook_text.upper(), max_chars_per_line=14, max_lines=2)
     cta_wrapped = wrap_text(cta_text.upper(), max_chars_per_line=18, max_lines=1)
     badge_wrapped = wrap_text(badge_text.upper(), max_chars_per_line=12, max_lines=1)
+
+    hook_enabled = ENABLE_HOOK_TEXT and not MODE_H_FORCE_DISABLE_TEXT
+    badge_enabled = ENABLE_BADGE_TEXT and not MODE_H_FORCE_DISABLE_TEXT
+    cta_enabled = ENABLE_CTA_TEXT and not MODE_H_FORCE_DISABLE_TEXT
+    hud_enabled = bool(hud_png and os.path.exists(hud_png) and ENABLE_HUD and not MODE_H_FORCE_DISABLE_HUD)
+
+    render_debug = {
+        "input_video": input_video,
+        "output_video": output_video,
+        "hook_enabled": hook_enabled,
+        "badge_enabled": badge_enabled,
+        "cta_enabled": cta_enabled,
+        "hud_enabled": hud_enabled,
+        "hud_png": hud_png if hud_enabled else None,
+        "music_mp3": music_mp3 if music_mp3 and os.path.exists(music_mp3) else None,
+        "keep_original_audio": KEEP_ORIGINAL_AUDIO,
+        "input_stream_info": get_video_stream_info(input_video),
+        "input_duration": get_video_duration(input_video),
+    }
 
     with tempfile.TemporaryDirectory() as td:
         hook_txt = os.path.join(td, "hook.txt")
@@ -735,7 +797,7 @@ def build_hype_reel(
         ]
 
         hud_input_idx = None
-        if hud_png and os.path.exists(hud_png) and ENABLE_HUD:
+        if hud_enabled:
             cmd += ["-i", hud_png]
             hud_input_idx = 1
 
@@ -767,7 +829,7 @@ def build_hype_reel(
             vf_parts.append(f"{current}[hud]overlay=0:0:format=auto[v1];")
             current = "[v1]"
 
-        if ENABLE_BADGE_TEXT:
+        if badge_enabled:
             vf_parts.append(
                 f"{current}"
                 f"drawbox=x=60:y=70:w=250:h=78:color=white@0.82:t=fill,"
@@ -777,7 +839,7 @@ def build_hype_reel(
             )
             current = "[vbadge]"
 
-        if ENABLE_HOOK_TEXT:
+        if hook_enabled:
             vf_parts.append(
                 f"{current}"
                 f"drawtext=fontfile={FONT_BOLD}:textfile={hook_txt}:"
@@ -791,7 +853,7 @@ def build_hype_reel(
             )
             current = "[vhook]"
 
-        if ENABLE_CTA_TEXT:
+        if cta_enabled:
             vf_parts.append(
                 f"{current}"
                 f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
@@ -800,18 +862,20 @@ def build_hype_reel(
                 f"fontcolor=white:"
                 f"borderw=2:bordercolor=black@0.45:"
                 f"box=1:boxcolor=black@0.16:boxborderw=10"
-                f"[vcta]"
+                f"[vcta];"
             )
             current = "[vcta]"
-        else:
-            vf_parts.append(f"{current}format=yuv420p[vcta]")
-            current = "[vcta]"
+
+        vf_parts.append(f"{current}format=yuv420p[vfinal]")
+
+        filter_complex = "".join(vf_parts)
+        render_debug["filter_complex"] = filter_complex
 
         cmd += [
             "-filter_complex",
-            "".join(vf_parts),
+            filter_complex,
             "-map",
-            current,
+            "[vfinal]",
         ]
 
         if KEEP_ORIGINAL_AUDIO:
@@ -851,9 +915,20 @@ def build_hype_reel(
             output_video,
         ]
 
+        render_debug["ffmpeg_cmd"] = cmd
+
         p = subprocess.run(cmd, capture_output=True, text=True)
+        render_debug["ffmpeg_returncode"] = p.returncode
+        render_debug["ffmpeg_stderr_tail"] = (p.stderr or "")[-4000:]
+        render_debug["ffmpeg_stdout_tail"] = (p.stdout or "")[-1000:]
+
         if p.returncode != 0:
             raise RuntimeError(f"ffmpeg falló:\n{(p.stderr or '')[:4000]}")
+
+        render_debug["output_stream_info"] = get_video_stream_info(output_video)
+        render_debug["output_duration"] = get_video_duration(output_video)
+
+        return render_debug
 
 
 def build_final_meta(
@@ -866,10 +941,11 @@ def build_final_meta(
     badge,
     music,
     hud,
+    render_debug,
 ):
     clip_meta = clip_meta or {}
 
-    return {
+    payload = {
         "source_clip_key": source_clip_key,
         "source_video_key": clip_meta.get("source_video_key"),
         "source_video_id": clip_meta.get("source_video_id"),
@@ -897,6 +973,11 @@ def build_final_meta(
         "generated_at": iso_now_full(),
     }
 
+    if MODE_H_SAVE_RENDER_DEBUG:
+        payload["render_debug"] = render_debug or {}
+
+    return payload
+
 
 def run_mode_h():
     print("===== MODE H (HYPE PACKER) START =====")
@@ -908,6 +989,12 @@ def run_mode_h():
     print("MODE_H_MAX_ITEMS:", MODE_H_MAX_ITEMS)
     print("MODE_H_ONLY_KEYS_CONTAIN:", MODE_H_ONLY_KEYS_CONTAIN or "(vacío)")
     print("MODE_H_NEWEST_FIRST:", MODE_H_NEWEST_FIRST)
+    print("ENABLE_HUD:", ENABLE_HUD)
+    print("ENABLE_BADGE_TEXT:", ENABLE_BADGE_TEXT)
+    print("ENABLE_HOOK_TEXT:", ENABLE_HOOK_TEXT)
+    print("ENABLE_CTA_TEXT:", ENABLE_CTA_TEXT)
+    print("MODE_H_FORCE_DISABLE_HUD:", MODE_H_FORCE_DISABLE_HUD)
+    print("MODE_H_FORCE_DISABLE_TEXT:", MODE_H_FORCE_DISABLE_TEXT)
 
     state = load_state()
     processed = set(state.get("processed_keys", []))
@@ -972,7 +1059,10 @@ def run_mode_h():
 
                 r2_download_to_file(key, in_path)
 
-                build_hype_reel(
+                input_info = get_video_stream_info(in_path)
+                print("INPUT STREAM INFO:", input_info)
+
+                render_debug = build_hype_reel(
                     input_video=in_path,
                     output_video=out_path,
                     hook_text=hook,
@@ -981,6 +1071,9 @@ def run_mode_h():
                     music_mp3=music,
                     hud_png=hud,
                 )
+
+                print("RENDER DEBUG HUD ENABLED:", render_debug.get("hud_enabled"))
+                print("RENDER DEBUG FILTER OK:", bool(render_debug.get("filter_complex")))
 
                 with open(out_path, "rb") as f:
                     data = f.read()
@@ -1002,6 +1095,7 @@ def run_mode_h():
                     badge=badge,
                     music=music,
                     hud=hud,
+                    render_debug=render_debug,
                 )
 
                 meta_key = f"{MODE_H_META_PREFIX}/{os.path.basename(out_key).rsplit('.', 1)[0]}.json"
@@ -1028,5 +1122,3 @@ def run_mode_h():
 
 if __name__ == "__main__":
     run_mode_h()
-
-# ===== FIN: ugc_mode_h.py =====

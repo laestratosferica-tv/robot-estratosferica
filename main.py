@@ -1277,9 +1277,12 @@ def generate_reel_from_image(
 
         if logo_ok:
             cmd += ["-i", logo_path]
+        if voice_ok:
+            cmd += ["-i", voice_path]
+        
         if music_ok:
             cmd += ["-i", music_path]
-
+    
         logo_input = 1 if logo_ok else None
         music_input = 2 if logo_ok and music_ok else 1 if music_ok else None
 

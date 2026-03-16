@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -36,6 +37,56 @@ MEMORY_KEY = env_nonempty("B_EDITORIAL_MEMORY_KEY", "ugc/state/editorial_memory.
 SUMMARY_KEY = env_nonempty("B_EDITORIAL_MEMORY_SUMMARY_KEY", "ugc/state/editorial_memory_summary.json")
 
 LOOKBACK_DAYS = env_int("B_EDITORIAL_LOOKBACK_DAYS", 7)
+
+
+STOPWORDS = {
+    "esto", "esta", "está", "para", "pero", "porque", "como", "donde", "desde",
+    "entre", "sobre", "hacia", "hasta", "tambien", "también", "solo", "sólo",
+    "aqui", "aquí", "alla", "allá", "muy", "mas", "más", "menos", "casi",
+    "puro", "pura", "total", "real", "brutal", "mucho", "mucha", "mejor",
+    "peor", "igual", "siempre", "nunca", "nadie", "todos", "todas", "este",
+    "esta", "estos", "estas", "ese", "esa", "esos", "esas", "una", "uno",
+    "unos", "unas", "del", "las", "los", "con", "sin", "por", "que", "qué",
+    "quien", "quién", "como", "cómo", "fue", "era", "son", "ser", "hay",
+    "the", "and", "for", "with", "from", "this", "that", "your", "just",
+}
+
+BANNED_WORDS = {
+    "gaminglatam",
+    "esportslatam",
+    "reelsgaming",
+    "valorantlatam",
+    "warzonelatam",
+    "cs2latam",
+    "f1esports",
+    "callofduty",
+    "counterstrike",
+    "apexlatam",
+    "fortnitelatam",
+    "minecraftlatam",
+    "gltalam",
+    "shorts",
+    "reels",
+    "tiktok",
+    "instagram",
+    "facebook",
+    "youtube",
+    "latam",
+}
+
+BANNED_PREFIXES = (
+    "http",
+    "www",
+)
+
+RECENT_PHRASE_KEYS = [
+    "en momento de manos",
+    "la mayoría la vende aquí",
+    "esto no es highlight, es castigo",
+    "momento de manos y sangre fría",
+    "la mayoría aquí la vende",
+    "la mayoría se apaga aquí",
+]
 
 
 def now_utc():
@@ -110,24 +161,127 @@ def recent_items(history):
     return out
 
 
+def clean_line(text):
+    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    return text
+
+
+def split_caption_lines(text):
+    return [clean_line(x) for x in str(text or "").splitlines() if clean_line(x)]
+
+
+def is_hashtag_line(line):
+    if not line:
+        return False
+    tokens = line.split()
+    if not tokens:
+        return False
+    tagged = 0
+    for t in tokens:
+        if t.startswith("#"):
+            tagged += 1
+    return tagged >= max(1, len(tokens) - 1)
+
+
+def strip_hashtags_from_caption(caption):
+    lines = split_caption_lines(caption)
+    kept = []
+
+    for line in lines:
+        if is_hashtag_line(line):
+            continue
+        kept.append(line)
+
+    return "\n".join(kept).strip()
+
+
+def normalize_word(word):
+    w = str(word or "").lower().strip()
+    w = w.strip(".,!?;:()[]{}\"'`“”‘’#🔥-_/\\|")
+    return w
+
+
+def should_keep_word(word):
+    w = normalize_word(word)
+    if not w:
+        return False
+    if len(w) < 4:
+        return False
+    if w.isdigit():
+        return False
+    if w in STOPWORDS:
+        return False
+    if w in BANNED_WORDS:
+        return False
+    if any(w.startswith(p) for p in BANNED_PREFIXES):
+        return False
+    if "#" in w:
+        return False
+    return True
+
+
 def extract_words(text):
     words = []
-    for w in str(text or "").lower().split():
-        w = w.strip(".,!?;:()[]{}\"'`“”‘’#🔥-_/\\|")
-        if len(w) < 4:
-            continue
-        if w.isdigit():
-            continue
-        words.append(w)
+    for raw in str(text or "").lower().split():
+        w = normalize_word(raw)
+        if should_keep_word(w):
+            words.append(w)
     return words
 
 
+def detect_patterns(captions):
+    hints = [
+        "usar conflicto",
+        "usar pregunta final",
+        "mencionar juego explícitamente",
+    ]
+
+    joined = "\n".join(captions).lower()
+
+    if any("¿" in c or "?" in c for c in captions):
+        hints.append("pregunta polarizante funciona")
+
+    if any(x in joined for x in ["skill", "suerte", "regalo", "regalado"]):
+        hints.append("skill vs suerte funciona")
+
+    if any(x in joined for x in ["inflado", "humo", "vendiendo de más", "vendiendo de mas"]):
+        hints.append("inflado vs real funciona")
+
+    if any(x in joined for x in ["lobby", "rival", "dormido", "regaló", "regalo"]):
+        hints.append("rival flojo / regalo funciona")
+
+    if any(x in joined for x in ["clutch", "sentencia", "borra", "castiga"]):
+        hints.append("clutch / castigo funciona")
+
+    if any(x in joined for x in ["caos", "milagro", "bendecido"]):
+        hints.append("caos vs mérito funciona")
+
+    return hints[:8]
+
+
+def build_recent_phrase_counts(captions):
+    counts = {}
+    joined = "\n".join(captions).lower()
+
+    for phrase in RECENT_PHRASE_KEYS:
+        counts[phrase] = joined.count(phrase)
+
+    return counts
+
+
 def build_editorial_memory(items):
+    cleaned_items = []
+
+    for item in items:
+        cloned = dict(item)
+        cloned["caption_editorial_body"] = strip_hashtags_from_caption(item.get("caption_final", ""))
+        cleaned_items.append(cloned)
+
     return {
-        "version": "v2_r2",
+        "version": "v3_r2_clean",
         "generated_at": now_utc().isoformat(),
         "lookback_days": LOOKBACK_DAYS,
-        "items": items,
+        "items": cleaned_items,
     }
 
 
@@ -141,8 +295,8 @@ def build_summary(items):
     summary_games = {}
 
     for game, rows in by_game.items():
-        captions = [r.get("caption_final", "") for r in rows if r.get("caption_final")]
-        questions = [c for c in captions if "¿" in c or "?" in c]
+        raw_captions = [r.get("caption_final", "") for r in rows if r.get("caption_final")]
+        captions = [strip_hashtags_from_caption(c) for c in raw_captions if strip_hashtags_from_caption(c)]
 
         freq = defaultdict(int)
         for caption in captions:
@@ -150,39 +304,18 @@ def build_summary(items):
                 freq[w] += 1
 
         top_words = [w for w, _ in sorted(freq.items(), key=lambda x: (-x[1], x[0]))[:12]]
-
-        patterns_hint = [
-            "usar conflicto",
-            "usar pregunta final",
-            "mencionar juego explícitamente",
-        ]
-
-        if len(questions) >= max(1, len(captions) // 2):
-            patterns_hint.append("pregunta polarizante funciona")
-
-        if any("skill" in c.lower() for c in captions):
-            patterns_hint.append("skill vs suerte funciona")
-
-        if any("inflado" in c.lower() for c in captions):
-            patterns_hint.append("inflado vs real funciona")
-
-        if any("lobby" in c.lower() for c in captions):
-            patterns_hint.append("lobby / rival flojo funciona")
-
-        if any("clutch" in c.lower() for c in captions):
-            patterns_hint.append("clutch funciona")
-
-        if any("regalo" in c.lower() or "regalado" in c.lower() for c in captions):
-            patterns_hint.append("skill vs regalo funciona")
+        patterns_hint = detect_patterns(captions)
+        recent_phrase_counts = build_recent_phrase_counts(captions)
 
         summary_games[game] = {
             "recent_posts": len(rows),
             "top_words": top_words,
-            "patterns_hint": patterns_hint[:8],
+            "patterns_hint": patterns_hint,
+            "recent_phrase_counts": recent_phrase_counts,
         }
 
     return {
-        "version": "v2_r2",
+        "version": "v3_r2_clean",
         "generated_at": now_utc().isoformat(),
         "lookback_days": LOOKBACK_DAYS,
         "games": summary_games,

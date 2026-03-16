@@ -2358,15 +2358,16 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         )
                         except Exception as e:
                             print("Runway falló (fallback a reel normal):", str(e))
-                            reel_bytes = generate_reel_from_image(
-                                headline=video_hook,
-                                news_image_path=local_img,
-                                logo_path=chosen_logo,
-                                bg_path=asset_bg,
-                                seconds=REEL_SECONDS,
-                                music_path=chosen_music,
-                                cta_text=video_cta,
-                            )
+                            reel_bytes = render_editorial_asset(
+                            plan=plan,
+                            render_clean_fn=generate_reel_from_video_bg,
+                            render_gamer_fn=generate_reel_gamer_dynamic,
+                            headline=plan["title_text"],
+                            image_path=local_img,
+                            logo_path=chosen_logo,
+                            seconds=REEL_SECONDS,
+                            music_path=chosen_music,
+                        )
                     else:
                         reel_bytes = render_editorial_asset(
                         plan=plan,

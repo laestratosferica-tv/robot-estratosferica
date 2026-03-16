@@ -1425,6 +1425,7 @@ def generate_reel_from_video_bg(
     seconds: int,
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
+    badge_text: Optional[str] = None,
 ) -> bytes:
     if not os.path.exists(bg_video_path):
         raise RuntimeError(f"Falta bg video local: {bg_video_path}")
@@ -1437,9 +1438,8 @@ def generate_reel_from_video_bg(
     )
     cta = (cta_text or "¿W o humazo?").strip()
 
-    label_options = ["HOT", "UPDATE", "DRAMA", "META", "OJO", "TOP"]
-    badge_text = random.choice(label_options)
-
+    badge_text = (badge_text or "HOT").strip().upper()
+    
     music_ok = bool(music_path) and os.path.exists(music_path)
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 
@@ -1621,6 +1621,174 @@ def generate_reel_from_video_bg(
             raise RuntimeError(
                 f"ffmpeg (video bg) falló:\nSTDERR:\n{(p.stderr or '')[:4000]}"
             )
+
+        with open(out_mp4, "rb") as f:
+            return f.read()
+
+
+def generate_reel_gamer_dynamic(
+    headline: str,
+    news_image_path: str,
+    logo_path: Optional[str],
+    seconds: int,
+    music_path: Optional[str] = None,
+    cta_text: Optional[str] = None,
+    badge_text: Optional[str] = None,
+) -> bytes:
+    if not os.path.exists(news_image_path):
+        raise RuntimeError(f"Falta news image local: {news_image_path}")
+    if not os.path.exists(FONT_BOLD):
+        raise RuntimeError(f"Falta FONT_BOLD en runner: {FONT_BOLD}")
+
+    headline_clean = (headline or "").strip().upper()
+    headline_wrapped = wrap_text_lines(headline_clean[:72], max_chars_per_line=14, max_lines=3)
+    cta = (cta_text or "¿W o humo?").strip()
+    badge = (badge_text or "HOT").strip().upper()
+
+    music_ok = bool(music_path) and os.path.exists(music_path)
+    logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
+
+    n_lines = max(1, headline_wrapped.count("\n") + 1)
+    title_size = 96 if n_lines == 1 else 82 if n_lines == 2 else 68
+
+    with tempfile.TemporaryDirectory() as td:
+        out_mp4 = os.path.join(td, "reel.mp4")
+        title_txt = os.path.join(td, "title.txt")
+        cta_txt = os.path.join(td, "cta.txt")
+        badge_txt = os.path.join(td, "badge.txt")
+
+        with open(title_txt, "w", encoding="utf-8") as f:
+            f.write(headline_wrapped)
+        with open(cta_txt, "w", encoding="utf-8") as f:
+            f.write(cta)
+        with open(badge_txt, "w", encoding="utf-8") as f:
+            f.write(badge)
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-loop", "1",
+            "-t", str(int(seconds)),
+            "-i", news_image_path,
+        ]
+
+        if logo_ok:
+            cmd += ["-i", logo_path]
+        if music_ok:
+            cmd += ["-i", music_path]
+
+        logo_input = 1 if logo_ok else None
+        music_input = 2 if logo_ok and music_ok else 1 if music_ok else None
+
+        vf_parts = []
+
+        vf_parts.append(
+            f"[0:v]"
+            f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+            f"crop={REEL_W}:{REEL_H},"
+            f"zoompan=z='min(zoom+0.0014,1.16)':d={int(seconds)*30}:"
+            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"s={REEL_W}x{REEL_H}:fps=30,"
+            f"eq=contrast=1.10:brightness=-0.03:saturation=1.18,"
+            f"gblur=sigma=8,"
+            f"format=rgba[bg];"
+        )
+
+        vf_parts.append(
+            f"[bg]"
+            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=black@0.20:t=fill,"
+            f"drawbox=x=0:y=1180:w={REEL_W}:h=740:color=black@0.34:t=fill"
+            f"[bg2];"
+        )
+
+        current = "[bg2]"
+
+        vf_parts.append(
+            f"{current}"
+            f"drawbox=x=72:y=92:w=240:h=72:color=white@0.96:t=fill,"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={badge_txt}:"
+            f"x=106:y=110:fontsize=34:fontcolor=black"
+            f"[badge];"
+        )
+        current = "[badge]"
+
+        if logo_ok and logo_input is not None:
+            vf_parts.append(f"[{logo_input}:v]scale=132:-1,format=rgba,colorchannelmixer=aa=0.95[logo];")
+            vf_parts.append(f"{current}[logo]overlay=W-w-48:72:format=auto[withlogo];")
+            current = "[withlogo]"
+
+        vf_parts.append(
+            f"{current}"
+            f"drawbox=x=66:y=260:w=16:h=270:color=white@0.95:t=fill"
+            f"[bar];"
+        )
+        current = "[bar]"
+
+        vf_parts.append(
+            f"{current}"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
+            f"x=108:y=250:"
+            f"fontsize={title_size}:"
+            f"line_spacing=12:"
+            f"fontcolor=white:"
+            f"shadowcolor=black@0.75:"
+            f"shadowx=0:shadowy=6"
+            f"[title];"
+        )
+        current = "[title]"
+
+        vf_parts.append(
+            f"{current}"
+            f"drawbox=x=68:y=1540:w=944:h=120:color=black@0.20:t=fill,"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
+            f"x=92:y=1578:fontsize=42:fontcolor=white@0.92:"
+            f"shadowcolor=black@0.60:shadowx=0:shadowy=4,"
+            f"fade=t=out:st={max(0, int(seconds)-1)}:d=0.8"
+            f"[vout]"
+        )
+
+        cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
+
+        if music_ok and music_input is not None:
+            cmd += [
+                "-map", f"{music_input}:a",
+                "-filter:a",
+                f"volume=0.34,afade=t=in:st=0:d=0.5,afade=t=out:st={max(0, int(seconds)-1)}:d=0.9",
+                "-c:a", "aac",
+                "-b:a", "128k",
+            ]
+        else:
+            cmd += ["-an"]
+
+        cmd += [
+            "-t", str(int(seconds)),
+            "-r", "30",
+            "-c:v", "libx264",
+            "-profile:v", "high",
+            "-level", "4.1",
+            "-preset", "medium",
+            "-crf", "20",
+            "-g", "60",
+            "-bf", "0",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            out_mp4,
+        ]
+
+        p = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        if p.returncode != 0:
+            raise RuntimeError(f"ffmpeg gamer dynamic falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
         with open(out_mp4, "rb") as f:
             return f.read()

@@ -88,6 +88,12 @@ B_REQUIRE_EDITORIAL_SIGNALS = env_bool("B_REQUIRE_EDITORIAL_SIGNALS", True)
 B_EDITORIAL_SCORE_MIN = env_float("B_EDITORIAL_SCORE_MIN", 1.25)
 B_ALLOW_STRONG_HOOK_OVERRIDE = env_bool("B_ALLOW_STRONG_HOOK_OVERRIDE", True)
 
+# MODE B v6 caption engine
+B_CAPTION_MAX_WORDS = env_int("B_CAPTION_MAX_WORDS", 42)
+B_CAPTION_MIN_SCORE = env_float("B_CAPTION_MIN_SCORE", 3.2)
+B_USE_OPENAI_POLISH = env_bool("B_USE_OPENAI_POLISH", True)
+B_OPENAI_POLISH_MIN_EDITORIAL = env_float("B_OPENAI_POLISH_MIN_EDITORIAL", 3.0)
+
 ENABLE_INSTAGRAM = env_bool("ENABLE_INSTAGRAM", True)
 ENABLE_FACEBOOK = env_bool("ENABLE_FACEBOOK", True)
 ENABLE_TIKTOK = env_bool("ENABLE_TIKTOK", False)
@@ -1197,80 +1203,594 @@ Reglas:
 {" ".join(hashtags[:7])}""".strip()
 
 
-def build_caption_from_meta_v62(key, meta, item):
-    game_name = item.get("game_name") or resolve_game_name(key, meta)
-    score = safe_float(item.get("candidate_score"), 0.0)
+# =========================
+# MODE B v6 - CAPTION ENGINE
+# =========================
+
+def clean_line(text):
+    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    text = text.strip(" -–—|•")
+    return text
+
+
+def sentence_case(text):
+    text = clean_line(text)
+    if not text:
+        return text
+    return text[0].upper() + text[1:]
+
+
+def clip_text(text, max_len):
+    text = clean_line(text)
+    if len(text) <= max_len:
+        return text
+    return text[:max_len].rstrip(" ,.;:!?") + "…"
+
+
+def word_count(text):
+    return len(re.findall(r"\S+", str(text or "")))
+
+
+def contains_question(text):
+    t = str(text or "")
+    return "¿" in t or "?" in t
+
+
+def has_conflict_words(text):
+    t = str(text or "").lower()
+    needles = [
+        "skill", "suerte", "regalado", "choke", "clutch", "humo", "cine",
+        "rotísimo", "roto", "milagro", "regalo", "fraude", "castigo",
+        "error rival", "lobby", "top", "inflando", "humilla", "sentencia",
+        "vende", "vende humo", "de plastilina", "caos", "iq", "mano",
+    ]
+    return any(n in t for n in needles)
+
+
+def looks_generic_caption(text):
+    t = str(text or "").strip().lower()
+
+    generic_patterns = [
+        "por esto seguimos viendo",
+        "gran jugada",
+        "increíble jugada",
+        "increible jugada",
+        "qué jugada",
+        "que jugada",
+        "qué momento",
+        "que momento",
+        "esto demuestra",
+        "nivel competitivo",
+        "momento épico",
+        "momento epico",
+        "clip increíble",
+        "clip increible",
+        "clip brutal",
+        "no tenía sentido",
+        "no tenia sentido",
+        "es exactamente por lo que seguimos viendo esports",
+    ]
+
+    if any(p in t for p in generic_patterns):
+        return True
+
+    if len(t) < 18:
+        return True
+
+    return False
+
+
+def dedupe_preserve_order(items):
+    seen = set()
+    result = []
+    for x in items:
+        k = clean_line(x).lower()
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        result.append(x)
+    return result
+
+
+def infer_moment_label(ctx):
+    game = ctx["game_name"]
+    moment_type = ctx["moment_type"]
+    emotion = ctx["emotion"]
+
+    if moment_type == "final_circle":
+        if game == "Fortnite":
+            return "zona final"
+        if game == "Warzone":
+            return "cierre"
+        return "momento final"
+
+    if moment_type == "ace":
+        if game == "Valorant":
+            return "ace"
+        if game == "CS2":
+            return "wipe"
+        return "borrada total"
+
+    if moment_type == "goal":
+        return "golazo"
+
+    if moment_type == "last_second":
+        return "último segundo"
+
+    if moment_type == "clutch":
+        return "clutch"
+
+    if emotion == "chaos":
+        return "caos total"
+
+    if emotion == "skill":
+        return "lectura criminal"
+
+    return "jugada"
+
+
+def infer_verdict_label(ctx):
+    game = ctx["game_name"]
+    emotion = ctx["emotion"]
+    intensity = ctx["intensity"]
+    moment_type = ctx["moment_type"]
+
+    if moment_type == "goal":
+        return random.choice([
+            "no define, sentencia",
+            "no remata, firma la humillación",
+            "la manda a guardar con una calma criminal",
+        ])
+
+    if game == "Fortnite" and moment_type == "final_circle":
+        return random.choice([
+            "no juega, sentencia",
+            "no sobrevive, castiga",
+            "no improvisa, ejecuta",
+        ])
+
+    if game == "Valorant" and moment_type == "clutch":
+        return random.choice([
+            "no entra en pánico, los lee completos",
+            "gana la ronda antes del duelo",
+            "no dispara por reflejo, decide",
+        ])
+
+    if game == "CS2":
+        return random.choice([
+            "no asoma, castiga",
+            "no perdona el timing",
+            "borra la ronda sin regalar nada",
+        ])
+
+    if emotion == "chaos":
+        return random.choice([
+            "el caos lo favorece, sí, pero también lo sabe leer",
+            "en el desastre también hay mérito",
+            "parece suerte hasta que lo ves dos veces",
+        ])
+
+    if emotion == "skill":
+        return random.choice([
+            "esto es mano y cabeza",
+            "esto no sale sin lectura real",
+            "aquí hay clase, no solo highlight",
+        ])
+
+    if intensity == "high":
+        return random.choice([
+            "en alta presión casi nadie resuelve así",
+            "en este contexto la mayoría la vende",
+            "con esta tensión muchos se rompen",
+        ])
+
+    return random.choice([
+        "esto no cae bien a todo el mundo",
+        "se ve limpio porque está hecho con decisión",
+        "esto obliga a tomar postura",
+    ])
+
+
+def infer_question_label(ctx):
+    game = ctx["game_name"]
+    moment_type = ctx["moment_type"]
+    emotion = ctx["emotion"]
+    cta = clean_line(ctx.get("cta"))
+
+    if cta and contains_question(cta):
+        return cta
+
+    if game == "Fortnite":
+        if moment_type == "final_circle":
+            return random.choice([
+                "¿Clutch real o zona demasiado regalada?",
+                "¿Skill total o milagro con esteroides?",
+                "¿Esto te parece cine o puro caos favorable?",
+            ])
+        return random.choice([
+            "¿Mechanics reales o lobby dormido?",
+            "¿Top play o la están inflando?",
+        ])
+
+    if game == "Valorant":
+        return random.choice([
+            "¿IQ puro o el rival colaboró demasiado?",
+            "¿Clutch real o mucha ayuda enfrente?",
+            "¿Esto es top tier o puro humo con replay?",
+        ])
+
+    if game == "CS2":
+        return random.choice([
+            "¿Puro aim o timing de otro planeta?",
+            "¿Play criminal o demasiado regalo rival?",
+            "¿La están inflando o sí estuvo asquerosa?",
+        ])
+
+    if game == "EA Sports FC":
+        return random.choice([
+            "¿Golazo o defensa de plastilina?",
+            "¿Clase real o el rival hizo cosplay de cono?",
+            "¿Esto fue talento o abuso del juego?",
+        ])
+
+    if game in ("Warzone", "Apex Legends"):
+        return random.choice([
+            "¿Skill brutal o suerte con esteroides?",
+            "¿Control total o puro caos bendecido?",
+            "¿Clutch real o milagro armado?",
+        ])
+
+    if moment_type == "goal":
+        return random.choice([
+            "¿Golazo real o defensa dormida?",
+            "¿Clase pura o regalo total?",
+        ])
+
+    if emotion == "chaos":
+        return random.choice([
+            "¿Esto es cerebro o puro caos bendecido?",
+            "¿Skill o suerte demasiado maquillada?",
+        ])
+
+    return random.choice([
+        "¿Esto es cine o la están vendiendo de más?",
+        "¿Skill puro o bastante fortuna?",
+        "¿Top clip o hype inflado?",
+    ])
+
+
+def build_caption_context(key, meta, item):
+    copy_signals = item.get("copy_signals") or {}
+
+    game_name = normalize_game_name(item.get("game_name") or resolve_game_name(key, meta))
     emotion = normalize_emotion(item.get("emotion"))
     intensity = normalize_intensity(item.get("intensity"))
     moment_type = normalize_moment_type(item.get("moment_type"))
+    candidate_score = safe_float(item.get("candidate_score"), 0.0)
+    editorial_score = safe_float(item.get("editorial_score"), 0.0)
 
-    copy_signals = item.get("copy_signals") or {}
-    cta_hint = clean_signal(copy_signals.get("cta"))
-    caption_base = clean_signal(copy_signals.get("caption_base"))
+    hook = clean_line(copy_signals.get("hook"))
+    cta = clean_line(copy_signals.get("cta"))
+    badge = clean_line(copy_signals.get("badge"))
+    caption_base = clean_line(copy_signals.get("caption_base"))
+    source_group = clean_line(item.get("source_group"))
+    filename = os.path.basename(key)
 
-    if OPENAI_API_KEY:
-        prompt = f"""
-Eres copywriter viral de gaming LATAM.
-Tu trabajo es hacer captions que generen comentarios en 3 segundos.
+    weak_game = is_weak_game_name(game_name)
 
-Contexto del clip:
-Juego: {game_name}
-Emotion: {emotion}
-Intensity: {intensity}
-Moment type: {moment_type}
-Candidate score: {score}
-Editorial score: {item.get("editorial_score")}
-CTA sugerido por H: {cta_hint}
-Caption base: {caption_base}
-Archivo: {os.path.basename(key)}
+    context = {
+        "key": key,
+        "filename": filename,
+        "game_name": game_name,
+        "emotion": emotion,
+        "intensity": intensity,
+        "moment_type": moment_type,
+        "candidate_score": candidate_score,
+        "editorial_score": editorial_score,
+        "hook": hook,
+        "cta": cta,
+        "badge": badge,
+        "caption_base": caption_base,
+        "source_group": source_group,
+        "weak_game": weak_game,
+    }
 
-Reglas:
-- sonar gamer LATAM
-- sonar específico y confrontativo
-- cero tono corporativo
-- incluir el nombre del juego sí o sí
-- hook agresivo
-- línea 2 con análisis o tensión
-- línea 3 pregunta polarizante
-- máximo 75 palabras
-- formato:
-  línea 1 hook
-  línea 2 tensión/lectura
-  línea 3 pregunta
-  línea 4 hashtags
+    context["moment_label"] = infer_moment_label(context)
+    context["verdict_label"] = infer_verdict_label(context)
+    context["question_label"] = infer_question_label(context)
+
+    return context
+
+
+def generate_caption_candidates(ctx):
+    game = ctx["game_name"]
+    hook = clean_line(ctx.get("hook"))
+    caption_base = clean_line(ctx.get("caption_base"))
+    question = clean_line(ctx.get("question_label"))
+    verdict = clean_line(ctx.get("verdict_label"))
+    moment_label = clean_line(ctx.get("moment_label"))
+
+    game_prefix = game if game and not is_weak_game_name(game) else "Este clip"
+
+    hook_fallback = sentence_case(hook) if hook else None
+    if not hook_fallback:
+        hook_fallback = f"{game_prefix} en {moment_label} no perdona"
+
+    line2_base = sentence_case(caption_base) if caption_base else ""
+    if looks_generic_caption(line2_base):
+        line2_base = ""
+
+    candidates = []
+
+    def add_candidate(line1, line2, line3):
+        parts = [
+            clean_line(line1),
+            clean_line(line2),
+            clean_line(line3),
+        ]
+        parts = [p for p in parts if p]
+        text = "\n".join(parts)
+        text = ensure_game_in_caption(text, game)
+        candidates.append(text)
+
+    add_candidate(
+        hook_fallback,
+        f"{game_prefix} {verdict}.",
+        question,
+    )
+
+    add_candidate(
+        f"{game_prefix} en {moment_label}: {verdict}.",
+        line2_base or "Y sí, esto va a partir comentarios.",
+        question,
+    )
+
+    add_candidate(
+        hook_fallback,
+        line2_base or f"En {game} la mayoría la vende aquí.",
+        question,
+    )
+
+    add_candidate(
+        f"{game_prefix}: {moment_label} y sangre fría.",
+        f"{verdict}.",
+        question,
+    )
+
+    add_candidate(
+        f"{game_prefix} no juega bonito, juega para herir.",
+        line2_base or verdict,
+        question,
+    )
+
+    if ctx["moment_type"] == "goal":
+        add_candidate(
+            f"{game_prefix}: {moment_label} que parte a la comunidad.",
+            verdict,
+            question,
+        )
+
+    if ctx["moment_type"] == "clutch":
+        add_candidate(
+            f"{game_prefix} y clutch de manual no van en la misma frase.",
+            verdict,
+            question,
+        )
+
+    if ctx["moment_type"] == "final_circle":
+        add_candidate(
+            f"{game_prefix} en {moment_label} no perdona errores.",
+            verdict,
+            question,
+        )
+
+    if line2_base:
+        add_candidate(
+            hook_fallback,
+            line2_base,
+            question,
+        )
+
+    return dedupe_preserve_order(candidates)
+
+
+def score_caption_candidate(text, ctx):
+    score = 0.0
+    t = str(text or "").strip()
+    tl = t.lower()
+
+    if not t:
+        return -999.0
+
+    game = (ctx.get("game_name") or "").strip().lower()
+    hook = (ctx.get("hook") or "").strip().lower()
+    cta = (ctx.get("cta") or "").strip().lower()
+    caption_base = (ctx.get("caption_base") or "").strip().lower()
+    moment_label = (ctx.get("moment_label") or "").strip().lower()
+
+    if game and game in tl:
+        score += 2.0
+    else:
+        score -= 3.0
+
+    if contains_question(t):
+        score += 1.4
+    else:
+        score -= 1.25
+
+    if has_conflict_words(t):
+        score += 1.6
+
+    if moment_label and moment_label in tl:
+        score += 0.9
+
+    if hook and hook[:18] in tl:
+        score += 0.7
+
+    if cta and any(word in tl for word in re.findall(r"\w+", cta.lower())[:4]):
+        score += 0.4
+
+    if caption_base and any(word in tl for word in re.findall(r"\w+", caption_base.lower())[:5]):
+        score += 0.3
+
+    wc = word_count(t)
+    if 12 <= wc <= B_CAPTION_MAX_WORDS:
+        score += 1.0
+    elif wc < 8:
+        score -= 1.4
+    elif wc > B_CAPTION_MAX_WORDS:
+        score -= 1.0
+
+    lines = [x.strip() for x in t.splitlines() if x.strip()]
+    if 2 <= len(lines) <= 3:
+        score += 0.8
+    elif len(lines) >= 4:
+        score -= 0.4
+
+    if looks_generic_caption(t):
+        score -= 2.4
+
+    corporate_words = [
+        "demuestra", "nivel competitivo", "seguimos viendo", "esports",
+        "momento increíble", "momento increible", "gran jugada", "impresionante"
+    ]
+    if any(w in tl for w in corporate_words):
+        score -= 2.5
+
+    if "gaming latam" in tl or "reelsgaming" in tl:
+        score -= 1.5
+
+    if t.count("🔥") > 1:
+        score -= 0.5
+
+    return round(score, 4)
+
+
+def build_hashtags_for_game(game_name):
+    tags = GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"])[:4]
+    return " ".join(tags)
+
+
+def select_best_caption(ctx):
+    candidates = generate_caption_candidates(ctx)
+
+    ranked = []
+    for c in candidates:
+        s = score_caption_candidate(c, ctx)
+        ranked.append({"text": c, "score": s})
+
+    ranked.sort(key=lambda x: x["score"], reverse=True)
+
+    best = ranked[0] if ranked else {"text": "", "score": -999.0}
+
+    return {
+        "best_text": best["text"],
+        "best_score": best["score"],
+        "ranked": ranked[:10],
+    }
+
+
+def polish_caption_with_openai(base_caption, ctx):
+    if not OPENAI_API_KEY or not B_USE_OPENAI_POLISH:
+        return base_caption
+
+    if safe_float(ctx.get("editorial_score"), 0.0) < B_OPENAI_POLISH_MIN_EDITORIAL:
+        return base_caption
+
+    prompt = f"""
+Reescribe este caption para que suene más gamer LATAM, más específico y más comentable.
+
+NO cambies el sentido.
+NO lo vuelvas corporativo.
+NO lo hagas genérico.
+Mantén el nombre del juego.
+Mantén una pregunta final polarizante.
+Máximo 42 palabras.
+2 o 3 líneas.
+Sin hashtags.
+
+Juego: {ctx.get('game_name')}
+Emotion: {ctx.get('emotion')}
+Intensity: {ctx.get('intensity')}
+Moment type: {ctx.get('moment_type')}
+Hook H: {ctx.get('hook')}
+CTA H: {ctx.get('cta')}
+Caption base: {ctx.get('caption_base')}
+
+Caption base:
+{base_caption}
 
 Devuelve solo el caption final.
-"""
-        try:
-            text = openai_text(prompt).strip()
-            if text:
-                return ensure_game_in_caption(text, game_name)
-        except Exception as e:
-            print("OpenAI caption v6.2 fallback:", repr(e))
+""".strip()
 
-    hook = pick_game_hook(game_name, emotion, moment_type)
-    if game_name and game_name.lower() in hook.lower():
-        line1 = hook
-    else:
-        line1 = f"{game_name}: {hook}"
+    try:
+        out = openai_text(prompt).strip()
+        if not out:
+            return base_caption
 
-    if caption_base and len(caption_base) <= 110:
-        line2 = caption_base
-    else:
-        contexts = GAME_CONTEXTS.get(game_name) or GAME_CONTEXTS.get("Esports") or ["Esto merece debate."]
-        line2 = random.choice(contexts)
+        out = ensure_game_in_caption(out, ctx.get("game_name"))
+        if score_caption_candidate(out, ctx) >= score_caption_candidate(base_caption, ctx):
+            return out
+        return base_caption
+    except Exception as e:
+        print("OpenAI polish fallback:", repr(e))
+        return base_caption
 
-    if cta_hint and len(cta_hint) <= 100:
-        line3 = f"🔥 {cta_hint}"
-    else:
-        ctas = GAME_CTAS.get(game_name) or GAME_CTAS.get("Esports") or ["🔥 ¿ESTO ES CINE O NO?"]
-        line3 = f"🔥 {random.choice(ctas)}"
 
-    hashtags = " ".join(GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"])[:5])
+def build_caption_from_meta_v6(key, meta, item):
+    ctx = build_caption_context(key, meta, item)
 
-    text = f"{line1}\n\n{line2}\n\n{line3}\n\n{hashtags}".strip()
-    return ensure_game_in_caption(text, game_name)
+    selected = select_best_caption(ctx)
+    caption = selected["best_text"]
 
+    if not caption or selected["best_score"] < B_CAPTION_MIN_SCORE:
+        caption = f"{ctx['game_name']}: esto obliga a comentar.\n{ctx['question_label']}"
+
+    caption = polish_caption_with_openai(caption, ctx)
+    caption = ensure_game_in_caption(caption, ctx["game_name"])
+
+    hashtags = build_hashtags_for_game(ctx["game_name"])
+    if hashtags:
+        caption = f"{caption}\n\n{hashtags}"
+
+    print("[B_V6] caption_context =", json.dumps({
+        "game_name": ctx["game_name"],
+        "emotion": ctx["emotion"],
+        "intensity": ctx["intensity"],
+        "moment_type": ctx["moment_type"],
+        "hook": ctx["hook"],
+        "cta": ctx["cta"],
+        "caption_base": ctx["caption_base"],
+        "editorial_score": ctx["editorial_score"],
+        "candidate_score": ctx["candidate_score"],
+    }, ensure_ascii=False))
+
+    print("[B_V6] top_caption_score =", selected["best_score"])
+    print("[B_V6] top_candidates =", json.dumps(selected["ranked"][:3], ensure_ascii=False))
+
+    item["caption_engine_debug"] = {
+        "version": "v6.0_conflict_engine",
+        "context": {
+            "game_name": ctx["game_name"],
+            "emotion": ctx["emotion"],
+            "intensity": ctx["intensity"],
+            "moment_type": ctx["moment_type"],
+            "hook": ctx["hook"],
+            "cta": ctx["cta"],
+            "caption_base": ctx["caption_base"],
+            "editorial_score": ctx["editorial_score"],
+            "candidate_score": ctx["candidate_score"],
+        },
+        "top_caption_score": selected["best_score"],
+        "top_candidates": selected["ranked"][:5],
+    }
+
+    return caption
+
+
+# =========================
+# SHORTS HELPERS
+# =========================
 
 def build_shorts_title_from_meta_v62(key, meta, item):
     game_name = item.get("game_name") or resolve_game_name(key, meta)
@@ -1358,6 +1878,10 @@ Reglas:
 
 {hashtags}""".strip()
 
+
+# =========================
+# PUBLISHERS
+# =========================
 
 def ig_publish(video_url, caption):
     print("IG publish: creando container...")
@@ -1643,7 +2167,8 @@ def should_skip_for_editorial_quality(item):
         return False, None
 
     if B_BLOCK_WEAK_GENERIC_AUTO and is_weak_game_name(item.get("game_name")):
-        return True, "weak_game"
+        if not (is_priority_key(key) or is_manual_key(key)):
+            return True, "weak_game"
 
     if B_REQUIRE_EDITORIAL_SIGNALS:
         signals = 0
@@ -1706,13 +2231,17 @@ def publish(item, target_platforms=None):
             shorts_description = build_campaign_shorts_description_from_brief(key, meta, brief)
 
     if not caption:
-        caption = build_caption_from_meta_v62(key, meta, item)
+        caption = build_caption_from_meta_v6(key, meta, item)
     if not shorts_title:
         shorts_title = build_shorts_title_from_meta_v62(key, meta, item)
     if not shorts_description:
         shorts_description = build_shorts_description_from_meta_v62(key, meta, item)
 
     caption = ensure_game_in_caption(caption, item.get("game_name"))
+
+    item["caption_final"] = caption
+    item["shorts_title_final"] = shorts_title
+    item["shorts_description_final"] = shorts_description
 
     print("PUBLICANDO VIDEO:")
     print("KEY:", key)
@@ -1896,7 +2425,7 @@ def sort_queue_items(items):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: V6_2_1_YT_LIMIT_AND_SOURCE_GROUP")
+    print("MODE B VERSION: V6_0_CONFLICT_ENGINE")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_MAX_PER_SOURCE_GROUP_PER_RUN:", B_MAX_PER_SOURCE_GROUP_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
@@ -1906,6 +2435,10 @@ def run_mode_b():
     print("B_REQUIRE_EDITORIAL_SIGNALS:", B_REQUIRE_EDITORIAL_SIGNALS)
     print("B_EDITORIAL_SCORE_MIN:", B_EDITORIAL_SCORE_MIN)
     print("B_ALLOW_STRONG_HOOK_OVERRIDE:", B_ALLOW_STRONG_HOOK_OVERRIDE)
+    print("B_CAPTION_MAX_WORDS:", B_CAPTION_MAX_WORDS)
+    print("B_CAPTION_MIN_SCORE:", B_CAPTION_MIN_SCORE)
+    print("B_USE_OPENAI_POLISH:", B_USE_OPENAI_POLISH)
+    print("B_OPENAI_POLISH_MIN_EDITORIAL:", B_OPENAI_POLISH_MIN_EDITORIAL)
     print("B_ONLY_KEYS_CONTAIN:", B_ONLY_KEYS_CONTAIN or "(vacío)")
     print("PREFIX_PRIORITY:", PREFIX_PRIORITY)
     print("PREFIX_MANUAL:", PREFIX_MANUAL)
@@ -2097,9 +2630,13 @@ def run_mode_b():
                     "moment_type": item.get("moment_type"),
                     "copy_signals": item.get("copy_signals"),
                     "fallback_used": item.get("fallback_used"),
-                    "editorial_mode": "v6.2.1",
+                    "editorial_mode": "v6.0_conflict_engine",
                     "brief_txt_key": item.get("brief_txt_key"),
                     "brief": item.get("brief"),
+                    "caption_final": item.get("caption_final"),
+                    "shorts_title_final": item.get("shorts_title_final"),
+                    "shorts_description_final": item.get("shorts_description_final"),
+                    "caption_engine_debug": item.get("caption_engine_debug"),
                     "platform_results": result,
                 },
             )

@@ -106,19 +106,7 @@ def build_visual_title(title, style_family):
 
 
 def choose_style_family(title):
-    tl = _clean(title).lower()
-
-    gamer_signals = [
-        "drama", "polémica", "controversia", "funa",
-        "buff", "nerf", "meta", "leak", "filtrado",
-        "explota", "rompe", "caos", "bug"
-    ]
-
-    if _has_any(tl, gamer_signals):
-        return "reel_gamer"
-
-    return "editorial_clean"
-
+    return "reel_gamer"
 
 def should_use_runway(style_family, runway_enabled, runway_force):
     if not runway_enabled:

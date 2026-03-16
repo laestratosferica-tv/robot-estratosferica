@@ -1686,64 +1686,90 @@ def generate_reel_gamer_dynamic(
             f"[0:v]"
             f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
             f"crop={REEL_W}:{REEL_H},"
-            f"zoompan=z='min(zoom+0.0014,1.16)':d={int(seconds)*30}:"
+            f"zoompan=z='min(zoom+0.0015,1.18)':d={int(seconds)*30}:"
             f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
             f"s={REEL_W}x{REEL_H}:fps=30,"
-            f"eq=contrast=1.10:brightness=-0.03:saturation=1.18,"
-            f"gblur=sigma=8,"
+            f"gblur=sigma=12,"
+            f"eq=contrast=1.15:brightness=-0.02:saturation=1.25,"
             f"format=rgba[bg];"
         )
-
+        
+        # gradient neon overlay
         vf_parts.append(
             f"[bg]"
-            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=black@0.20:t=fill,"
-            f"drawbox=x=0:y=1180:w={REEL_W}:h=740:color=black@0.34:t=fill"
+            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=blue@0.10:t=fill,"
+            f"drawbox=x=0:y=900:w={REEL_W}:h=1020:color=purple@0.18:t=fill"
             f"[bg2];"
         )
-
+        
         current = "[bg2]"
-
+        
+        # card glow
         vf_parts.append(
             f"{current}"
-            f"drawbox=x=72:y=92:w=240:h=72:color=white@0.96:t=fill,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={badge_txt}:"
-            f"x=106:y=110:fontsize=34:fontcolor=black"
-            f"[badge];"
+            f"drawbox=x=120:y=260:w=840:h=840:color=white@0.10:t=fill"
+            f"[shadow];"
         )
-        current = "[badge]"
-
-        if logo_ok and logo_input is not None:
-            vf_parts.append(f"[{logo_input}:v]scale=132:-1,format=rgba,colorchannelmixer=aa=0.95[logo];")
-            vf_parts.append(f"{current}[logo]overlay=W-w-48:72:format=auto[withlogo];")
-            current = "[withlogo]"
-
+        current = "[shadow]"
+        
+        vf_parts.append(
+            f"[0:v]"
+            f"scale=840:840:force_original_aspect_ratio=decrease,"
+            f"pad=840:840:(ow-iw)/2:(oh-ih)/2:color=black@0,"
+            f"format=rgba[card];"
+        )
+        
+        vf_parts.append(
+            f"{current}[card]overlay=120:260:format=auto[main];"
+        )
+        
+        current = "[main]"
+        
+        # accent vertical bar
         vf_parts.append(
             f"{current}"
-            f"drawbox=x=66:y=260:w=16:h=270:color=white@0.95:t=fill"
+            f"drawbox=x=70:y=250:w=16:h=320:color=white@0.95:t=fill"
             f"[bar];"
         )
         current = "[bar]"
-
+        
+        # badge HOT esports red
+        vf_parts.append(
+            f"{current}"
+            f"drawbox=x=70:y=110:w=220:h=70:color=red@0.95:t=fill,"
+            f"drawtext=fontfile={FONT_BOLD}:textfile={badge_txt}:"
+            f"x=100:y=125:fontsize=36:fontcolor=white"
+            f"[badge];"
+        )
+        current = "[badge]"
+        
+        # title gamer BIG
         vf_parts.append(
             f"{current}"
             f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
-            f"x=108:y=250:"
+            f"x=110:y=260:"
             f"fontsize={title_size}:"
             f"line_spacing=12:"
             f"fontcolor=white:"
-            f"shadowcolor=black@0.75:"
+            f"borderw=4:bordercolor=black@0.6:"
+            f"shadowcolor=black@0.8:"
             f"shadowx=0:shadowy=6"
             f"[title];"
         )
+        
         current = "[title]"
-
+        
+        # CTA glass bar
         vf_parts.append(
             f"{current}"
-            f"drawbox=x=68:y=1540:w=944:h=120:color=black@0.20:t=fill,"
+            f"drawbox=x=60:y=1540:w=960:h=130:color=black@0.30:t=fill,"
             f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
-            f"x=92:y=1578:fontsize=42:fontcolor=white@0.92:"
-            f"shadowcolor=black@0.60:shadowx=0:shadowy=4,"
-            f"fade=t=out:st={max(0, int(seconds)-1)}:d=0.8"
+            f"x=90:y=1580:"
+            f"fontsize=44:"
+            f"fontcolor=white@0.95:"
+            f"shadowcolor=black@0.7:"
+            f"shadowx=0:shadowy=4,"
+            f"fade=t=out:st={max(0,int(seconds)-1)}:d=0.8"
             f"[vout]"
         )
 

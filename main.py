@@ -15,6 +15,37 @@ from editorial_renderers import render_editorial_asset
 import requests
 import boto3
 
+def generate_tts_voice(text: str) -> str:
+    """
+    Genera voz TTS y devuelve path local del wav
+    Usa gTTS (simple y funciona en runner)
+    """
+    from gtts import gTTS
+
+    tts = gTTS(text=text, lang="es")
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+    tts.save(tmp.name)
+
+    wav = tmp.name.replace(".mp3", ".wav")
+
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            tmp.name,
+            "-ar",
+            "44100",
+            "-ac",
+            "2",
+            wav,
+        ],
+        check=True,
+    )
+
+    return wav
+
 # RSS
 try:
     import feedparser

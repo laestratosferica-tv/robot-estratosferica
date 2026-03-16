@@ -1,7 +1,10 @@
+# ===== ugc_mode_b_feedback.py =====
+
 import json
 import os
 from collections import defaultdict
 from datetime import datetime, timedelta
+
 
 STATE_PATH = "ugc/state/mode_b_state.json"
 MEMORY_PATH = "ugc/state/editorial_memory.json"
@@ -23,90 +26,122 @@ def save_json(path, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+def parse_iso_datetime(value):
+    if not value:
+        return None
+
+    try:
+        v = str(value).strip()
+        if v.endswith("Z"):
+            v = v[:-1] + "+00:00"
+        return datetime.fromisoformat(v)
+    except Exception:
+        return None
+
+
 def recent_items(history):
     cutoff = datetime.utcnow() - timedelta(days=LOOKBACK_DAYS)
     out = []
 
     for item in history:
         ts = item.get("published_at")
-        if not ts:
+        dt = parse_iso_datetime(ts)
+        if not dt:
             continue
 
-        try:
-            dt = datetime.fromisoformat(ts.replace("Z", ""))
-        except:
-            continue
+        if dt.tzinfo is not None:
+            dt_naive = dt.astimezone().replace(tzinfo=None)
+        else:
+            dt_naive = dt
 
-        if dt >= cutoff:
+        if dt_naive >= cutoff:
             out.append(item)
 
     return out
 
 
+def extract_words(text):
+    words = []
+    for w in str(text or "").lower().split():
+        w = w.strip(".,!?;:()[]{}\"'`“”‘’#🔥-_/\\|")
+        if len(w) < 4:
+            continue
+        if w.isdigit():
+            continue
+        words.append(w)
+    return words
+
+
 def build_editorial_memory(items):
-    memory = {
+    return {
         "version": "v1",
         "generated_at": datetime.utcnow().isoformat(),
-        "items": items
+        "items": items,
     }
-    return memory
 
 
 def build_summary(items):
     by_game = defaultdict(list)
 
     for it in items:
-        game = (it.get("game_name") or "generic").lower()
+        game = (it.get("game_name") or "generic").strip().lower()
         by_game[game].append(it)
 
-    summary = {}
+    summary_games = {}
 
     for game, rows in by_game.items():
         captions = [r.get("caption_final", "") for r in rows if r.get("caption_final")]
+        questions = [c for c in captions if "¿" in c or "?" in c]
 
-        hot_words = []
-        for c in captions:
-            words = c.lower().split()
-            hot_words.extend(words)
-
-        # naive frequency
         freq = defaultdict(int)
-        for w in hot_words:
-            if len(w) < 4:
-                continue
-            freq[w] += 1
+        for caption in captions:
+            for w in extract_words(caption):
+                freq[w] += 1
 
-        top_words = sorted(freq.items(), key=lambda x: -x[1])[:10]
-        top_words = [w for w, _ in top_words]
+        top_words = [w for w, _ in sorted(freq.items(), key=lambda x: (-x[1], x[0]))[:12]]
 
-        summary[game] = {
+        patterns_hint = [
+            "usar conflicto",
+            "usar pregunta final",
+            "mencionar juego explícitamente",
+        ]
+
+        if len(questions) >= max(1, len(captions) // 2):
+            patterns_hint.append("pregunta polarizante funciona")
+
+        if any("skill" in c.lower() for c in captions):
+            patterns_hint.append("skill vs suerte funciona")
+
+        if any("inflado" in c.lower() for c in captions):
+            patterns_hint.append("inflado vs real funciona")
+
+        if any("lobby" in c.lower() for c in captions):
+            patterns_hint.append("lobby / rival flojo funciona")
+
+        summary_games[game] = {
             "recent_posts": len(rows),
             "top_words": top_words,
-            "patterns_hint": [
-                "usar conflicto",
-                "usar pregunta final",
-                "mencionar juego explícitamente"
-            ]
+            "patterns_hint": patterns_hint[:8],
         }
 
     return {
         "version": "v1",
         "generated_at": datetime.utcnow().isoformat(),
-        "games": summary
+        "games": summary_games,
     }
 
 
 def run():
     state = load_json(STATE_PATH)
+    history = state.get("history", [])
 
-    history = state.get("published_history", [])
     if not history:
-        print("No published history found.")
+        print("No history found in mode_b_state.json")
         return
 
     recents = recent_items(history)
     if not recents:
-        print("No recent items.")
+        print("No recent items in lookback window.")
         return
 
     memory = build_editorial_memory(recents)
@@ -116,6 +151,8 @@ def run():
     save_json(SUMMARY_PATH, summary)
 
     print(f"Editorial memory updated. Items: {len(recents)}")
+    print(f"Saved: {MEMORY_PATH}")
+    print(f"Saved: {SUMMARY_PATH}")
 
 
 if __name__ == "__main__":

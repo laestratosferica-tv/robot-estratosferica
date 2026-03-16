@@ -1243,6 +1243,9 @@ def generate_reel_from_image(
     badge_text = (badge_text or "HOT").strip().upper()
     
     music_ok = bool(music_path) and os.path.exists(music_path)
+    voice_text = headline
+    voice_path = generate_tts_voice(voice_text)
+    voice_ok = os.path.exists(voice_path)
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 
     n_lines = max(1, headline_wrapped.count("\n") + 1)

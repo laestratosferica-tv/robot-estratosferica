@@ -1770,7 +1770,14 @@ def generate_reel_gamer_dynamic(
             f"fontcolor=white@0.95:"
             f"shadowcolor=black@0.7:"
             f"shadowx=0:shadowy=4,"
+            f"fade=t=in:st=0:d=0.20,"
             f"fade=t=out:st={max(0,int(seconds)-1)}:d=0.8"
+            f"[baseout];"
+        )
+        
+        vf_parts.append(
+            f"[baseout]"
+            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=white@0.10:t=fill:enable='between(t,0,0.12)'"
             f"[vout]"
         )
 

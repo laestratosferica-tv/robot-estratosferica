@@ -1697,8 +1697,9 @@ def generate_reel_gamer_dynamic(
         # gradient neon overlay
         vf_parts.append(
             f"[bg]"
-            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=blue@0.10:t=fill,"
-            f"drawbox=x=0:y=900:w={REEL_W}:h=1020:color=purple@0.18:t=fill"
+            f"drawbox=x=0:y=0:w={REEL_W}:h=780:color=blue@0.12:t=fill,"
+            f"drawbox=x=0:y=780:w={REEL_W}:h=520:color=purple@0.14:t=fill,"
+            f"drawbox=x=0:y=1300:w={REEL_W}:h=620:color=black@0.16:t=fill"
             f"[bg2];"
         )
         

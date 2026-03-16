@@ -86,6 +86,26 @@ RECENT_PHRASE_KEYS = [
     "momento de manos y sangre fría",
     "la mayoría aquí la vende",
     "la mayoría se apaga aquí",
+    "momento de manos y cero miedo",
+    "esto es mano y cabeza",
+    "aquí muchos dudan y la regalan",
+]
+
+OPENING_PATTERNS = [
+    "valorant:",
+    "cs2:",
+    "warzone:",
+    "f1:",
+    "minecraft:",
+    "apex legends:",
+    "ea sports fc:",
+    "league of legends:",
+    "fortnite:",
+    "gran turismo:",
+    "momento de manos y cero miedo",
+    "momento de manos y sangre fría",
+    "esto no es highlight, es castigo",
+    "esto es mano y cabeza",
 ]
 
 
@@ -154,7 +174,6 @@ def recent_items(history):
         dt = parse_iso_datetime(ts)
         if not dt:
             continue
-
         if dt >= cutoff:
             out.append(item)
 
@@ -175,10 +194,7 @@ def is_hashtag_line(line):
     tokens = line.split()
     if not tokens:
         return False
-    tagged = 0
-    for t in tokens:
-        if t.startswith("#"):
-            tagged += 1
+    tagged = sum(1 for t in tokens if t.startswith("#"))
     return tagged >= max(1, len(tokens) - 1)
 
 
@@ -249,7 +265,7 @@ def detect_patterns(captions):
     if any(x in joined for x in ["lobby", "rival", "dormido", "regaló", "regalo"]):
         hints.append("rival flojo / regalo funciona")
 
-    if any(x in joined for x in ["clutch", "sentencia", "borra", "castiga"]):
+    if any(x in joined for x in ["clutch", "sentencia", "borra", "castigo"]):
         hints.append("clutch / castigo funciona")
 
     if any(x in joined for x in ["caos", "milagro", "bendecido"]):
@@ -268,6 +284,41 @@ def build_recent_phrase_counts(captions):
     return counts
 
 
+def first_meaningful_line(caption):
+    lines = split_caption_lines(caption)
+    for line in lines:
+        if is_hashtag_line(line):
+            continue
+        return line.lower()
+    return ""
+
+
+def normalize_opening(line):
+    line = clean_line(line).lower()
+    line = re.sub(r"\s+", " ", line)
+
+    for pattern in OPENING_PATTERNS:
+        if line.startswith(pattern):
+            return pattern
+
+    words = line.split()
+    if len(words) >= 5:
+        return " ".join(words[:5])
+    return line
+
+
+def build_opening_counts(captions):
+    counts = defaultdict(int)
+    for caption in captions:
+        opening = first_meaningful_line(caption)
+        if not opening:
+            continue
+        normalized = normalize_opening(opening)
+        if normalized:
+            counts[normalized] += 1
+    return dict(sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:20])
+
+
 def build_editorial_memory(items):
     cleaned_items = []
 
@@ -277,7 +328,7 @@ def build_editorial_memory(items):
         cleaned_items.append(cloned)
 
     return {
-        "version": "v3_r2_clean",
+        "version": "v4_r2_opening_memory",
         "generated_at": now_utc().isoformat(),
         "lookback_days": LOOKBACK_DAYS,
         "items": cleaned_items,
@@ -305,16 +356,18 @@ def build_summary(items):
         top_words = [w for w, _ in sorted(freq.items(), key=lambda x: (-x[1], x[0]))[:12]]
         patterns_hint = detect_patterns(captions)
         recent_phrase_counts = build_recent_phrase_counts(captions)
+        opening_counts = build_opening_counts(captions)
 
         summary_games[game] = {
             "recent_posts": len(rows),
             "top_words": top_words,
             "patterns_hint": patterns_hint,
             "recent_phrase_counts": recent_phrase_counts,
+            "opening_counts": opening_counts,
         }
 
     return {
-        "version": "v3_r2_clean",
+        "version": "v4_r2_opening_memory",
         "generated_at": now_utc().isoformat(),
         "lookback_days": LOOKBACK_DAYS,
         "games": summary_games,

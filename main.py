@@ -1744,6 +1744,17 @@ def generate_reel_gamer_dynamic(
         )
         current = "[badge]"
         
+        vf_parts.append(
+            f"{current}"
+            f"drawbox=x=180:y=220:w=6:h=6:color=white@0.20:t=fill,"
+            f"drawbox=x=860:y=340:w=8:h=8:color=white@0.18:t=fill,"
+            f"drawbox=x=940:y=980:w=5:h=5:color=white@0.16:t=fill,"
+            f"drawbox=x=220:y=1180:w=7:h=7:color=white@0.15:t=fill,"
+            f"drawbox=x=820:y=1460:w=6:h=6:color=white@0.14:t=fill"
+            f"[particles];"
+        )
+        current = "[particles]"
+        
         # title gamer BIG
         vf_parts.append(
             f"{current}"

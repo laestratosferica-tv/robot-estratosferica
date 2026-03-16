@@ -3,27 +3,79 @@
 import json
 import os
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+import boto3
 
 
-STATE_PATH = "ugc/state/mode_b_state.json"
-MEMORY_PATH = "ugc/state/editorial_memory.json"
-SUMMARY_PATH = "ugc/state/editorial_memory_summary.json"
+def env_nonempty(name, default=None):
+    v = os.getenv(name)
+    if not v:
+        return default
+    v = v.strip()
+    return v if v else default
 
-LOOKBACK_DAYS = 7
+
+def env_int(name, default):
+    v = os.getenv(name)
+    if not v:
+        return default
+    try:
+        return int(v)
+    except Exception:
+        return default
 
 
-def load_json(path):
-    if not os.path.exists(path):
+AWS_ACCESS_KEY_ID = env_nonempty("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = env_nonempty("AWS_SECRET_ACCESS_KEY")
+R2_ENDPOINT_URL = env_nonempty("R2_ENDPOINT_URL")
+BUCKET_NAME = env_nonempty("BUCKET_NAME")
+
+STATE_KEY = env_nonempty("B_STATE_KEY", "ugc/state/mode_b_state.json")
+MEMORY_KEY = env_nonempty("B_EDITORIAL_MEMORY_KEY", "ugc/state/editorial_memory.json")
+SUMMARY_KEY = env_nonempty("B_EDITORIAL_MEMORY_SUMMARY_KEY", "ugc/state/editorial_memory_summary.json")
+
+LOOKBACK_DAYS = env_int("B_EDITORIAL_LOOKBACK_DAYS", 7)
+
+
+def now_utc():
+    return datetime.now(timezone.utc)
+
+
+def r2():
+    if not AWS_ACCESS_KEY_ID:
+        raise RuntimeError("Falta AWS_ACCESS_KEY_ID")
+    if not AWS_SECRET_ACCESS_KEY:
+        raise RuntimeError("Falta AWS_SECRET_ACCESS_KEY")
+    if not R2_ENDPOINT_URL:
+        raise RuntimeError("Falta R2_ENDPOINT_URL")
+    if not BUCKET_NAME:
+        raise RuntimeError("Falta BUCKET_NAME")
+
+    return boto3.client(
+        "s3",
+        endpoint_url=R2_ENDPOINT_URL,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name="auto",
+    )
+
+
+def load_json(key):
+    try:
+        obj = r2().get_object(Bucket=BUCKET_NAME, Key=key)
+        return json.loads(obj["Body"].read().decode("utf-8"))
+    except Exception:
         return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
-def save_json(path, data):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+def save_json(key, data):
+    r2().put_object(
+        Bucket=BUCKET_NAME,
+        Key=key,
+        Body=json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"),
+        ContentType="application/json",
+    )
 
 
 def parse_iso_datetime(value):
@@ -34,13 +86,16 @@ def parse_iso_datetime(value):
         v = str(value).strip()
         if v.endswith("Z"):
             v = v[:-1] + "+00:00"
-        return datetime.fromisoformat(v)
+        dt = datetime.fromisoformat(v)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
     except Exception:
         return None
 
 
 def recent_items(history):
-    cutoff = datetime.utcnow() - timedelta(days=LOOKBACK_DAYS)
+    cutoff = now_utc() - timedelta(days=LOOKBACK_DAYS)
     out = []
 
     for item in history:
@@ -49,12 +104,7 @@ def recent_items(history):
         if not dt:
             continue
 
-        if dt.tzinfo is not None:
-            dt_naive = dt.astimezone().replace(tzinfo=None)
-        else:
-            dt_naive = dt
-
-        if dt_naive >= cutoff:
+        if dt >= cutoff:
             out.append(item)
 
     return out
@@ -74,8 +124,9 @@ def extract_words(text):
 
 def build_editorial_memory(items):
     return {
-        "version": "v1",
-        "generated_at": datetime.utcnow().isoformat(),
+        "version": "v2_r2",
+        "generated_at": now_utc().isoformat(),
+        "lookback_days": LOOKBACK_DAYS,
         "items": items,
     }
 
@@ -118,6 +169,12 @@ def build_summary(items):
         if any("lobby" in c.lower() for c in captions):
             patterns_hint.append("lobby / rival flojo funciona")
 
+        if any("clutch" in c.lower() for c in captions):
+            patterns_hint.append("clutch funciona")
+
+        if any("regalo" in c.lower() or "regalado" in c.lower() for c in captions):
+            patterns_hint.append("skill vs regalo funciona")
+
         summary_games[game] = {
             "recent_posts": len(rows),
             "top_words": top_words,
@@ -125,14 +182,21 @@ def build_summary(items):
         }
 
     return {
-        "version": "v1",
-        "generated_at": datetime.utcnow().isoformat(),
+        "version": "v2_r2",
+        "generated_at": now_utc().isoformat(),
+        "lookback_days": LOOKBACK_DAYS,
         "games": summary_games,
     }
 
 
 def run():
-    state = load_json(STATE_PATH)
+    print("===== MODE B FEEDBACK START =====")
+    print("STATE_KEY:", STATE_KEY)
+    print("MEMORY_KEY:", MEMORY_KEY)
+    print("SUMMARY_KEY:", SUMMARY_KEY)
+    print("LOOKBACK_DAYS:", LOOKBACK_DAYS)
+
+    state = load_json(STATE_KEY)
     history = state.get("history", [])
 
     if not history:
@@ -147,12 +211,13 @@ def run():
     memory = build_editorial_memory(recents)
     summary = build_summary(recents)
 
-    save_json(MEMORY_PATH, memory)
-    save_json(SUMMARY_PATH, summary)
+    save_json(MEMORY_KEY, memory)
+    save_json(SUMMARY_KEY, summary)
 
     print(f"Editorial memory updated. Items: {len(recents)}")
-    print(f"Saved: {MEMORY_PATH}")
-    print(f"Saved: {SUMMARY_PATH}")
+    print(f"Saved to R2: {MEMORY_KEY}")
+    print(f"Saved to R2: {SUMMARY_KEY}")
+    print("===== MODE B FEEDBACK DONE =====")
 
 
 if __name__ == "__main__":

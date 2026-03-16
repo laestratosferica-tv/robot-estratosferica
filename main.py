@@ -1877,31 +1877,25 @@ def generate_reel_gamer_dynamic(
             )
             current = "[withlogo]"
 
-        # Título grande
+        # Franja sutil abajo para título principal
+        vf_parts.append(
+            f"{current}"
+            f"drawbox=x=40:y=1400:w=1000:h=260:color=black@0.20:t=fill"
+            f"[titlebase];"
+        )
+        current = "[titlebase]"
+
+        # Título principal abajo
         vf_parts.append(
             f"{current}"
             f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
-            f"x=110:y=640:"
+            f"x=80:y=1445:"
             f"fontsize={title_size}:"
             f"line_spacing=10:"
             f"fontcolor=white:"
             f"borderw=4:bordercolor=black@0.62:"
             f"shadowcolor=black@0.85:"
-            f"shadowx=0:shadowy=6"
-            f"[title];"
-        )
-        current = "[title]"
-
-        # CTA abajo tipo glass
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=60:y=1540:w=960:h=125:color=black@0.22:t=fill,"
-            f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
-            f"x=90:y=1578:"
-            f"fontsize=42:"
-            f"fontcolor=white@0.95:"
-            f"shadowcolor=black@0.70:"
-            f"shadowx=0:shadowy=4,"
+            f"shadowx=0:shadowy=6,"
             f"fade=t=out:st={max(0, int(seconds)-1)}:d=0.8"
             f"[vout];"
         )

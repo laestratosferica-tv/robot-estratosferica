@@ -2374,7 +2374,7 @@ def save_run_payload(account_id: str, payload: Dict[str, Any]) -> str:
     save_to_r2_json(key, payload)
     print("Archivo guardado en R2:", key)
     return key
-    £
+    
 # =========================
 # MAIN
 # =========================

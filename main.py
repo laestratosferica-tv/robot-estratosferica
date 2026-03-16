@@ -2301,8 +2301,13 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
                 chosen_music = pick_music_path()
                 chosen_logo = pick_logo_path(asset_logo_default)
-                video_hook = build_video_hook(item.get("title", ""))
-                video_cta = pick_gamer_cta(cta_text)
+                
+                plan = build_editorial_plan(
+                    item=item,
+                    default_cta=cta_text,
+                    runway_enabled=RUNWAY_ENABLED and bool(RUNWAY_API_KEY),
+                    runway_force=RUNWAY_FORCE,
+                )
 
                 with tempfile.TemporaryDirectory() as td:
                     local_img = os.path.join(td, f"news{img_ext}")

@@ -1,12 +1,16 @@
-name: publisher
+name: mode-b-publisher
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   schedule:
     - cron: "0 */3 * * *"
 
+concurrency:
+  group: mode-b-publisher
+  cancel-in-progress: false
+
 jobs:
-  publish:
+  ugc_mode_b:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -14,17 +18,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+
+      - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install boto3 requests google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2
 
-      - name: Run Mode B Publisher
+      - name: Run Mode B
+        run: python -u main.py
         env:
           RUN_MODE: B
 
@@ -39,10 +51,26 @@ jobs:
           B_PREFIX_AUTO: ugc/final_clean
           B_META_FINAL_PREFIX: ugc/meta/final_clean
           B_STATE_KEY: ugc/state/mode_b_state.json
+
           B_MAX_PUBLISH_PER_RUN: "2"
+          B_MAX_PER_SOURCE_GROUP_PER_RUN: "2"
 
           B_ONLY_KEYS_CONTAIN: ""
           B_AVOID_SAME_SOURCE_PER_RUN: "true"
+          B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED: "false"
+
+          B_MIN_CANDIDATE_SCORE: "0.55"
+          B_ALLOW_LOW_SCORE_FOR_PRIORITY: "true"
+          B_ALLOW_LOW_SCORE_FOR_MANUAL: "true"
+          B_BLOCK_WEAK_GENERIC_AUTO: "true"
+          B_REQUIRE_EDITORIAL_SIGNALS: "true"
+          B_EDITORIAL_SCORE_MIN: "1.25"
+          B_ALLOW_STRONG_HOOK_OVERRIDE: "true"
+
+          B_CAPTION_MAX_WORDS: "42"
+          B_CAPTION_MIN_SCORE: "3.6"
+          B_USE_OPENAI_POLISH: "true"
+          B_OPENAI_POLISH_MIN_EDITORIAL: "3.0"
 
           ENABLE_INSTAGRAM: "true"
           ENABLE_FACEBOOK: "true"
@@ -65,5 +93,5 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           YOUTUBE_PRIVACY_STATUS: "public"
 
-        run: |
-          python -u main.py
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: "gpt-4.1-mini"

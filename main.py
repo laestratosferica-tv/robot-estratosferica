@@ -1841,6 +1841,71 @@ def generate_reel_gamer_dynamic(
         with open(out_mp4, "rb") as f:
             return f.read()
 
+# =========================
+# Instagram Graph API publish
+# =========================
+
+def ig_api_post(path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    url = f"{GRAPH_BASE}/{path.lstrip('/')}"
+    r = requests.post(url, data=data, timeout=HTTP_TIMEOUT)
+    _raise_meta_error(r, f"IG POST {path}")
+    return r.json()
+
+
+def ig_api_get(path: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    url = f"{GRAPH_BASE}/{path.lstrip('/')}"
+    r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
+    _raise_meta_error(r, f"IG GET {path}")
+    return r.json()
+
+
+def ig_wait_container(
+    creation_id: str, access_token: str, timeout_sec: int = 900
+) -> None:
+    start = time.time()
+    while time.time() - start < timeout_sec:
+        j = ig_api_get(
+            f"{creation_id}",
+            {"fields": "status_code", "access_token": access_token},
+        )
+        status = (j.get("status_code") or "").upper()
+        if status in ("FINISHED", "PUBLISHED"):
+            return
+        if status in ("ERROR", "FAILED"):
+            raise RuntimeError(f"IG container failed: {j}")
+        time.sleep(3)
+    raise TimeoutError(f"IG container not ready after {timeout_sec}s")
+
+
+def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
+    if not (IG_USER_ID and IG_ACCESS_TOKEN):
+        raise RuntimeError("Faltan IG_USER_ID o IG_ACCESS_TOKEN")
+
+    print("IG publish: creando container...")
+    j = ig_api_post(
+        f"{IG_USER_ID}/media",
+        {
+            "media_type": "REELS",
+            "video_url": video_url,
+            "caption": caption,
+            "share_to_feed": "true",
+            "access_token": IG_ACCESS_TOKEN,
+        },
+    )
+    creation_id = j.get("id")
+    if not creation_id:
+        raise RuntimeError(f"IG reels create failed: {j}")
+
+    print("IG publish: esperando container...", creation_id)
+    ig_wait_container(creation_id, IG_ACCESS_TOKEN, timeout_sec=900)
+
+    print("IG publish: publicando...")
+    res = ig_api_post(
+        f"{IG_USER_ID}/media_publish",
+        {"creation_id": creation_id, "access_token": IG_ACCESS_TOKEN},
+    )
+    return res
+    
 
 # =========================
 # Facebook Page Reels publish

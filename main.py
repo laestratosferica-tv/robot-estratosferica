@@ -1229,20 +1229,16 @@ def generate_reel_from_image(
             f.write(cta)
         with open(badge_txt, "w", encoding="utf-8") as f:
             f.write(badge_text)
-
-        cmd = [
+            
+            cmd = [
             "ffmpeg",
             "-y",
             "-nostdin",
             "-hide_banner",
             "-loglevel",
             "error",
-            "-loop",
-            "1",
-            "-t",
-            str(int(seconds)),
-            "-i",
-            news_image_path,
+            "-framerate", "30",
+            "-i", news_image_path,
         ]
 
         if logo_ok:

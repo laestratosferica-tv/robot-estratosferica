@@ -1275,16 +1275,27 @@ def generate_reel_from_image(
             "-i", news_image_path,
         ]
 
+        # inputs ffmpeg ordenados: 0 = imagen base
+        input_index = 1
+        
+        logo_input = None
+        voice_input = None
+        music_input = None
+        
         if logo_ok:
             cmd += ["-i", logo_path]
+            logo_input = input_index
+            input_index += 1
+        
         if voice_ok:
             cmd += ["-i", voice_path]
+            voice_input = input_index
+            input_index += 1
         
         if music_ok:
             cmd += ["-i", music_path]
-    
-        logo_input = 1 if logo_ok else None
-        music_input = 2 if logo_ok and music_ok else 1 if music_ok else None
+            music_input = input_index
+            input_index += 1
 
         vf_parts = []
 

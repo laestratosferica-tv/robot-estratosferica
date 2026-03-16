@@ -75,7 +75,6 @@ B_MAX_PER_SOURCE_GROUP_PER_RUN = env_int("B_MAX_PER_SOURCE_GROUP_PER_RUN", 2)
 B_ONLY_KEYS_CONTAIN = env_nonempty("B_ONLY_KEYS_CONTAIN", "")
 B_AVOID_SAME_SOURCE_PER_RUN = env_bool("B_AVOID_SAME_SOURCE_PER_RUN", True)
 
-# Por defecto FALSE
 B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED = env_bool("B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED", False)
 
 B_MIN_CANDIDATE_SCORE = env_float("B_MIN_CANDIDATE_SCORE", 0.55)
@@ -88,7 +87,6 @@ B_REQUIRE_EDITORIAL_SIGNALS = env_bool("B_REQUIRE_EDITORIAL_SIGNALS", True)
 B_EDITORIAL_SCORE_MIN = env_float("B_EDITORIAL_SCORE_MIN", 1.25)
 B_ALLOW_STRONG_HOOK_OVERRIDE = env_bool("B_ALLOW_STRONG_HOOK_OVERRIDE", True)
 
-# MODE B v6.1 caption engine
 B_CAPTION_MAX_WORDS = env_int("B_CAPTION_MAX_WORDS", 42)
 B_CAPTION_MIN_SCORE = env_float("B_CAPTION_MIN_SCORE", 3.6)
 B_USE_OPENAI_POLISH = env_bool("B_USE_OPENAI_POLISH", True)
@@ -1245,10 +1243,6 @@ Reglas:
 {" ".join(hashtags[:7])}""".strip()
 
 
-# =========================
-# MODE B v6.1 - CAPTION ENGINE
-# =========================
-
 def clean_line(text):
     text = re.sub(r"\s+", " ", str(text or "")).strip()
     text = text.strip(" -–—|•")
@@ -1577,6 +1571,48 @@ def get_memory_top_words(ctx):
     return [clean_line(w).lower() for w in words if clean_line(w)]
 
 
+def get_recent_phrase_counts(ctx):
+    gm = ctx.get("game_memory") or {}
+    counts = gm.get("recent_phrase_counts") or {}
+    if not isinstance(counts, dict):
+        return {}
+    out = {}
+    for k, v in counts.items():
+        try:
+            out[str(k).strip().lower()] = int(v)
+        except Exception:
+            continue
+    return out
+
+
+def score_recent_phrase_penalty(text, ctx):
+    tl = str(text or "").lower()
+    counts = get_recent_phrase_counts(ctx)
+
+    if not counts:
+        return 0.0
+
+    penalty = 0.0
+
+    tracked_phrases = [
+        "en momento de manos",
+        "la mayoría la vende aquí",
+        "esto no es highlight, es castigo",
+        "momento de manos y sangre fría",
+        "la mayoría aquí la vende",
+        "la mayoría se apaga aquí",
+    ]
+
+    for phrase in tracked_phrases:
+        seen = counts.get(phrase, 0)
+        if seen <= 0:
+            continue
+        if phrase in tl:
+            penalty += min(seen * 0.45, 2.2)
+
+    return penalty
+
+
 def generate_caption_candidates(ctx):
     game = ctx["game_name"]
     hook = clean_line(ctx.get("hook"))
@@ -1589,7 +1625,7 @@ def generate_caption_candidates(ctx):
 
     hook_fallback = sentence_case(hook) if hook else None
     if not hook_fallback:
-        hook_fallback = f"{game_prefix} en {moment_label} no perdona"
+        hook_fallback = f"{game_prefix} no perdona aquí"
 
     line2_base = sentence_case(caption_base) if caption_base else ""
     if looks_generic_caption(line2_base):
@@ -1615,25 +1651,19 @@ def generate_caption_candidates(ctx):
     )
 
     add_candidate(
-        f"{game_prefix} en {moment_label}: {verdict}.",
-        line2_base or f"En {game_prefix} la mayoría la vende aquí.",
+        f"{game_prefix}: {verdict}.",
+        line2_base or "Aquí muchos se apagan.",
         question,
     )
 
     add_candidate(
         hook_fallback,
-        line2_base or f"En {game_prefix} la mayoría se apaga aquí.",
+        line2_base or "Aquí muchos dudan y la regalan.",
         question,
     )
 
     add_candidate(
-        f"{game_prefix}: {moment_label} y sangre fría.",
-        f"{verdict}.",
-        question,
-    )
-
-    add_candidate(
-        f"{game_prefix} no juega bonito, juega para herir.",
+        f"{game_prefix} no juega bonito, juega para castigar.",
         line2_base or verdict,
         question,
     )
@@ -1641,6 +1671,24 @@ def generate_caption_candidates(ctx):
     add_candidate(
         f"{game_prefix} ve medio error y lo cobra.",
         line2_base or verdict,
+        question,
+    )
+
+    add_candidate(
+        f"{game_prefix} aquí no improvisa.",
+        line2_base or verdict,
+        question,
+    )
+
+    add_candidate(
+        f"{game_prefix} no lo hace por reflejo.",
+        line2_base or verdict,
+        question,
+    )
+
+    add_candidate(
+        f"{game_prefix}: {moment_label} y cero miedo.",
+        verdict,
         question,
     )
 
@@ -1653,7 +1701,7 @@ def generate_caption_candidates(ctx):
 
     if ctx["moment_type"] == "clutch":
         add_candidate(
-            f"{game_prefix} y clutch limpio no van siempre en la misma frase.",
+            f"{game_prefix} aquí no tiembla.",
             verdict,
             question,
         )
@@ -1754,6 +1802,8 @@ def score_caption_candidate(text, ctx):
 
     if t.count("🔥") > 1:
         score -= 0.5
+
+    score -= score_recent_phrase_penalty(t, ctx)
 
     return round(score, 4)
 
@@ -1873,7 +1923,7 @@ def build_caption_from_meta_v6(key, meta, item):
     print("[B_V6] top_candidates =", json.dumps(selected["ranked"][:3], ensure_ascii=False))
 
     item["caption_engine_debug"] = {
-        "version": "v6.1_conflict_engine_aggressive_memory",
+        "version": "v6.1_conflict_engine_aggressive_memory_dedup",
         "context": {
             "game_name": ctx["game_name"],
             "emotion": ctx["emotion"],
@@ -1892,10 +1942,6 @@ def build_caption_from_meta_v6(key, meta, item):
 
     return caption
 
-
-# =========================
-# SHORTS HELPERS
-# =========================
 
 def build_shorts_title_from_meta_v62(key, meta, item):
     game_name = item.get("game_name") or resolve_game_name(key, meta)
@@ -1983,10 +2029,6 @@ Reglas:
 
 {hashtags}""".strip()
 
-
-# =========================
-# PUBLISHERS
-# =========================
 
 def ig_publish(video_url, caption):
     print("IG publish: creando container...")
@@ -2540,7 +2582,7 @@ def sort_queue_items(items):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: V6_1_CONFLICT_ENGINE_AGGRESSIVE_MEMORY")
+    print("MODE B VERSION: V6_1_CONFLICT_ENGINE_AGGRESSIVE_MEMORY_DEDUP")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_MAX_PER_SOURCE_GROUP_PER_RUN:", B_MAX_PER_SOURCE_GROUP_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
@@ -2746,7 +2788,7 @@ def run_mode_b():
                     "moment_type": item.get("moment_type"),
                     "copy_signals": item.get("copy_signals"),
                     "fallback_used": item.get("fallback_used"),
-                    "editorial_mode": "v6.1_conflict_engine_aggressive_memory",
+                    "editorial_mode": "v6.1_conflict_engine_aggressive_memory_dedup",
                     "brief_txt_key": item.get("brief_txt_key"),
                     "brief": item.get("brief"),
                     "caption_final": item.get("caption_final"),

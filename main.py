@@ -2380,8 +2380,8 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             seconds=REEL_SECONDS,
                             music_path=chosen_music,
                         )
-
-                            bg_vid_clean = os.path.join(td, "bg_clean.mp4")
+                        
+                        bg_vid_clean = os.path.join(td, "bg_clean.mp4")
                             sanitize_runway_bg_video(bg_vid, bg_vid_clean, start_sec=0.35)
 
                             reel_bytes = generate_reel_from_video_bg(

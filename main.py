@@ -2291,7 +2291,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         reel_bytes = None
         if ENABLE_REELS:
             try:
-                img_bytes, img_ext = download_image_bytes(chosen_img)
+                               img_bytes, img_ext = download_image_bytes(chosen_img)
                 img_r2_url = upload_image_bytes_to_r2_public(
                     img_bytes,
                     img_ext,
@@ -2301,7 +2301,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
                 chosen_music = pick_music_path()
                 chosen_logo = pick_logo_path(asset_logo_default)
-                
+
                 plan = build_editorial_plan(
                     item=item,
                     default_cta=cta_text,
@@ -2314,12 +2314,12 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     with open(local_img, "wb") as f:
                         f.write(img_bytes)
 
-                  use_runway = bool(plan.get("use_runway"))
+                    use_runway = bool(plan.get("use_runway"))
 
                     if use_runway:
                         try:
                             runway_prompt = plan.get("runway_prompt") or item.get("title", "")
-                            
+
                             task_id = runway_create_image_to_video(
                                 img_r2_url,
                                 runway_prompt,
@@ -2343,6 +2343,43 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             bg_vid = os.path.join(td, "bg.mp4")
                             with open(bg_vid, "wb") as f:
                                 f.write(mp4_bytes)
+
+                            bg_vid_clean = os.path.join(td, "bg_clean.mp4")
+                            sanitize_runway_bg_video(bg_vid, bg_vid_clean, start_sec=0.35)
+
+                            reel_bytes = generate_reel_from_video_bg(
+                                headline=plan["title_text"],
+                                bg_video_path=bg_vid_clean,
+                                logo_path=chosen_logo,
+                                seconds=REEL_SECONDS,
+                                music_path=chosen_music,
+                                cta_text=plan["cta_text"],
+                                badge_text=plan["badge_text"],
+                            )
+
+                        except Exception as e:
+                            print("Runway falló (fallback a reel normal):", str(e))
+                            reel_bytes = render_editorial_asset(
+                                plan=plan,
+                                render_clean_fn=generate_reel_from_video_bg,
+                                render_gamer_fn=generate_reel_gamer_dynamic,
+                                headline=plan["title_text"],
+                                image_path=local_img,
+                                logo_path=chosen_logo,
+                                seconds=REEL_SECONDS,
+                                music_path=chosen_music,
+                            )
+                    else:
+                        reel_bytes = render_editorial_asset(
+                            plan=plan,
+                            render_clean_fn=generate_reel_from_video_bg,
+                            render_gamer_fn=generate_reel_gamer_dynamic,
+                            headline=plan["title_text"],
+                            image_path=local_img,
+                            logo_path=chosen_logo,
+                            seconds=REEL_SECONDS,
+                            music_path=chosen_music,
+                        )
 
                             bg_vid_clean = os.path.join(td, "bg_clean.mp4")
                             sanitize_runway_bg_video(bg_vid, bg_vid_clean, start_sec=0.35)

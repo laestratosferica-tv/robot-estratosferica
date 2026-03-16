@@ -1106,7 +1106,7 @@ def download_runway_mp4_robust(mp4_url: str, task_id: Optional[str] = None) -> b
 # =========================
 # Reel generator helpers
 # =========================
-    
+
 def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.35) -> str:
     """
     Limpia el video de Runway para evitar primer frame negro
@@ -1144,6 +1144,8 @@ def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.
         )
 
     return dst_path
+
+
 def _require_file(path: str, label: str) -> None:
     if not os.path.exists(path):
         raise RuntimeError(f"Falta {label} en repo: {path}")
@@ -1219,6 +1221,69 @@ def pick_music_path() -> Optional[str]:
     return chosen
 
 
+def generate_tts_voice(text: str) -> Optional[str]:
+    """
+    Genera una voz TTS simple en español y devuelve un path local .wav
+    """
+    text = (text or "").strip()
+    if not text:
+        return None
+
+    try:
+        from gtts import gTTS
+    except Exception:
+        try:
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "gTTS"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            from gtts import gTTS
+        except Exception as e:
+            print("TTS no disponible:", str(e))
+            return None
+
+    try:
+        tmp_mp3 = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+        tmp_mp3.close()
+
+        tts = gTTS(text=text, lang="es")
+        tts.save(tmp_mp3.name)
+
+        wav_path = tmp_mp3.name.replace(".mp3", ".wav")
+
+        p = subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                tmp_mp3.name,
+                "-ar",
+                "44100",
+                "-ac",
+                "2",
+                wav_path,
+            ],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if p.returncode != 0:
+            print("TTS ffmpeg conversion falló:", (p.stderr or "")[:2000])
+            return None
+
+        return wav_path
+    except Exception as e:
+        print("generate_tts_voice falló:", str(e))
+        return None
+
+
 def generate_reel_from_image(
     headline: str,
     news_image_path: str,
@@ -1239,13 +1304,9 @@ def generate_reel_from_image(
         headline_clean[:90], max_chars_per_line=18, max_lines=3
     )
     cta = (cta_text or "¿W o humazo?").strip()
-
     badge_text = (badge_text or "HOT").strip().upper()
-    
+
     music_ok = bool(music_path) and os.path.exists(music_path)
-    voice_text = headline
-    voice_path = generate_tts_voice(voice_text)
-    voice_ok = os.path.exists(voice_path)
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 
     n_lines = max(1, headline_wrapped.count("\n") + 1)
@@ -1263,8 +1324,8 @@ def generate_reel_from_image(
             f.write(cta)
         with open(badge_txt, "w", encoding="utf-8") as f:
             f.write(badge_text)
-            
-            cmd = [
+
+        cmd = [
             "ffmpeg",
             "-y",
             "-nostdin",
@@ -1275,23 +1336,15 @@ def generate_reel_from_image(
             "-i", news_image_path,
         ]
 
-        # inputs ffmpeg ordenados: 0 = imagen base
         input_index = 1
-        
         logo_input = None
-        voice_input = None
         music_input = None
-        
+
         if logo_ok:
             cmd += ["-i", logo_path]
             logo_input = input_index
             input_index += 1
-        
-        if voice_ok:
-            cmd += ["-i", voice_path]
-            voice_input = input_index
-            input_index += 1
-        
+
         if music_ok:
             cmd += ["-i", music_path]
             music_input = input_index
@@ -1405,7 +1458,7 @@ def generate_reel_from_image(
 
         cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
 
-        if music_ok and music_input is not None:
+        if music_input is not None:
             cmd += [
                 "-map",
                 f"{music_input}:a",
@@ -1457,9 +1510,7 @@ def generate_reel_from_image(
             raise RuntimeError(f"ffmpeg falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
 
         with open(out_mp4, "rb") as f:
-            video_bytes = f.read()
-
-        return video_bytes
+            return f.read()
 
 
 def generate_reel_from_video_bg(
@@ -1481,9 +1532,8 @@ def generate_reel_from_video_bg(
         headline_clean[:90], max_chars_per_line=18, max_lines=3
     )
     cta = (cta_text or "¿W o humazo?").strip()
-
     badge_text = (badge_text or "HOT").strip().upper()
-    
+
     music_ok = bool(music_path) and os.path.exists(music_path)
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 
@@ -1516,13 +1566,19 @@ def generate_reel_from_video_bg(
             bg_video_path,
         ]
 
+        input_index = 1
+        logo_input = None
+        music_input = None
+
         if logo_ok:
             cmd += ["-i", logo_path]
+            logo_input = input_index
+            input_index += 1
+
         if music_ok:
             cmd += ["-i", music_path]
-
-        logo_input = 1 if logo_ok else None
-        music_input = 2 if logo_ok and music_ok else 1 if music_ok else None
+            music_input = input_index
+            input_index += 1
 
         vf_parts = []
 
@@ -1613,7 +1669,7 @@ def generate_reel_from_video_bg(
 
         cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
 
-        if music_ok and music_input is not None:
+        if music_input is not None:
             cmd += [
                 "-map",
                 f"{music_input}:a",
@@ -1697,6 +1753,9 @@ def generate_reel_gamer_dynamic(
     music_ok = bool(music_path) and os.path.exists(music_path)
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 
+    voice_path = generate_tts_voice(headline)
+    voice_ok = bool(voice_path) and os.path.exists(voice_path)
+
     n_lines = max(1, headline_wrapped.count("\n") + 1)
     title_size = 100 if n_lines == 1 else 84 if n_lines == 2 else 70
 
@@ -1726,17 +1785,29 @@ def generate_reel_gamer_dynamic(
             news_image_path,
         ]
 
+        input_index = 1
+        logo_input = None
+        voice_input = None
+        music_input = None
+
         if logo_ok:
             cmd += ["-i", logo_path]
+            logo_input = input_index
+            input_index += 1
+
+        if voice_ok:
+            cmd += ["-i", voice_path]
+            voice_input = input_index
+            input_index += 1
+
         if music_ok:
             cmd += ["-i", music_path]
-
-        logo_input = 1 if logo_ok else None
-        music_input = 2 if logo_ok and music_ok else 1 if music_ok else None
+            music_input = input_index
+            input_index += 1
 
         vf_parts = []
 
-        # Fondo full bleed, sin card, sin caja, sin look editorial
+        # Fondo full bleed
         vf_parts.append(
             f"[0:v]"
             f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
@@ -1751,7 +1822,7 @@ def generate_reel_gamer_dynamic(
             f"format=rgba[bg];"
         )
 
-        # Color gamer, sin negro muerto
+        # Color gamer
         vf_parts.append(
             f"[bg]"
             f"drawbox=x=0:y=0:w={REEL_W}:h=760:color=blue@0.10:t=fill,"
@@ -1805,7 +1876,7 @@ def generate_reel_gamer_dynamic(
             )
             current = "[withlogo]"
 
-        # Título grande, sin caja central
+        # Título grande
         vf_parts.append(
             f"{current}"
             f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
@@ -1831,21 +1902,32 @@ def generate_reel_gamer_dynamic(
             f"shadowcolor=black@0.70:"
             f"shadowx=0:shadowy=4,"
             f"fade=t=out:st={max(0, int(seconds)-1)}:d=0.8"
-            f"[vout]"
+            f"[vout];"
         )
+
+        # Audio
+        if voice_input is not None and music_input is not None:
+            vf_parts.append(
+                f"[{voice_input}:a]volume=1.5[a_voice];"
+                f"[{music_input}:a]volume=0.15[a_music];"
+                f"[a_voice][a_music]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+            )
+        elif voice_input is not None:
+            vf_parts.append(
+                f"[{voice_input}:a]volume=1.5[aout]"
+            )
+        elif music_input is not None:
+            vf_parts.append(
+                f"[{music_input}:a]volume=0.22[aout]"
+            )
 
         cmd += ["-filter_complex", "".join(vf_parts), "-map", "[vout]"]
 
-        if music_ok and music_input is not None:
+        if voice_input is not None or music_input is not None:
             cmd += [
-                "-map",
-                f"{music_input}:a",
-                "-filter:a",
-                f"volume=0.34,afade=t=in:st=0:d=0.4,afade=t=out:st={max(0, int(seconds)-1)}:d=0.9",
-                "-c:a",
-                "aac",
-                "-b:a",
-                "128k",
+                "-map", "[aout]",
+                "-c:a", "aac",
+                "-b:a", "128k",
             ]
         else:
             cmd += ["-an"]

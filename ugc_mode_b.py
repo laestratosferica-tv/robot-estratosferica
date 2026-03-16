@@ -532,49 +532,49 @@ GAME_CONTEXTS = {
         "Aquí se gana antes del duelo.",
         "Esto separa al que pega tiros del que entiende el momento.",
         "No es reflejo. Es lectura total.",
-        "La mayoría aquí la vende.",
+        "Un error mínimo y ya te sentenció.",
     ],
     "CS2": [
         "Aim, timing y cabeza en el segundo exacto.",
         "Esto no es highlight vacío. Es castigo real.",
-        "La mayoría asoma mal aquí.",
-        "Esto huele a castigo puro.",
+        "Un hueco mínimo y ya te borró la ronda.",
+        "La ventana es mínima y aun así la cobra.",
     ],
     "Fortnite": [
         "En zona final el que duda se muere.",
         "Esto no es solo mecánica. Es sangre fría.",
         "Hay edits buenos y luego está esta barbaridad.",
-        "La mayoría aquí se apaga.",
+        "Aquí el error se paga en un frame.",
     ],
     "Warzone": [
         "Aquí no ganó el más loco. Ganó el que entendió el caos.",
         "Esto no es solo aim. Es control del desastre.",
         "Hay cierres buenos y luego está esto.",
-        "La mayoría aquí entra en pánico.",
+        "Todos corren, uno solo entiende el cierre.",
     ],
     "EA Sports FC": [
         "Esto entra para partir la comunidad en dos.",
         "Gol que vale uno y comentarios toda la semana.",
         "Aquí el rival ayuda, pero el castigo también tiene clase.",
-        "La defensa queda mal parada y él no perdona.",
+        "Ve un hueco mínimo y lo manda adentro.",
     ],
     "Gran Turismo": [
         "Aquí no hubo humo: hubo control fino y sangre fría.",
         "Se ve limpio porque está hecho con cabeza.",
         "Esto es precisión real, no replay bonito.",
-        "Aquí el mínimo error te manda afuera.",
+        "El margen es mínimo y aun así no falla.",
     ],
     "F1": [
         "Esto no sale limpio sin precisión y cero miedo al error.",
         "Hay espacio mínimo y aun así decide atacar ahí.",
         "No fue suerte. Fue cálculo.",
-        "La mayoría no se tira ahí.",
+        "No todos meten el coche ahí.",
     ],
     "Minecraft": [
         "Parece absurdo, sí, y justo por eso internet se divide en dos.",
         "Esto parece meme, pero también hay mérito real.",
         "Hay momentos raros y luego está esta locura.",
-        "Se ve maldito y por eso funciona.",
+        "Parece casualidad hasta que lo miras dos veces.",
     ],
     "Esports": [
         "Esto no fue una jugada cualquiera.",
@@ -1403,18 +1403,50 @@ def infer_verdict_label(ctx):
 
     if game == "Valorant" and moment_type == "clutch":
         return random.choice([
-            "no entra en pánico, los lee completos",
             "gana la ronda antes del duelo",
-            "no dispara por reflejo, decide",
-            "hace parecer fácil lo que suele salir mal",
+            "no entra por reflejo, entra con lectura",
+            "no se acelera, los lee completos",
+            "parece simple porque lo leyó mejor",
         ])
 
     if game == "CS2":
         return random.choice([
-            "no asoma, castiga",
             "no perdona el timing",
+            "ve la ventana mínima y la cobra",
             "borra la ronda sin regalar nada",
-            "ve una ventana mínima y la cobra",
+            "castiga en el segundo exacto",
+        ])
+
+    if game == "Warzone":
+        return random.choice([
+            "no compra el caos, lo ordena",
+            "huele el error y lo liquida",
+            "parece milagro hasta que ves la lectura",
+            "no regala ni un frame",
+        ])
+
+    if game == "EA Sports FC":
+        return random.choice([
+            "ve el hueco y sentencia",
+            "la defensa ayuda, sí, pero hay que cobrarla",
+            "esto divide porque entra demasiado limpio",
+            "lee la jugada antes del toque final",
+        ])
+
+    if game == "F1":
+        return random.choice([
+            "no todos meten el coche ahí",
+            "parece limpio porque hay cálculo detrás",
+            "no es humo, es decisión quirúrgica",
+            "ve una puerta mínima y la usa",
+        ])
+
+    if game == "Minecraft":
+        return random.choice([
+            "parece casualidad hasta que lo ves dos veces",
+            "suena meme, pero hay mérito real",
+            "internet le dirá suerte, pero hay lectura",
+            "se ve maldito y por eso divide",
         ])
 
     if emotion == "chaos":
@@ -1427,24 +1459,24 @@ def infer_verdict_label(ctx):
 
     if emotion == "skill":
         return random.choice([
-            "esto es mano y cabeza",
-            "la mayoría aquí la vende",
-            "esto no es highlight, es castigo",
-            "lo hace parecer fácil y justo ahí está el problema",
+            "parece fácil porque está bien leído",
+            "ve medio error y lo sentencia",
+            "no se acelera, castiga",
+            "no lo resuelve por reflejo, lo cobra con lectura",
         ])
 
     if intensity == "high":
         return random.choice([
             "en alta presión casi nadie resuelve así",
-            "en este contexto la mayoría la vende",
             "con esta tensión muchos se rompen",
-            "aquí muchos dudan y se mueren",
+            "aquí el error vale carísimo",
+            "con esta presión la mayoría se nubla",
         ])
 
     return random.choice([
         "se ve limpio porque está hecho con decisión",
-        "la mayoría ahí se apaga",
         "aquí muchos la regalan",
+        "un error mínimo y ya te castiga",
     ])
 
 
@@ -1563,12 +1595,21 @@ def build_caption_context(key, meta, item):
     return context
 
 
+def normalize_memory_word(word):
+    return re.sub(r"^[^\wáéíóúñ]+|[^\wáéíóúñ]+$", "", str(word or "").lower()).strip()
+
+
 def get_memory_top_words(ctx):
     gm = ctx.get("game_memory") or {}
     words = gm.get("top_words") or []
     if not isinstance(words, list):
         return []
-    return [clean_line(w).lower() for w in words if clean_line(w)]
+    out = []
+    for w in words:
+        nw = normalize_memory_word(w)
+        if nw:
+            out.append(nw)
+    return out
 
 
 def get_recent_phrase_counts(ctx):
@@ -1583,6 +1624,11 @@ def get_recent_phrase_counts(ctx):
         except Exception:
             continue
     return out
+
+
+def has_memory_words(ctx, *needles):
+    words = set(get_memory_top_words(ctx))
+    return all(str(n).lower() in words for n in needles)
 
 
 def score_recent_phrase_penalty(text, ctx):
@@ -1601,14 +1647,73 @@ def score_recent_phrase_penalty(text, ctx):
         "momento de manos y sangre fría",
         "la mayoría aquí la vende",
         "la mayoría se apaga aquí",
+        "momento de manos y cero miedo",
+        "esto es mano y cabeza",
+        "aquí muchos dudan y la regalan",
     ]
 
     for phrase in tracked_phrases:
         seen = counts.get(phrase, 0)
         if seen <= 0:
             continue
+
         if phrase in tl:
-            penalty += min(seen * 0.45, 2.2)
+            if seen >= 5:
+                penalty += 3.2
+            elif seen >= 3:
+                penalty += 2.2
+            elif seen >= 2:
+                penalty += 1.35
+            else:
+                penalty += 0.65
+
+    return penalty
+
+
+def score_template_penalty(text, ctx):
+    tl = str(text or "").lower()
+    penalty = 0.0
+
+    hard_templates = {
+        "momento de manos y cero miedo": 3.2,
+        "esto es mano y cabeza": 2.6,
+        "aquí muchos dudan y la regalan": 2.2,
+        "la mayoría aquí la vende": 2.6,
+        "la mayoría la vende aquí": 2.8,
+        "esto no es highlight, es castigo": 2.8,
+        "momento de manos": 1.4,
+    }
+
+    for phrase, base_penalty in hard_templates.items():
+        if phrase in tl:
+            penalty += base_penalty
+
+    if "momento de manos" in tl and has_memory_words(ctx, "manos", "momento"):
+        penalty += 0.9
+
+    if "cero miedo" in tl and has_memory_words(ctx, "cero", "miedo"):
+        penalty += 1.0
+
+    if "mano y cabeza" in tl and (has_memory_words(ctx, "mano", "cabeza") or has_memory_words(ctx, "manos", "cabeza")):
+        penalty += 1.0
+
+    if "la mayoría" in tl and "vende" in tl and has_memory_words(ctx, "mayoría", "vende"):
+        penalty += 1.15
+
+    if tl.startswith("valorant: momento de manos"):
+        penalty += 1.2
+    if tl.startswith("f1: momento de manos"):
+        penalty += 1.2
+    if tl.startswith("warzone: momento de manos"):
+        penalty += 1.2
+    if tl.startswith("cs2: momento de manos"):
+        penalty += 1.2
+    if tl.startswith("apex legends: momento de manos"):
+        penalty += 1.2
+    if tl.startswith("minecraft: momento de manos"):
+        penalty += 1.2
+    if tl.startswith("ea sports fc: momento de manos"):
+        penalty += 1.2
 
     return penalty
 
@@ -1652,13 +1757,13 @@ def generate_caption_candidates(ctx):
 
     add_candidate(
         f"{game_prefix}: {verdict}.",
-        line2_base or "Aquí muchos se apagan.",
+        line2_base or "Aquí el error sale carísimo.",
         question,
     )
 
     add_candidate(
         hook_fallback,
-        line2_base or "Aquí muchos dudan y la regalan.",
+        line2_base or "Todos dudan medio segundo; uno solo cobra.",
         question,
     )
 
@@ -1687,8 +1792,32 @@ def generate_caption_candidates(ctx):
     )
 
     add_candidate(
-        f"{game_prefix}: {moment_label} y cero miedo.",
+        f"{game_prefix}: {moment_label} y sangre fría.",
         verdict,
+        question,
+    )
+
+    add_candidate(
+        f"{game_prefix} huele el error y lo castiga.",
+        line2_base or verdict,
+        question,
+    )
+
+    add_candidate(
+        f"{game_prefix} ve una puerta mínima y la usa.",
+        line2_base or verdict,
+        question,
+    )
+
+    add_candidate(
+        f"{game_prefix} parece simple porque está bien leído.",
+        line2_base or verdict,
+        question,
+    )
+
+    add_candidate(
+        f"{game_prefix} no perdona ese hueco.",
+        line2_base or verdict,
         question,
     )
 
@@ -1751,7 +1880,7 @@ def score_caption_candidate(text, ctx):
         score += 1.6
 
     if moment_label and moment_label in tl:
-        score += 0.9
+        score += 0.7
 
     if hook and hook[:18] in tl:
         score += 0.7
@@ -1768,7 +1897,7 @@ def score_caption_candidate(text, ctx):
         for w in memory_words[:6]:
             if w and w in tl:
                 hits += 1
-        score += min(hits * 0.35, 1.05)
+        score += min(hits * 0.25, 0.75)
 
     wc = word_count(t)
     if 10 <= wc <= B_CAPTION_MAX_WORDS:
@@ -1804,6 +1933,7 @@ def score_caption_candidate(text, ctx):
         score -= 0.5
 
     score -= score_recent_phrase_penalty(t, ctx)
+    score -= score_template_penalty(t, ctx)
 
     return round(score, 4)
 
@@ -1851,6 +1981,12 @@ NO cambies el sentido.
 NO lo vuelvas corporativo.
 NO lo hagas genérico.
 NO uses frases tipo "esto obliga a comentar" o "lectura criminal".
+NO uses estas muletillas si puedes evitarlas:
+- momento de manos y cero miedo
+- esto es mano y cabeza
+- la mayoría aquí la vende
+- esto no es highlight, es castigo
+
 Mantén el nombre del juego.
 Mantén una pregunta final polarizante.
 Máximo 42 palabras.
@@ -1904,7 +2040,7 @@ def build_caption_from_meta_v6(key, meta, item):
 
     hashtags = build_hashtags_for_game(ctx["game_name"])
     if hashtags:
-        caption = f"{caption}\n\n{hashtags}"
+        caption = f"{caption}\n{hashtags}"
 
     print("[B_V6] caption_context =", json.dumps({
         "game_name": ctx["game_name"],
@@ -1923,7 +2059,7 @@ def build_caption_from_meta_v6(key, meta, item):
     print("[B_V6] top_candidates =", json.dumps(selected["ranked"][:3], ensure_ascii=False))
 
     item["caption_engine_debug"] = {
-        "version": "v6.1_conflict_engine_aggressive_memory_dedup",
+        "version": "v6.2_conflict_engine_diversity_lock",
         "context": {
             "game_name": ctx["game_name"],
             "emotion": ctx["emotion"],
@@ -1966,6 +2102,7 @@ Reglas:
 - potente
 - comentable
 - máximo 75 caracteres antes de #Shorts
+- evitar plantillas quemadas
 - devolver solo el título
 """
         try:
@@ -2010,6 +2147,7 @@ Reglas:
 - 2 líneas + hashtags
 - no sonar genérico
 - máximo 350 caracteres
+- evitar templates quemados
 - devolver solo el texto
 """
         try:
@@ -2582,7 +2720,7 @@ def sort_queue_items(items):
 
 def run_mode_b():
     print("===== MODE B (PUBLISHER) START =====")
-    print("MODE B VERSION: V6_1_CONFLICT_ENGINE_AGGRESSIVE_MEMORY_DEDUP")
+    print("MODE B VERSION: V6_2_CONFLICT_ENGINE_DIVERSITY_LOCK")
     print("B_MAX_PUBLISH_PER_RUN:", B_MAX_PUBLISH_PER_RUN)
     print("B_MAX_PER_SOURCE_GROUP_PER_RUN:", B_MAX_PER_SOURCE_GROUP_PER_RUN)
     print("B_AVOID_SAME_SOURCE_PER_RUN:", B_AVOID_SAME_SOURCE_PER_RUN)
@@ -2788,7 +2926,7 @@ def run_mode_b():
                     "moment_type": item.get("moment_type"),
                     "copy_signals": item.get("copy_signals"),
                     "fallback_used": item.get("fallback_used"),
-                    "editorial_mode": "v6.1_conflict_engine_aggressive_memory_dedup",
+                    "editorial_mode": "v6.2_conflict_engine_diversity_lock",
                     "brief_txt_key": item.get("brief_txt_key"),
                     "brief": item.get("brief"),
                     "caption_final": item.get("caption_final"),

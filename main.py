@@ -1196,6 +1196,7 @@ def generate_reel_from_image(
     seconds: int,
     music_path: Optional[str] = None,
     cta_text: Optional[str] = None,
+    badge_text: Optional[str] = None,
 ) -> bytes:
     if not os.path.exists(news_image_path):
         raise RuntimeError(f"Falta news image local: {news_image_path}")

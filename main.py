@@ -2314,23 +2314,12 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     with open(local_img, "wb") as f:
                         f.write(img_bytes)
 
-                    use_runway = (
-                        RUNWAY_ENABLED
-                        and bool(RUNWAY_API_KEY)
-                        and (
-                            RUNWAY_FORCE
-                            or random.random() <= max(0.0, min(1.0, RUNWAY_PROBABILITY))
-                        )
-                    )
+                  use_runway = bool(plan.get("use_runway"))
 
                     if use_runway:
                         try:
-                            runway_prompt = (
-                                "Cinematic esports/gaming animation, neon, glitch, "
-                                "HUD overlays, dynamic camera movement, high energy, "
-                                "viral reel background. "
-                                f"Based on this news image and headline: {item.get('title', '')}"
-                            )
+                            runway_prompt = plan.get("runway_prompt") or item.get("title", "")
+                            
                             task_id = runway_create_image_to_video(
                                 img_r2_url,
                                 runway_prompt,
@@ -2359,13 +2348,14 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             sanitize_runway_bg_video(bg_vid, bg_vid_clean, start_sec=0.35)
 
                             reel_bytes = generate_reel_from_video_bg(
-                                headline=video_hook,
-                                bg_video_path=bg_vid_clean,
-                                logo_path=chosen_logo,
-                                seconds=REEL_SECONDS,
-                                music_path=chosen_music,
-                                cta_text=video_cta,
-                            )
+                            headline=plan["title_text"],
+                            bg_video_path=bg_vid_clean,
+                            logo_path=chosen_logo,
+                            seconds=REEL_SECONDS,
+                            music_path=chosen_music,
+                            cta_text=plan["cta_text"],
+                            badge_text=plan["badge_text"],
+                        )
                         except Exception as e:
                             print("Runway falló (fallback a reel normal):", str(e))
                             reel_bytes = generate_reel_from_image(
@@ -2378,15 +2368,16 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                                 cta_text=video_cta,
                             )
                     else:
-                        reel_bytes = generate_reel_from_image(
-                            headline=video_hook,
-                            news_image_path=local_img,
-                            logo_path=chosen_logo,
-                            bg_path=asset_bg,
-                            seconds=REEL_SECONDS,
-                            music_path=chosen_music,
-                            cta_text=video_cta,
-                        )
+                        reel_bytes = render_editorial_asset(
+                        plan=plan,
+                        render_clean_fn=generate_reel_from_video_bg,
+                        render_gamer_fn=generate_reel_gamer_dynamic,
+                        headline=plan["title_text"],
+                        image_path=local_img,
+                        logo_path=chosen_logo,
+                        seconds=REEL_SECONDS,
+                        music_path=chosen_music,
+                    )
 
                 reel_url = upload_video_mp4_to_r2_public(
                     reel_bytes,

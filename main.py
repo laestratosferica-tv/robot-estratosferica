@@ -1761,7 +1761,7 @@ def generate_reel_gamer_dynamic(
         vf_parts.append(
             f"{current}"
             f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
-            f"x=110:y=250:"
+            f"x=110:y=640:"
             f"fontsize={title_size}:"
             f"line_spacing=10:"
             f"fontcolor=white:"

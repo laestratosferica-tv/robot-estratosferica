@@ -1,0 +1,38 @@
+name: ugc-feedback
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 */6 * * *"
+
+jobs:
+  feedback:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install boto3
+
+      - name: Run Feedback
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+
+          B_STATE_KEY: ugc/state/mode_b_state.json
+          B_EDITORIAL_MEMORY_KEY: ugc/state/editorial_memory.json
+          B_EDITORIAL_MEMORY_SUMMARY_KEY: ugc/state/editorial_memory_summary.json
+
+        run: |
+          python -u ugc_mode_b_feedback.py

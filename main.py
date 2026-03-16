@@ -6,6 +6,7 @@ import hashlib
 import random
 import subprocess
 import tempfile
+import sys
 from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse, parse_qs
 from typing import Optional, Tuple, Dict, Any, List

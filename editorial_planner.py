@@ -3,11 +3,10 @@ import random
 
 GAMER_CTAS = [
     "¿W o humo?",
-    "¿Lo compras o no?",
-    "¿Roto o normal?",
-    "¿Te gusta o puro show?",
-    "¿Esto suma o estorba?",
-    "¿Banco o no banco?",
+    "¿Skill o regalo?",
+    "¿Clutch o suerte?",
+    "¿Banco o no?",
+    "¿Esto cuenta o no?",
 ]
 
 
@@ -24,113 +23,82 @@ def pick_cta_by_style(style_family, default_cta=None):
     if default_cta and default_cta.strip() and default_cta.strip().lower() != "sigue para más":
         return default_cta.strip()
 
-    if style_family == "reel_gamer":
-        return random.choice([
-            "¿W o humo?",
-            "¿Esto está roto?",
-            "¿Banco o no banco?",
-            "¿Lo ves o no?",
-            "¿Skill o regalo?",
-        ])
-
     return random.choice(GAMER_CTAS)
 
 
 def pick_badge_by_title(title):
     t = _clean(title).lower()
 
-    if _has_any(t, ["leak", "filtra", "filtrado"]):
-        return "LEAK"
-    if _has_any(t, ["drama", "polémica", "controversia", "funa"]):
-        return "DRAMA"
-    if _has_any(t, ["parche", "patch", "update", "actualización"]):
-        return "UPDATE"
-    if _has_any(t, ["final", "champion", "campeón", "worlds", "major"]):
+    if _has_any(t, ["final", "grand final", "grand finals", "playoffs", "masters", "worlds", "champion", "campeón"]):
         return "FINAL"
-    if _has_any(t, ["buff", "nerf", "meta"]):
+    if _has_any(t, ["bug", "exploit", "glitch"]):
+        return "BUG"
+    if _has_any(t, ["buff", "nerf", "meta", "patch", "update", "parche"]):
         return "META"
-    return random.choice(["HOT", "TOP", "OJO"])
+    if _has_any(t, ["leak", "filtrado", "rumor"]):
+        return "LEAK"
+    if _has_any(t, ["ace", "pentakill", "quadrakill", "quadra", "clutch"]):
+        return "CLIP"
+
+    return random.choice(["HOT", "PLAY", "TOP"])
 
 
-def build_visual_title(title, style_family):
-    t = _clean(title)
+def build_reel_gamer_title(headline):
+    t = (headline or "").lower()
 
-    if not t:
-        return "ESTO SE PUSO RARO"
+    if "valorant" in t and _has_any(t, ["final", "masters", "champions", "playoffs"]):
+        return "TODO O NADA"
 
-    tl = t.lower()
+    if "valorant" in t and _has_any(t, ["ace", "clutch"]):
+        return "CLUTCH O HUMO"
 
-    if style_family == "reel_gamer":
-        if _has_any(tl, ["drama", "polémica", "controversia", "funa"]):
-            return random.choice([
-                "ESTO YA SE SALIÓ",
-                "SE PRENDIÓ TODO",
-                "YA HUELE A DRAMA",
-                "ESTO VA A DIVIDIR",
-            ])
-        if _has_any(tl, ["parche", "patch", "buff", "nerf", "meta"]):
-            return random.choice([
-                "ESTO MUEVE EL META",
-                "AQUÍ CAMBIÓ TODO",
-                "ESTO NO VIENE SUAVE",
-                "SE VIENE PROBLEMA",
-            ])
-        if _has_any(tl, ["leak", "filtrado", "rumor"]):
-            return random.choice([
-                "SE LES ESCAPÓ",
-                "YA SE FILTRÓ TODO",
-                "OJO CON ESTO",
-                "ESTO NO ERA OFICIAL",
-            ])
-        return random.choice([
-            "ESTO NO PASÓ NORMAL",
-            "OJO CON ESTO",
-            "AQUÍ HAY TEMA",
-            "ESTO TIENE PINTA",
-        ])
+    if _has_any(t, ["league of legends", "lol"]) and _has_any(t, ["quadra", "quadrakill", "penta", "pentakill"]):
+        return "NO ES NORMAL"
 
-    if _has_any(tl, ["parche", "patch", "update", "actualización"]):
-        return random.choice([
-            "CAMBIO IMPORTANTE",
-            "NUEVO UPDATE",
-            "AJUSTE CLAVE",
-        ])
-    if _has_any(tl, ["final", "major", "worlds", "campeón"]):
-        return random.choice([
-            "MOMENTO CLAVE",
-            "SE VIENE LO SERIO",
-            "PUNTO CRÍTICO",
-        ])
+    if _has_any(t, ["league of legends", "lol"]) and _has_any(t, ["final", "worlds", "playoffs"]):
+        return "ESTO SE CALENTÓ"
 
-    return t[:55].upper()
+    if _has_any(t, ["bug", "exploit", "glitch"]):
+        return "BUG O SKILL"
+
+    if _has_any(t, ["record", "récord"]):
+        return "HISTORIA O SUERTE"
+
+    if _has_any(t, ["ace", "pentakill", "quadrakill", "quadra", "clutch"]):
+        return "NO TIENE SENTIDO"
+
+    if _has_any(t, ["final", "grand final", "grand finals", "playoffs", "masters", "worlds"]):
+        return "MOMENTO CLAVE"
+
+    return random.choice([
+        "¿QUÉ ACABO DE VER?",
+        "ESTO NO ES REAL",
+        "ALGO PASÓ AQUÍ",
+        "NO TIENE SENTIDO",
+        "MIRA ESTO",
+        "SE VOLVIÓ LOCO",
+    ])
 
 
 def choose_style_family(title):
     return "reel_gamer"
 
+
 def should_use_runway(style_family, runway_enabled, runway_force):
     if not runway_enabled:
         return False
+
     if runway_force:
         return True
 
-    if style_family == "editorial_clean":
-        return random.random() <= 0.45
-
-    return random.random() <= 0.15
+    return random.random() <= 0.35
 
 
 def build_runway_prompt(title, style_family):
-    if style_family == "reel_gamer":
-        return (
-            "High-energy gaming motion background, fast camera movement, "
-            "subtle glitch, intense esports vibe, punchy, not cinematic trailer, "
-            "not news style, social reel energy. Headline context: " + (title or "")
-        )
-
     return (
-        "Dynamic gaming editorial motion, subtle camera movement, premium esports feel, "
-        "clean but alive, social-first vertical video. Headline context: " + (title or "")
+        "High-energy gaming motion background, fast camera movement, "
+        "subtle glitch, intense esports vibe, punchy, social reel energy, "
+        "not news style, not cinematic trailer. Headline context: " + (title or "")
     )
 
 
@@ -138,7 +106,7 @@ def build_editorial_plan(item, default_cta=None, runway_enabled=False, runway_fo
     raw_title = item.get("title", "") or ""
 
     style_family = choose_style_family(raw_title)
-    title_text = build_visual_title(raw_title, style_family)
+    title_text = build_reel_gamer_title(raw_title)
     cta_text = pick_cta_by_style(style_family, default_cta)
     badge_text = pick_badge_by_title(raw_title)
     use_runway = should_use_runway(style_family, runway_enabled, runway_force)
@@ -151,5 +119,5 @@ def build_editorial_plan(item, default_cta=None, runway_enabled=False, runway_fo
         "badge_text": badge_text,
         "use_runway": use_runway,
         "runway_prompt": runway_prompt,
-        "motion_level": "high" if style_family == "reel_gamer" else "low",
+        "motion_level": "high",
     }

@@ -2291,7 +2291,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         reel_bytes = None
         if ENABLE_REELS:
             try:
-                               img_bytes, img_ext = download_image_bytes(chosen_img)
+                img_bytes, img_ext = download_image_bytes(chosen_img)
                 img_r2_url = upload_image_bytes_to_r2_public(
                     img_bytes,
                     img_ext,

@@ -1209,9 +1209,8 @@ def generate_reel_from_image(
     )
     cta = (cta_text or "¿W o humazo?").strip()
 
-    label_options = ["HOT", "UPDATE", "DRAMA", "META", "OJO", "TOP"]
-    badge_text = random.choice(label_options)
-
+    badge_text = (badge_text or "HOT").strip().upper()
+    
     music_ok = bool(music_path) and os.path.exists(music_path)
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 

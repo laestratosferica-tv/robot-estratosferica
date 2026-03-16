@@ -1717,9 +1717,12 @@ def generate_reel_gamer_dynamic(
         # Badge arriba izquierda
         vf_parts.append(
             f"{current}"
-            f"drawbox=x=70:y=110:w=220:h=70:color=red@0.95:t=fill,"
             f"drawtext=fontfile={FONT_BOLD}:textfile={badge_txt}:"
-            f"x=100:y=125:fontsize=36:fontcolor=white"
+            f"x=90:y=120:"
+            f"fontsize=34:"
+            f"fontcolor=white@0.88:"
+            f"shadowcolor=purple@0.85:"
+            f"shadowx=0:shadowy=0"
             f"[badge];"
         )
         current = "[badge]"

@@ -2169,7 +2169,6 @@ def load_accounts() -> List[Dict[str, Any]]:
 # Main per account run
 # =========================
 
-
 def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     account_id = cfg.get("account_id", "unknown")
     print(f"\n===== RUN ACCOUNT: {account_id} =====")
@@ -2206,31 +2205,19 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     if auto_post_limit <= 0 or not rss_feeds:
-        print(
-            f"Cuenta {account_id} está apagada (auto_post_limit=0 o rss_feeds vacío). Saltando ✅"
-        )
-        return {
-            "generated_at": iso_now(),
-            "account_id": account_id,
-            "skipped": True,
-            "reason": "disabled_or_no_feeds",
-        }
+        print(f"Cuenta {account_id} apagada o sin feeds.")
+        return {"generated_at": iso_now(), "account_id": account_id, "skipped": True}
 
-    print("Obteniendo artículos (RSS)...")
     articles = fetch_rss_articles(rss_feeds, max_per_feed=max_per_feed, shuffle=shuffle)
-    print(
-        f"{len(articles)} artículos candidatos tras mix/balance "
-        f"(MAX_PER_FEED={max_per_feed}, SHUFFLE={shuffle})"
-    )
-
     processed = list(articles[:max_ai_items])
+
     state = load_threads_state(state_key)
-    print("STATE posted_items:", len(state.get("posted_items", {})))
 
     posted_count = 0
-    results: List[Dict[str, Any]] = []
+    results = []
 
     while posted_count < auto_post_limit:
+
         item, mode = pick_item(
             processed,
             state,
@@ -2238,57 +2225,33 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             repost_max_times,
             repost_window_days,
         )
+
         if not item:
-            print("No hay item nuevo ni repost elegible.")
+            print("No hay item elegible.")
             break
 
         link = item["link"]
-        label = "NUEVO" if mode == "new" else "REPOST"
-        print(f"Seleccionado ({label}): {link}")
 
-        try:
-            threads_text = build_threads_text(item, mode=mode)
-        except Exception as e:
-            print("OpenAI falló generando texto (se omite item):", str(e))
-            processed = [x for x in processed if x.get("link") != link]
+        threads_text = build_threads_text(item, mode=mode)
+
+        imgs = extract_best_images(link, 5)
+        if not imgs:
+            processed = [x for x in processed if x["link"] != link]
             continue
 
-        img_candidates = extract_best_images(link, max_images=5)
-        if not img_candidates:
-            print("No se encontró imagen. Se omite.")
-            processed = [x for x in processed if x.get("link") != link]
-            continue
+        chosen_img = imgs[0]
 
-        chosen_img = None
-        for u in img_candidates:
-            try:
-                _ = download_image_bytes(u)
-                chosen_img = u
-                break
-            except Exception:
-                continue
-
-        if not chosen_img:
-            print("Todas las imágenes del artículo fallaron. Se omite.")
-            processed = [x for x in processed if x.get("link") != link]
-            continue
-
-        threads_res = None
-        try:
-            threads_res = threads_publish_text_image(
-                user_id=threads_user_id,
-                access_token=THREADS_USER_ACCESS_TOKEN or "",
-                dry_run=acct_dry_run,
-                text=threads_text,
-                image_url_from_news=chosen_img,
-                threads_media_prefix=threads_media_prefix,
-            )
-        except Exception as e:
-            print("Threads falló (no rompe todo):", str(e))
-            threads_res = {"ok": False, "error": str(e)}
+        threads_res = threads_publish_text_image(
+            user_id=threads_user_id,
+            access_token=THREADS_USER_ACCESS_TOKEN or "",
+            dry_run=acct_dry_run,
+            text=threads_text,
+            image_url_from_news=chosen_img,
+            threads_media_prefix=threads_media_prefix,
+        )
 
         reel_url = None
-        reel_bytes = None
+
         if ENABLE_REELS:
             try:
                 img_bytes, img_ext = download_image_bytes(chosen_img)
@@ -2297,7 +2260,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     img_ext,
                     prefix=threads_media_prefix,
                 )
-                print("Imagen rehost R2:", img_r2_url)
 
                 chosen_music = pick_music_path()
                 chosen_logo = pick_logo_path(asset_logo_default)
@@ -2310,6 +2272,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 )
 
                 with tempfile.TemporaryDirectory() as td:
+
                     local_img = os.path.join(td, f"news{img_ext}")
                     with open(local_img, "wb") as f:
                         f.write(img_bytes)
@@ -2318,34 +2281,29 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
                     if use_runway:
                         try:
-                            runway_prompt = plan.get("runway_prompt") or item.get("title", "")
+                            runway_prompt = plan.get("runway_prompt")
 
                             task_id = runway_create_image_to_video(
                                 img_r2_url,
                                 runway_prompt,
                                 seconds=RUNWAY_I2V_SECONDS,
                             )
-                            print("Runway task created:", task_id)
 
-                            mp4_url = runway_wait_for_mp4(
-                                task_id,
-                                timeout_sec=RUNWAY_TIMEOUT,
-                            )
-                            print(
-                                "Runway mp4 URL:",
-                                mp4_url[:160] + ("..." if len(mp4_url) > 160 else ""),
-                            )
+                            mp4_url = runway_wait_for_mp4(task_id, RUNWAY_TIMEOUT)
 
-                            mp4_bytes = download_runway_mp4_robust(
-                                mp4_url,
-                                task_id=task_id,
-                            )
+                            mp4_bytes = download_runway_mp4_robust(mp4_url, task_id)
+
                             bg_vid = os.path.join(td, "bg.mp4")
                             with open(bg_vid, "wb") as f:
                                 f.write(mp4_bytes)
 
                             bg_vid_clean = os.path.join(td, "bg_clean.mp4")
-                            sanitize_runway_bg_video(bg_vid, bg_vid_clean, start_sec=0.35)
+
+                            sanitize_runway_bg_video(
+                                bg_vid,
+                                bg_vid_clean,
+                                start_sec=0.35,
+                            )
 
                             reel_bytes = generate_reel_from_video_bg(
                                 headline=plan["title_text"],
@@ -2358,7 +2316,8 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             )
 
                         except Exception as e:
-                            print("Runway falló (fallback a reel normal):", str(e))
+                            print("Runway fallback:", e)
+
                             reel_bytes = render_editorial_asset(
                                 plan=plan,
                                 render_clean_fn=generate_reel_from_video_bg,
@@ -2380,179 +2339,34 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             seconds=REEL_SECONDS,
                             music_path=chosen_music,
                         )
-                        
-                        bg_vid_clean = os.path.join(td, "bg_clean.mp4")
-                            sanitize_runway_bg_video(bg_vid, bg_vid_clean, start_sec=0.35)
-
-                            reel_bytes = generate_reel_from_video_bg(
-                            headline=plan["title_text"],
-                            bg_video_path=bg_vid_clean,
-                            logo_path=chosen_logo,
-                            seconds=REEL_SECONDS,
-                            music_path=chosen_music,
-                            cta_text=plan["cta_text"],
-                            badge_text=plan["badge_text"],
-                        )
-                        except Exception as e:
-                            print("Runway falló (fallback a reel normal):", str(e))
-                            reel_bytes = render_editorial_asset(
-                            plan=plan,
-                            render_clean_fn=generate_reel_from_video_bg,
-                            render_gamer_fn=generate_reel_gamer_dynamic,
-                            headline=plan["title_text"],
-                            image_path=local_img,
-                            logo_path=chosen_logo,
-                            seconds=REEL_SECONDS,
-                            music_path=chosen_music,
-                        )
-                    else:
-                        reel_bytes = render_editorial_asset(
-                        plan=plan,
-                        render_clean_fn=generate_reel_from_video_bg,
-                        render_gamer_fn=generate_reel_gamer_dynamic,
-                        headline=plan["title_text"],
-                        image_path=local_img,
-                        logo_path=chosen_logo,
-                        seconds=REEL_SECONDS,
-                        music_path=chosen_music,
-                    )
 
                 reel_url = upload_video_mp4_to_r2_public(
                     reel_bytes,
                     prefix=reels_prefix,
                 )
-                print("Reel URL R2:", reel_url)
-            except Exception as e:
-                print("Reel generation falló (no rompe):", str(e))
-
-                ig_res = None
-        if reel_url:
-            if ENABLE_IG_PUBLISH and (not acct_dry_run):
-                try:
-                    ig_caption = build_instagram_caption(item, link)
-                    ig_res = ig_publish_reel(
-                        video_url=reel_url,
-                        caption=ig_caption,
-                    )
-                    print("IG publish OK:", ig_res)
-                except Exception as e:
-                    print("IG publish falló (no rompe):", str(e))
-                    ig_res = {
-                        "ok": False,
-                        "error": str(e),
-                        "video_url": reel_url,
-                    }
-            else:
-                print("[DRY_RUN] IG disabled or dry_run, no publico.")
-                ig_res = {
-                    "video_url": reel_url,
-                    "published": False,
-                }
-
-        fb_res = None
-        if reel_url and (not acct_dry_run) and ENABLE_FB_PUBLISH:
-            fb_res = fb_publish_reel(
-                reel_url,
-                build_instagram_caption(item, link),
-            )
-
-        yt_res = None
-        if reel_url and (not acct_dry_run) and ENABLE_YT_PUBLISH:
-            try:
-                with tempfile.TemporaryDirectory() as td:
-                    local_video = os.path.join(td, "reel.mp4")
-
-                    rr = _get_with_retries(
-                        reel_url,
-                        timeout=90,
-                        label="R2 DOWNLOAD REEL",
-                        retries=2,
-                    )
-
-                    with open(local_video, "wb") as f:
-                        f.write(rr.content)
-
-                    cap = build_instagram_caption(item, link)
-
-                    yt_title = (
-                        cap.splitlines()[0].strip()[:85] + " #Shorts"
-                    ).strip()
-
-                    yt_desc = cap + "\n\n#Shorts #gaming #esports"
-
-                    yt_res = youtube_upload_short(
-                        local_video,
-                        yt_title,
-                        yt_desc,
-                    )
 
             except Exception as e:
-                print("YT publish falló (no rompe):", str(e))
-                yt_res = {
-                    "ok": False,
-                    "error": str(e),
-                }
+                print("Reel error:", e)
 
-        tt_res = None
-        if reel_url and (not acct_dry_run) and ENABLE_TIKTOK_PUBLISH:
-            tt_res = tiktok_publish_video_from_url(
-                reel_url,
-                build_instagram_caption(item, link),
-            )
+        if reel_url and ENABLE_IG_PUBLISH and not acct_dry_run:
+            ig_caption = build_instagram_caption(item, link)
+            ig_publish_reel(reel_url, ig_caption)
 
-        if threads_res and threads_res.get("ok") and not threads_res.get("dry_run"):
+        if threads_res and threads_res.get("ok"):
             mark_posted(state, link)
             save_threads_state(state_key, state)
             posted_count += 1
-        elif threads_res and threads_res.get("dry_run"):
-            posted_count += 1
 
-        results.append(
-            {
-                "link": link,
-                "mode": mode,
-                "threads": threads_res,
-                "ig": ig_res,
-                "fb": fb_res,
-                "yt": yt_res,
-                "tiktok": tt_res,
-                "dry_run": acct_dry_run,
-            }
-        )
+        results.append({"link": link, "mode": mode})
+
         break
 
-    run_payload = {
+    return {
         "generated_at": iso_now(),
         "account_id": account_id,
-        "settings": {
-            "enable_reels": ENABLE_REELS,
-            "reel_seconds": REEL_SECONDS,
-            "enable_ig_publish": ENABLE_IG_PUBLISH,
-            "enable_fb_publish": ENABLE_FB_PUBLISH,
-            "enable_yt_publish": ENABLE_YT_PUBLISH,
-            "enable_tiktok_publish": ENABLE_TIKTOK_PUBLISH,
-            "enable_threads_publish": ENABLE_THREADS_PUBLISH,
-            "dry_run": DRY_RUN,
-            "graph_version": f"v{GRAPH_VERSION}",
-            "runway_enabled": RUNWAY_ENABLED and bool(RUNWAY_API_KEY),
-            "runway_probability": RUNWAY_PROBABILITY,
-            "music_probability": MUSIC_PROBABILITY,
-            "logo_probability": LOGO_PROBABILITY,
-        },
-        "result": {
-            "posted_count": posted_count,
-            "results": results,
-        },
+        "posted_count": posted_count,
+        "results": results,
     }
-    return run_payload
-
-
-def save_run_payload(account_id: str, payload: Dict[str, Any]) -> str:
-    run_id = now_utc().strftime("%Y%m%d_%H%M%S")
-    key = f"accounts/{account_id}/runs/editorial_run_{run_id}.json"
-    save_to_r2_json(key, payload)
-    print("Archivo guardado en R2:", key)
-    return key
 
 
 # =========================

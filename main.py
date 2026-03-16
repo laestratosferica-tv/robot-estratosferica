@@ -2368,7 +2368,13 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "results": results,
     }
 
-
+def save_run_payload(account_id: str, payload: Dict[str, Any]) -> str:
+    run_id = now_utc().strftime("%Y%m%d_%H%M%S")
+    key = f"accounts/{account_id}/runs/editorial_run_{run_id}.json"
+    save_to_r2_json(key, payload)
+    print("Archivo guardado en R2:", key)
+    return key
+    £
 # =========================
 # MAIN
 # =========================

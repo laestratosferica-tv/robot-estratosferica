@@ -1637,7 +1637,12 @@ def generate_reel_gamer_dynamic(
         raise RuntimeError(f"Falta FONT_BOLD en runner: {FONT_BOLD}")
 
     headline_clean = (headline or "").strip().upper()
-    headline_wrapped = wrap_text_lines(headline_clean[:72], max_chars_per_line=14, max_lines=3)
+    headline_wrapped = wrap_text_lines(
+        headline_clean[:64],
+        max_chars_per_line=13,
+        max_lines=3,
+    )
+
     cta = (cta_text or "¿W o humo?").strip()
     badge = (badge_text or "HOT").strip().upper()
 
@@ -1645,7 +1650,7 @@ def generate_reel_gamer_dynamic(
     logo_ok = bool(logo_path) and os.path.exists(logo_path) if logo_path else False
 
     n_lines = max(1, headline_wrapped.count("\n") + 1)
-    title_size = 96 if n_lines == 1 else 82 if n_lines == 2 else 68
+    title_size = 100 if n_lines == 1 else 84 if n_lines == 2 else 70
 
     with tempfile.TemporaryDirectory() as td:
         out_mp4 = os.path.join(td, "reel.mp4")
@@ -1667,9 +1672,10 @@ def generate_reel_gamer_dynamic(
             "-hide_banner",
             "-loglevel",
             "error",
-            "-loop", "1",
-            "-t", str(int(seconds)),
-            "-i", news_image_path,
+            "-framerate",
+            "30",
+            "-i",
+            news_image_path,
         ]
 
         if logo_ok:
@@ -1682,59 +1688,33 @@ def generate_reel_gamer_dynamic(
 
         vf_parts = []
 
+        # Fondo full bleed, sin card, sin caja, sin look editorial
         vf_parts.append(
             f"[0:v]"
             f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
             f"crop={REEL_W}:{REEL_H},"
-            f"zoompan=z='min(zoom+0.0015,1.18)':d={int(seconds)*30}:"
-            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"zoompan=z='min(zoom+0.0015,1.16)':"
+            f"d={int(seconds)*30}:"
+            f"x='iw/2-(iw/zoom/2)':"
+            f"y='ih/2-(ih/zoom/2)':"
             f"s={REEL_W}x{REEL_H}:fps=30,"
-            f"gblur=sigma=12,"
-            f"eq=contrast=1.15:brightness=-0.02:saturation=1.25,"
+            f"eq=contrast=1.14:brightness=0.01:saturation=1.22,"
+            f"gblur=sigma=7,"
             f"format=rgba[bg];"
         )
-        
-        # gradient neon overlay
+
+        # Color gamer, sin negro muerto
         vf_parts.append(
             f"[bg]"
-            f"drawbox=x=0:y=0:w={REEL_W}:h=780:color=blue@0.12:t=fill,"
-            f"drawbox=x=0:y=780:w={REEL_W}:h=520:color=purple@0.14:t=fill,"
-            f"drawbox=x=0:y=1300:w={REEL_W}:h=620:color=black@0.16:t=fill"
+            f"drawbox=x=0:y=0:w={REEL_W}:h=760:color=blue@0.10:t=fill,"
+            f"drawbox=x=0:y=760:w={REEL_W}:h=560:color=purple@0.10:t=fill,"
+            f"drawbox=x=0:y=1320:w={REEL_W}:h=600:color=black@0.12:t=fill"
             f"[bg2];"
         )
-        
+
         current = "[bg2]"
-        
-        # card glow
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=120:y=260:w=840:h=840:color=white@0.10:t=fill"
-            f"[shadow];"
-        )
-        current = "[shadow]"
-        
-        vf_parts.append(
-            f"[0:v]"
-            f"scale=840:840:force_original_aspect_ratio=decrease,"
-            f"pad=840:840:(ow-iw)/2:(oh-ih)/2:color=black@0,"
-            f"format=rgba[card];"
-        )
-        
-        vf_parts.append(
-            f"{current}[card]overlay=120:260:format=auto[main];"
-        )
-        
-        current = "[main]"
-        
-        # accent vertical bar
-        vf_parts.append(
-            f"{current}"
-            f"drawbox=x=70:y=250:w=16:h=320:color=white@0.95:t=fill"
-            f"[bar];"
-        )
-        current = "[bar]"
-        
-        # badge HOT esports red
+
+        # Badge arriba izquierda
         vf_parts.append(
             f"{current}"
             f"drawbox=x=70:y=110:w=220:h=70:color=red@0.95:t=fill,"
@@ -1743,7 +1723,8 @@ def generate_reel_gamer_dynamic(
             f"[badge];"
         )
         current = "[badge]"
-        
+
+        # Partículas simples
         vf_parts.append(
             f"{current}"
             f"drawbox=x=180:y=220:w=6:h=6:color=white@0.20:t=fill,"
@@ -1754,41 +1735,51 @@ def generate_reel_gamer_dynamic(
             f"[particles];"
         )
         current = "[particles]"
-        
-        # title gamer BIG
+
+        # Barra vertical izquierda
+        vf_parts.append(
+            f"{current}"
+            f"drawbox=x=70:y=240:w=16:h=330:color=white@0.96:t=fill"
+            f"[bar];"
+        )
+        current = "[bar]"
+
+        # Logo opcional
+        if logo_ok and logo_input is not None:
+            vf_parts.append(
+                f"[{logo_input}:v]scale=132:-1,format=rgba,colorchannelmixer=aa=0.86[logo];"
+            )
+            vf_parts.append(
+                f"{current}[logo]overlay=W-w-48:72:format=auto[withlogo];"
+            )
+            current = "[withlogo]"
+
+        # Título grande, sin caja central
         vf_parts.append(
             f"{current}"
             f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
-            f"x=110:y=260:"
+            f"x=110:y=250:"
             f"fontsize={title_size}:"
-            f"line_spacing=12:"
+            f"line_spacing=10:"
             f"fontcolor=white:"
-            f"borderw=4:bordercolor=black@0.6:"
-            f"shadowcolor=black@0.8:"
+            f"borderw=4:bordercolor=black@0.62:"
+            f"shadowcolor=black@0.85:"
             f"shadowx=0:shadowy=6"
             f"[title];"
         )
-        
         current = "[title]"
-        
-        # CTA glass bar
+
+        # CTA abajo tipo glass
         vf_parts.append(
             f"{current}"
-            f"drawbox=x=60:y=1540:w=960:h=130:color=black@0.30:t=fill,"
+            f"drawbox=x=60:y=1540:w=960:h=125:color=black@0.22:t=fill,"
             f"drawtext=fontfile={FONT_BOLD}:textfile={cta_txt}:"
-            f"x=90:y=1580:"
-            f"fontsize=44:"
+            f"x=90:y=1578:"
+            f"fontsize=42:"
             f"fontcolor=white@0.95:"
-            f"shadowcolor=black@0.7:"
+            f"shadowcolor=black@0.70:"
             f"shadowx=0:shadowy=4,"
-            f"fade=t=in:st=0:d=0.20,"
-            f"fade=t=out:st={max(0,int(seconds)-1)}:d=0.8"
-            f"[baseout];"
-        )
-        
-        vf_parts.append(
-            f"[baseout]"
-            f"drawbox=x=0:y=0:w={REEL_W}:h={REEL_H}:color=white@0.10:t=fill:enable='between(t,0,0.12)'"
+            f"fade=t=out:st={max(0, int(seconds)-1)}:d=0.8"
             f"[vout]"
         )
 
@@ -1796,27 +1787,41 @@ def generate_reel_gamer_dynamic(
 
         if music_ok and music_input is not None:
             cmd += [
-                "-map", f"{music_input}:a",
+                "-map",
+                f"{music_input}:a",
                 "-filter:a",
-                f"volume=0.34,afade=t=in:st=0:d=0.5,afade=t=out:st={max(0, int(seconds)-1)}:d=0.9",
-                "-c:a", "aac",
-                "-b:a", "128k",
+                f"volume=0.34,afade=t=in:st=0:d=0.4,afade=t=out:st={max(0, int(seconds)-1)}:d=0.9",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
             ]
         else:
             cmd += ["-an"]
 
         cmd += [
-            "-t", str(int(seconds)),
-            "-r", "30",
-            "-c:v", "libx264",
-            "-profile:v", "high",
-            "-level", "4.1",
-            "-preset", "medium",
-            "-crf", "20",
-            "-g", "60",
-            "-bf", "0",
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
+            "-t",
+            str(int(seconds)),
+            "-r",
+            "30",
+            "-c:v",
+            "libx264",
+            "-profile:v",
+            "high",
+            "-level",
+            "4.1",
+            "-preset",
+            "slow",
+            "-crf",
+            "17",
+            "-g",
+            "60",
+            "-bf",
+            "0",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
             out_mp4,
         ]
 
@@ -1829,80 +1834,12 @@ def generate_reel_gamer_dynamic(
             check=False,
         )
         if p.returncode != 0:
-            raise RuntimeError(f"ffmpeg gamer dynamic falló:\nSTDERR:\n{(p.stderr or '')[:4000]}")
+            raise RuntimeError(
+                f"ffmpeg gamer dynamic falló:\nSTDERR:\n{(p.stderr or '')[:4000]}"
+            )
 
         with open(out_mp4, "rb") as f:
             return f.read()
-
-
-# =========================
-# Instagram Graph API publish
-# =========================
-# =========================
-# Instagram Graph API publish
-# =========================
-
-
-def ig_api_post(path: str, data: Dict[str, Any]) -> Dict[str, Any]:
-    url = f"{GRAPH_BASE}/{path.lstrip('/')}"
-    r = requests.post(url, data=data, timeout=HTTP_TIMEOUT)
-    _raise_meta_error(r, f"IG POST {path}")
-    return r.json()
-
-
-def ig_api_get(path: str, params: Dict[str, Any]) -> Dict[str, Any]:
-    url = f"{GRAPH_BASE}/{path.lstrip('/')}"
-    r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
-    _raise_meta_error(r, f"IG GET {path}")
-    return r.json()
-
-
-def ig_wait_container(
-    creation_id: str, access_token: str, timeout_sec: int = 900
-) -> None:
-    start = time.time()
-    while time.time() - start < timeout_sec:
-        j = ig_api_get(
-            f"{creation_id}",
-            {"fields": "status_code", "access_token": access_token},
-        )
-        status = (j.get("status_code") or "").upper()
-        if status in ("FINISHED", "PUBLISHED"):
-            return
-        if status in ("ERROR", "FAILED"):
-            raise RuntimeError(f"IG container failed: {j}")
-        time.sleep(3)
-    raise TimeoutError(f"IG container not ready after {timeout_sec}s")
-
-
-def ig_publish_reel(video_url: str, caption: str) -> Dict[str, Any]:
-    if not (IG_USER_ID and IG_ACCESS_TOKEN):
-        raise RuntimeError("Faltan IG_USER_ID o IG_ACCESS_TOKEN")
-
-    print("IG publish: creando container...")
-    j = ig_api_post(
-        f"{IG_USER_ID}/media",
-        {
-            "media_type": "REELS",
-            "video_url": video_url,
-            "caption": caption,
-            "share_to_feed": "true",
-            "access_token": IG_ACCESS_TOKEN,
-        },
-    )
-    creation_id = j.get("id")
-    if not creation_id:
-        raise RuntimeError(f"IG reels create failed: {j}")
-
-    print("IG publish: esperando container...", creation_id)
-    ig_wait_container(creation_id, IG_ACCESS_TOKEN, timeout_sec=900)
-
-    print("IG publish: publicando...")
-    res = ig_api_post(
-        f"{IG_USER_ID}/media_publish",
-        {"creation_id": creation_id, "access_token": IG_ACCESS_TOKEN},
-    )
-    return res
 
 
 # =========================

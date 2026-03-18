@@ -1143,9 +1143,7 @@ def detect_crop_area(src_path: str, sample_sec: int = 2) -> Optional[str]:
         return None
 
     return matches[-1]
-def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.60) -> str:
-    """
-    def has_excessive_black_borders(src_path: str) -> bool:
+def has_excessive_black_borders(src_path: str) -> bool:
     """
     Revisa si el video sigue trayendo negro raro.
     Si detecta crop muy pequeño o desplazado, lo marca como malo.

@@ -1020,7 +1020,7 @@ def runway_create_image_to_video(
     payload = {
         "model": RUNWAY_I2V_MODEL,
         "promptText": prompt_text[:1000],
-        "ratio": "720:1280",
+        "ratio": "1080:1920",
         "duration": int(max(2, min(10, seconds))),
         "promptImage": image_https_url,
     }

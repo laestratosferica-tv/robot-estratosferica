@@ -1124,7 +1124,7 @@ def detect_crop_area(src_path: str, sample_sec: int = 2) -> Optional[str]:
         "cropdetect=24:16:0",
         "-f",
         "null",
-        "-"
+        "-",
     ]
 
     p = subprocess.run(
@@ -1143,37 +1143,14 @@ def detect_crop_area(src_path: str, sample_sec: int = 2) -> Optional[str]:
         return None
 
     return matches[-1]
-def has_excessive_black_borders(src_path: str) -> bool:
+
+
+def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.60) -> str:
     """
-    Revisa si el video sigue trayendo negro raro.
-    Si detecta crop muy pequeño o desplazado, lo marca como malo.
-    """
-    crop = detect_crop_area(src_path)
-
-    if not crop:
-        return False
-
-    m = re.search(r"crop=(\d+):(\d+):(\d+):(\d+)", crop)
-    if not m:
-        return False
-
-    w, h, x, y = map(int, m.groups())
-
-    if w < 700:
-        return True
-    if h < 1200:
-        return True
-    if x > 40:
-        return True
-    if y > 40:
-        return True
-
-    return False
-    
     Limpia el video de Runway:
     - salta primeros frames raros
     - detecta y recorta bordes negros
-    - normaliza a 1080x1920
+    - normaliza tamaño vertical
     """
     crop_filter = detect_crop_area(src_path)
 
@@ -1226,10 +1203,38 @@ def has_excessive_black_borders(src_path: str) -> bool:
 
     if p.returncode != 0:
         raise RuntimeError(
-            f"sanitize_runway_bg_video falló:\\nSTDERR:\\n{(p.stderr or '')[:4000]}"
+            f"sanitize_runway_bg_video fallo:\nSTDERR:\n{(p.stderr or '')[:4000]}"
         )
 
     return dst_path
+
+
+def has_excessive_black_borders(src_path: str) -> bool:
+    """
+    Revisa si el video sigue trayendo negro raro.
+    Si detecta crop muy pequeño o desplazado, lo marca como malo.
+    """
+    crop = detect_crop_area(src_path)
+
+    if not crop:
+        return False
+
+    m = re.search(r"crop=(\d+):(\d+):(\d+):(\d+)", crop)
+    if not m:
+        return False
+
+    w, h, x, y = map(int, m.groups())
+
+    if w < 700:
+        return True
+    if h < 1200:
+        return True
+    if x > 40:
+        return True
+    if y > 40:
+        return True
+
+    return False
 
 
 def _require_file(path: str, label: str) -> None:
@@ -1893,7 +1898,6 @@ def generate_reel_gamer_dynamic(
 
         vf_parts = []
 
-        # Fondo full bleed
         vf_parts.append(
             f"[0:v]"
             f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
@@ -1908,7 +1912,6 @@ def generate_reel_gamer_dynamic(
             f"format=rgba[bg];"
         )
 
-        # Color gamer
         vf_parts.append(
             f"[bg]"
             f"drawbox=x=0:y=0:w={REEL_W}:h=760:color=blue@0.10:t=fill,"
@@ -1919,7 +1922,6 @@ def generate_reel_gamer_dynamic(
 
         current = "[bg2]"
 
-        # Badge arriba izquierda
         vf_parts.append(
             f"{current}"
             f"drawtext=fontfile={FONT_BOLD}:textfile={badge_txt}:"
@@ -1932,7 +1934,6 @@ def generate_reel_gamer_dynamic(
         )
         current = "[badge]"
 
-        # Partículas simples
         vf_parts.append(
             f"{current}"
             f"drawbox=x=180:y=220:w=6:h=6:color=white@0.20:t=fill,"
@@ -1944,7 +1945,6 @@ def generate_reel_gamer_dynamic(
         )
         current = "[particles]"
 
-        # Barra vertical izquierda
         vf_parts.append(
             f"{current}"
             f"drawbox=x=70:y=240:w=16:h=330:color=white@0.96:t=fill"
@@ -1952,7 +1952,6 @@ def generate_reel_gamer_dynamic(
         )
         current = "[bar]"
 
-        # Logo opcional
         if logo_ok and logo_input is not None:
             vf_parts.append(
                 f"[{logo_input}:v]scale=132:-1,format=rgba,colorchannelmixer=aa=0.86[logo];"
@@ -1962,7 +1961,6 @@ def generate_reel_gamer_dynamic(
             )
             current = "[withlogo]"
 
-        # Franja sutil abajo para título principal
         vf_parts.append(
             f"{current}"
             f"drawbox=x=40:y=1400:w=1000:h=260:color=black@0.20:t=fill"
@@ -1970,7 +1968,6 @@ def generate_reel_gamer_dynamic(
         )
         current = "[titlebase]"
 
-        # Título principal abajo
         vf_parts.append(
             f"{current}"
             f"drawtext=fontfile={FONT_BOLD}:textfile={title_txt}:"
@@ -1985,7 +1982,6 @@ def generate_reel_gamer_dynamic(
             f"[vout];"
         )
 
-        # Audio
         if voice_input is not None and music_input is not None:
             vf_parts.append(
                 f"[{voice_input}:a]volume=1.5[a_voice];"

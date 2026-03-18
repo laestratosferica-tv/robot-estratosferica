@@ -52,7 +52,17 @@ META_CLIPS_PREFIX = (env_nonempty("UGC_META_CLIPS_PREFIX", "ugc/meta/clips") or 
 
 STATE_KEY = env_nonempty("MODE_C_STATE_KEY", "ugc/state/mode_c_state.json")
 
-CLIP_SECONDS = env_float("MODE_C_CLIP_SECONDS", 12.0)
+# NUEVO: duración flexible
+CLIP_SECONDS_DEFAULT = env_float("MODE_C_CLIP_SECONDS_DEFAULT", 12.0)
+CLIP_SECONDS_MIN = env_float("MODE_C_CLIP_SECONDS_MIN", 8.0)
+CLIP_SECONDS_MAX = env_float("MODE_C_CLIP_SECONDS_MAX", 15.0)
+
+MOMENT_DURATION_CLUTCH = env_float("MODE_C_MOMENT_DURATION_CLUTCH", 14.0)
+MOMENT_DURATION_REACTION = env_float("MODE_C_MOMENT_DURATION_REACTION", 10.0)
+MOMENT_DURATION_ACTION = env_float("MODE_C_MOMENT_DURATION_ACTION", 9.0)
+MOMENT_DURATION_HYPE = env_float("MODE_C_MOMENT_DURATION_HYPE", 12.0)
+MOMENT_DURATION_MOMENT = env_float("MODE_C_MOMENT_DURATION_MOMENT", 11.0)
+
 MAX_INPUTS = env_int("MODE_C_MAX_INPUTS", 4)
 MAX_CLIPS_PER_VIDEO = env_int("MODE_C_MAX_CLIPS_PER_VIDEO", 4)
 
@@ -553,7 +563,36 @@ def infer_intensity(score):
     return "low"
 
 
-def score_segments(duration, audio_series, video_series, step_sec, clip_seconds):
+# NUEVO: decide duración según tipo de momento
+def resolve_clip_seconds(moment_type, emotion, candidate_score):
+    moment_type = str(moment_type or "").strip().lower()
+    emotion = str(emotion or "").strip().lower()
+    score = float(candidate_score or 0.0)
+
+    if moment_type == "clutch":
+        secs = MOMENT_DURATION_CLUTCH
+    elif moment_type == "reaction":
+        secs = MOMENT_DURATION_REACTION
+    elif moment_type == "action":
+        secs = MOMENT_DURATION_ACTION
+    elif moment_type == "hype":
+        secs = MOMENT_DURATION_HYPE
+    else:
+        secs = MOMENT_DURATION_MOMENT
+
+    if emotion in ("heroic", "chaos"):
+        secs += 1.0
+
+    if score >= 0.82:
+        secs += 1.0
+    elif score <= 0.45:
+        secs -= 1.0
+
+    return round(clamp(secs, CLIP_SECONDS_MIN, CLIP_SECONDS_MAX), 2)
+
+
+# NUEVO: ya no usa duración fija
+def score_segments(duration, audio_series, video_series, step_sec):
     audio_sm = smooth_series(normalize_series(audio_series), radius=1)
     video_sm = smooth_series(normalize_series(video_series), radius=1)
 
@@ -562,7 +601,27 @@ def score_segments(duration, audio_series, video_series, step_sec, clip_seconds)
 
     for idx in range(count):
         center = idx * step_sec
-        start = center - (clip_seconds / 2.0)
+
+        audio_n = audio_sm[idx]
+        video_n = video_sm[idx]
+
+        rough_moment_type = infer_moment_type(audio_n, video_n, audio_n, video_n)
+        rough_score = (audio_n * AUDIO_WEIGHT) + (video_n * VIDEO_WEIGHT)
+        rough_emotion = infer_emotion(rough_moment_type, rough_score)
+
+        clip_seconds = resolve_clip_seconds(rough_moment_type, rough_emotion, rough_score)
+
+        pre_ratio = 0.42
+        if rough_moment_type == "clutch":
+            pre_ratio = 0.50
+        elif rough_moment_type == "reaction":
+            pre_ratio = 0.35
+        elif rough_moment_type == "action":
+            pre_ratio = 0.30
+        elif rough_moment_type == "hype":
+            pre_ratio = 0.45
+
+        start = center - (clip_seconds * pre_ratio)
         start = clamp(
             start,
             EDGE_PADDING_SEC,
@@ -592,11 +651,46 @@ def score_segments(duration, audio_series, video_series, step_sec, clip_seconds)
         emotion = infer_emotion(moment_type, total_score)
         intensity = infer_intensity(total_score)
 
+        final_clip_seconds = resolve_clip_seconds(moment_type, emotion, total_score)
+
+        if abs(final_clip_seconds - clip_seconds) > 0.5:
+            clip_seconds = final_clip_seconds
+            start = center - (clip_seconds * pre_ratio)
+            start = clamp(
+                start,
+                EDGE_PADDING_SEC,
+                max(EDGE_PADDING_SEC, duration - clip_seconds - EDGE_PADDING_SEC),
+            )
+            end = start + clip_seconds
+
+            if end > duration:
+                start = max(0.0, duration - clip_seconds)
+                end = duration
+
+            a_idx = max(0, int(start // step_sec))
+            b_idx = min(count, int(math.ceil(end / step_sec)))
+            if b_idx <= a_idx:
+                b_idx = min(count, a_idx + 1)
+
+            audio_window = audio_sm[a_idx:b_idx]
+            video_window = video_sm[a_idx:b_idx]
+
+            audio_peak = max(audio_window) if audio_window else 0.0
+            video_peak = max(video_window) if video_window else 0.0
+            audio_avg = mean(audio_window)
+            video_avg = mean(video_window)
+
+            total_score = (audio_avg * AUDIO_WEIGHT) + (video_avg * VIDEO_WEIGHT)
+            moment_type = infer_moment_type(audio_avg, video_avg, audio_peak, video_peak)
+            emotion = infer_emotion(moment_type, total_score)
+            intensity = infer_intensity(total_score)
+
         candidates.append(
             {
                 "start": round(start, 2),
                 "end": round(end, 2),
                 "duration": round(end - start, 2),
+                "clip_seconds": round(end - start, 2),
                 "audio_score": round(audio_avg, 4),
                 "video_score": round(video_avg, 4),
                 "audio_peak_score": round(audio_peak, 4),
@@ -621,7 +715,8 @@ def pick_diverse_segments(candidates, max_clips, min_gap_sec):
 
         too_close = False
         for s in selected:
-            if abs(c["start"] - s["start"]) < min_gap_sec:
+            dynamic_gap = max(min_gap_sec, min(c["duration"], s["duration"]) * 0.8)
+            if abs(c["start"] - s["start"]) < dynamic_gap:
                 too_close = True
                 break
 
@@ -640,7 +735,14 @@ def run_mode_c():
     print("OUTPUT_PREFIX:", OUTPUT_PREFIX)
     print("META_CLIPS_PREFIX:", META_CLIPS_PREFIX)
     print("STATE_KEY:", STATE_KEY)
-    print("CLIP_SECONDS:", CLIP_SECONDS)
+    print("CLIP_SECONDS_DEFAULT:", CLIP_SECONDS_DEFAULT)
+    print("CLIP_SECONDS_MIN:", CLIP_SECONDS_MIN)
+    print("CLIP_SECONDS_MAX:", CLIP_SECONDS_MAX)
+    print("MOMENT_DURATION_ACTION:", MOMENT_DURATION_ACTION)
+    print("MOMENT_DURATION_REACTION:", MOMENT_DURATION_REACTION)
+    print("MOMENT_DURATION_HYPE:", MOMENT_DURATION_HYPE)
+    print("MOMENT_DURATION_MOMENT:", MOMENT_DURATION_MOMENT)
+    print("MOMENT_DURATION_CLUTCH:", MOMENT_DURATION_CLUTCH)
     print("MAX_INPUTS:", MAX_INPUTS)
     print("MAX_CLIPS_PER_VIDEO:", MAX_CLIPS_PER_VIDEO)
     print("ANALYSIS_STEP_SEC:", ANALYSIS_STEP_SEC)
@@ -675,7 +777,7 @@ def run_mode_c():
             duration = get_duration(src)
             print("Duración:", duration)
 
-            if duration < max(CLIP_SECONDS + 2.0, MIN_SOURCE_DURATION_SEC):
+            if duration < max(CLIP_SECONDS_MIN + 2.0, MIN_SOURCE_DURATION_SEC):
                 print("Video demasiado corto:", key)
                 processed.add(key)
                 continue
@@ -692,7 +794,6 @@ def run_mode_c():
                     audio_series=audio_series,
                     video_series=video_series,
                     step_sec=ANALYSIS_STEP_SEC,
-                    clip_seconds=CLIP_SECONDS,
                 )
 
                 selected = pick_diverse_segments(
@@ -718,9 +819,10 @@ def run_mode_c():
             for i, seg in enumerate(selected):
                 start = float(seg["start"])
                 end = float(seg["end"])
+                clip_seconds = float(seg.get("duration") or CLIP_SECONDS_DEFAULT)
                 out = os.path.join(tmp, f"clip{i}.mp4")
 
-                ok = cut_clip(src, start, CLIP_SECONDS, out)
+                ok = cut_clip(src, start, clip_seconds, out)
                 if not ok:
                     print("ERROR creando clip:", key, "clip", i)
                     continue
@@ -765,6 +867,7 @@ def run_mode_c():
                     "| moment:", seg["moment_type"],
                     "| emotion:", seg["emotion"],
                     "| intensity:", seg["intensity"],
+                    "| duration:", seg["duration"],
                 )
 
                 created_for_video += 1

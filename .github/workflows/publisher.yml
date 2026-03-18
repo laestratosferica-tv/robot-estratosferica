@@ -1,47 +1,70 @@
-name: mode-b-publisher
+name: Publisher Mode B
 
 on:
-  workflow_dispatch: {}
   schedule:
-    - cron: "0 */2 * * *"
-
-concurrency:
-  group: mode-b-publisher
-  cancel-in-progress: false
+    - cron: "0 12 * * *" # 7am Colombia
+    - cron: "0 16 * * *" # 11am Colombia
+    - cron: "0 20 * * *" # 3pm Colombia
+    - cron: "0 0 * * *"  # 7pm Colombia
+  workflow_dispatch:
 
 jobs:
-  ugc_mode_b:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install system deps
+      - name: Install deps
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          ffmpeg -version
-
-      - name: Install Python deps
-        run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install boto3 requests google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2
 
-      - name: Run Mode B
+      - name: Run publisher
         run: python -u main.py
         env:
+
           RUN_MODE: B
 
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # VOLUMEN
+          B_MAX_PUBLISH_PER_RUN: 3
+          B_MAX_PER_SOURCE_GROUP_PER_RUN: 2
+
+          # FILTRO TURBO
+          B_MIN_CANDIDATE_SCORE: 0.30
+          B_REQUIRE_EDITORIAL_SIGNALS: true
+          B_EDITORIAL_SCORE_MIN: 0.8
+          B_ALLOW_STRONG_HOOK_OVERRIDE: true
+          B_BLOCK_WEAK_GENERIC_AUTO: true
+          B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED: false
+          B_ALLOW_LOW_SCORE_FOR_PRIORITY: true
+          B_ALLOW_LOW_SCORE_FOR_MANUAL: true
+
+          # COPY
+          B_CAPTION_MAX_WORDS: 42
+          B_CAPTION_MIN_SCORE: 3.6
+          B_USE_OPENAI_POLISH: true
+          B_OPENAI_POLISH_MIN_EDITORIAL: 3.0
+
+          # PLATAFORMAS
+          ENABLE_INSTAGRAM: true
+          ENABLE_FACEBOOK: true
+          ENABLE_SHORTS: true
+          ENABLE_TIKTOK: false
+
+          # ESTADO
+          DRY_RUN: false
+
+          # GRAPH
+          GRAPH_VERSION: v25.0
+          HTTP_TIMEOUT: 30
+
+          # STORAGE
           R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
@@ -52,46 +75,20 @@ jobs:
           B_META_FINAL_PREFIX: ugc/meta/final_clean
           B_STATE_KEY: ugc/state/mode_b_state.json
 
-          B_MAX_PUBLISH_PER_RUN: "2"
-          B_MAX_PER_SOURCE_GROUP_PER_RUN: "2"
-
-          B_ONLY_KEYS_CONTAIN: ""
-          B_AVOID_SAME_SOURCE_PER_RUN: "true"
-          B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED: "false"
-
-          B_MIN_CANDIDATE_SCORE: "0.45"
-          B_ALLOW_LOW_SCORE_FOR_PRIORITY: "true"
-          B_ALLOW_LOW_SCORE_FOR_MANUAL: "true"
-          B_BLOCK_WEAK_GENERIC_AUTO: "true"
-          B_REQUIRE_EDITORIAL_SIGNALS: "true"
-          B_EDITORIAL_SCORE_MIN: "1.25"
-          B_ALLOW_STRONG_HOOK_OVERRIDE: "true"
-
-          B_CAPTION_MAX_WORDS: "42"
-          B_CAPTION_MIN_SCORE: "3.6"
-          B_USE_OPENAI_POLISH: "true"
-          B_OPENAI_POLISH_MIN_EDITORIAL: "3.0"
-
-          ENABLE_INSTAGRAM: "true"
-          ENABLE_FACEBOOK: "true"
-          ENABLE_TIKTOK: "false"
-          ENABLE_SHORTS: "true"
-
-          DRY_RUN: "false"
-
-          GRAPH_VERSION: "v25.0"
-          HTTP_TIMEOUT: "30"
-
+          # IG
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
 
+          # FB
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
 
+          # YT
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          YOUTUBE_PRIVACY_STATUS: "public"
+          YOUTUBE_PRIVACY_STATUS: public
 
+          # OPENAI
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: "gpt-4.1-mini"
+          OPENAI_MODEL: gpt-4.1-mini

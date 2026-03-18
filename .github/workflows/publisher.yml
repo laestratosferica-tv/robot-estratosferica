@@ -59,7 +59,7 @@ jobs:
           B_AVOID_SAME_SOURCE_PER_RUN: "true"
           B_BLOCK_IF_SOURCE_ALREADY_PUBLISHED: "false"
 
-          B_MIN_CANDIDATE_SCORE: "0.55"
+          B_MIN_CANDIDATE_SCORE: "0.45"
           B_ALLOW_LOW_SCORE_FOR_PRIORITY: "true"
           B_ALLOW_LOW_SCORE_FOR_MANUAL: "true"
           B_BLOCK_WEAK_GENERIC_AUTO: "true"

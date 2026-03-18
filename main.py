@@ -1108,6 +1108,41 @@ def download_runway_mp4_robust(mp4_url: str, task_id: Optional[str] = None) -> b
 # Reel generator helpers
 # =========================
 
+def detect_crop_area(src_path: str, sample_sec: int = 2) -> Optional[str]:
+    """
+    Detecta el área útil del video para quitar bordes negros.
+    Devuelve algo como: crop=720:1280:0:0
+    """
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-i",
+        src_path,
+        "-t",
+        str(sample_sec),
+        "-vf",
+        "cropdetect=24:16:0",
+        "-f",
+        "null",
+        "-"
+    ]
+
+    p = subprocess.run(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+    stderr = p.stderr or ""
+    matches = re.findall(r"crop=\d+:\d+:\d+:\d+", stderr)
+
+    if not matches:
+        return None
+
+    return matches[-1]
 def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.35) -> str:
     """
     Limpia el video de Runway para evitar primer frame negro

@@ -1143,11 +1143,26 @@ def detect_crop_area(src_path: str, sample_sec: int = 2) -> Optional[str]:
         return None
 
     return matches[-1]
-def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.35) -> str:
+def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.60) -> str:
     """
-    Limpia el video de Runway para evitar primer frame negro
-    y arranques raros por seek/keyframes.
+    Limpia el video de Runway:
+    - salta primeros frames raros
+    - detecta y recorta bordes negros
+    - normaliza a 1080x1920
     """
+    crop_filter = detect_crop_area(src_path)
+
+    if not crop_filter:
+        crop_filter = "crop=iw:ih:0:0"
+
+    vf = (
+        f"{crop_filter},"
+        f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+        f"crop={REEL_W}:{REEL_H},"
+        f"fps=30,"
+        f"format=yuv420p"
+    )
+
     cmd = [
         "ffmpeg",
         "-y",
@@ -1155,14 +1170,23 @@ def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.
         "-hide_banner",
         "-loglevel",
         "error",
-        "-i", src_path,
-        "-ss", str(start_sec),
+        "-ss",
+        str(start_sec),
+        "-i",
+        src_path,
         "-an",
-        "-c:v", "libx264",
-        "-preset", "medium",
-        "-crf", "18",
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
+        "-vf",
+        vf,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
         dst_path,
     ]
 
@@ -1174,9 +1198,10 @@ def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.
         timeout=300,
         check=False,
     )
+
     if p.returncode != 0:
         raise RuntimeError(
-            f"sanitize_runway_bg_video falló:\nSTDERR:\n{(p.stderr or '')[:4000]}"
+            f"sanitize_runway_bg_video falló:\\nSTDERR:\\n{(p.stderr or '')[:4000]}"
         )
 
     return dst_path

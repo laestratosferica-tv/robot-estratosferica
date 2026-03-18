@@ -1158,13 +1158,13 @@ def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.
         crop_filter = "crop=iw:ih:0:0"
 
     vf = (
-        f"{crop_filter},"
-        f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
-        f"crop={REEL_W}:{REEL_H},"
-        f"fps=30,"
-        f"setsar=1,format=yuv420p"
-    )
-
+            f"{crop_filter},"
+            f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+            f"crop={REEL_W}:{REEL_H},"
+            f"setsar=1,"
+            f"fps=30,"
+            f"format=yuv420p"
+        )
     cmd = [
         "ffmpeg",
         "-y",

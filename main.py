@@ -2603,17 +2603,24 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as e:
                 print("Reel error:", e)
 
-              if reel_url and not acct_dry_run:
+        # =========================
+        # PUBLISH IG + FB
+        # =========================
+
+        if reel_url and not acct_dry_run:
+
             ig_caption = build_instagram_caption(item, link)
 
             if ENABLE_IG_PUBLISH:
                 try:
+                    print("IG publish trigger:", reel_url)
                     ig_publish_reel(reel_url, ig_caption)
                 except Exception as e:
                     print("IG publish falló:", str(e))
 
             if ENABLE_FB_PUBLISH:
                 try:
+                    print("FB publish trigger:", reel_url)
                     fb_res = fb_publish_reel(reel_url, ig_caption)
                     print("FB publish result:", fb_res)
                 except Exception as e:

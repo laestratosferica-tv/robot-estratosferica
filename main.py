@@ -2560,9 +2560,12 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
                             sanitize_runway_bg_video(
                                 bg_vid,
                                 bg_vid_clean,
-                                start_sec=0.35,
+                                start_sec=0.60,
                             )
-
+                            
+                            if has_excessive_black_borders(bg_vid_clean):
+                                raise RuntimeError("Runway devolvió video con parches negros o bordes rotos")
+                            
                             reel_bytes = generate_reel_from_video_bg(
                                 headline=plan["title_text"],
                                 bg_video_path=bg_vid_clean,

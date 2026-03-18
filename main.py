@@ -1162,7 +1162,7 @@ def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.
         f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
         f"crop={REEL_W}:{REEL_H},"
         f"fps=30,"
-        f"format=yuv420p"
+        f"setsar=1,format=yuv420p"
     )
 
     cmd = [

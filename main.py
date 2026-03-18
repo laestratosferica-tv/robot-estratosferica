@@ -1145,6 +1145,33 @@ def detect_crop_area(src_path: str, sample_sec: int = 2) -> Optional[str]:
     return matches[-1]
 def sanitize_runway_bg_video(src_path: str, dst_path: str, start_sec: float = 0.60) -> str:
     """
+    def has_excessive_black_borders(src_path: str) -> bool:
+    """
+    Revisa si el video sigue trayendo negro raro.
+    Si detecta crop muy pequeño o desplazado, lo marca como malo.
+    """
+    crop = detect_crop_area(src_path)
+
+    if not crop:
+        return False
+
+    m = re.search(r"crop=(\d+):(\d+):(\d+):(\d+)", crop)
+    if not m:
+        return False
+
+    w, h, x, y = map(int, m.groups())
+
+    if w < 700:
+        return True
+    if h < 1200:
+        return True
+    if x > 40:
+        return True
+    if y > 40:
+        return True
+
+    return False
+    
     Limpia el video de Runway:
     - salta primeros frames raros
     - detecta y recorta bordes negros

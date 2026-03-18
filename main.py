@@ -2603,21 +2603,21 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as e:
                 print("Reel error:", e)
 
-       if reel_url and not acct_dry_run:
+              if reel_url and not acct_dry_run:
             ig_caption = build_instagram_caption(item, link)
 
-        if ENABLE_IG_PUBLISH:
-            try:
-                ig_publish_reel(reel_url, ig_caption)
-            except Exception as e:
-                print("IG publish falló:", str(e))
-    
-        if ENABLE_FB_PUBLISH:
-            try:
-                fb_res = fb_publish_reel(reel_url, ig_caption)
-                print("FB publish result:", fb_res)
-            except Exception as e:
-                print("FB publish falló:", str(e))
+            if ENABLE_IG_PUBLISH:
+                try:
+                    ig_publish_reel(reel_url, ig_caption)
+                except Exception as e:
+                    print("IG publish falló:", str(e))
+
+            if ENABLE_FB_PUBLISH:
+                try:
+                    fb_res = fb_publish_reel(reel_url, ig_caption)
+                    print("FB publish result:", fb_res)
+                except Exception as e:
+                    print("FB publish falló:", str(e))
                 
         if threads_res and threads_res.get("ok"):
             mark_posted(state, link)

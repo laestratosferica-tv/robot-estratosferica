@@ -12,8 +12,9 @@ from .metrics import build_measurement_plan
 from .models import Candidate, PipelineItem
 from .queue import save_queue
 from .radar import load_source_registry, normalize_story
-from .studio import build_content_package
+from .studio import FORMAT_BY_TERRITORY, build_content_package
 from .storyboard import build_storyboard
+from .talent import load_talent_catalog, select_talent
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,12 +23,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", default="artifacts/editorial_queue.json")
     parser.add_argument("--sources")
+    parser.add_argument(
+        "--talent-config", default="config/talent_v1.json"
+    )
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
     config = load_config(args.config)
+    talent_catalog = load_talent_catalog(args.talent_config)
     raw_candidates = json.loads(Path(args.input).read_text(encoding="utf-8"))
     limit = int(config["safe_mode"]["max_candidates_per_run"])
     if args.sources:
@@ -43,8 +48,14 @@ def main() -> int:
     pipeline_items = []
     for candidate, decision in zip(candidates, decisions):
         opportunity = detect_opportunity(candidate, decision)
+        talent = None
+        if decision.accepted:
+            format_id = FORMAT_BY_TERRITORY[candidate.territory]
+            talent = select_talent(
+                candidate.territory, format_id, talent_catalog
+            ).to_dict()
         content_package = build_content_package(
-            candidate, decision, opportunity
+            candidate, decision, opportunity, talent
         )
         if content_package:
             errors = validate_content_package(content_package)

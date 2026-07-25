@@ -14,15 +14,15 @@ on:
       publish_ig:
         description: "Publicar en Instagram"
         required: false
-        default: "true"
+        default: "false"
       publish_threads:
         description: "Publicar en Threads"
         required: false
-        default: "true"
+        default: "false"
       runway_enabled:
         description: "Activar Runway"
         required: false
-        default: "true"
+        default: "false"
       runway_force:
         description: "Forzar Runway sí o sí"
         required: false
@@ -34,6 +34,8 @@ concurrency:
 
 jobs:
   run-editorial:
+    # Freno central: sin esta variable explícita el flujo no puede ejecutarse.
+    if: vars.PRODUCTION_ARMED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 

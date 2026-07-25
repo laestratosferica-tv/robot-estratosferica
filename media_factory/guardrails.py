@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from .models import ContentPackage
+from .models import ContentPackage, Storyboard
 
 
 PLATFORM_LIMITS = {
@@ -36,4 +36,38 @@ def validate_content_package(package: ContentPackage) -> list[str]:
     visual_text = " ".join(package.visual_brief).lower()
     if "original" not in visual_text or "no descargar" not in visual_text:
         errors.append("missing_visual_rights_instruction")
+    return errors
+
+
+def validate_storyboard(storyboard: Storyboard) -> list[str]:
+    errors: list[str] = []
+    if storyboard.state != "draft":
+        errors.append("storyboard_must_remain_draft")
+    if storyboard.production_enabled:
+        errors.append("production_must_be_disabled")
+    if not storyboard.requires_human_review:
+        errors.append("storyboard_human_review_required")
+    if storyboard.master_format != "1080x1920":
+        errors.append("invalid_master_format")
+    if storyboard.duration_seconds > 30:
+        errors.append("duration_exceeds_pilot_limit")
+    if not storyboard.captions_required:
+        errors.append("captions_required")
+    if not storyboard.scenes:
+        errors.append("missing_scenes")
+    else:
+        if storyboard.scenes[0].start_second != 0:
+            errors.append("storyboard_must_start_at_zero")
+        if storyboard.scenes[-1].end_second != storyboard.duration_seconds:
+            errors.append("storyboard_duration_mismatch")
+        for previous, current in zip(
+            storyboard.scenes, storyboard.scenes[1:]
+        ):
+            if previous.end_second != current.start_second:
+                errors.append("storyboard_timeline_gap")
+    if not storyboard.source_card.get("url"):
+        errors.append("missing_storyboard_source")
+    style_text = " ".join(storyboard.visual_style).lower()
+    if "original" not in style_text or "sin logos" not in style_text:
+        errors.append("missing_original_visual_policy")
     return errors

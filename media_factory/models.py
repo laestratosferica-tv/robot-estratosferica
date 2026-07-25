@@ -9,6 +9,7 @@ class Candidate:
     title: str
     source_url: str
     territory: str
+    summary: str = ""
     source_id: str = ""
     published_at: str = ""
     region: str = "latam"
@@ -24,6 +25,7 @@ class Candidate:
             title=str(data.get("title", "")).strip(),
             source_url=str(data.get("source_url", "")).strip(),
             territory=str(data.get("territory", "")).strip(),
+            summary=str(data.get("summary", "")).strip(),
             source_id=str(data.get("source_id", "")).strip(),
             published_at=str(data.get("published_at", "")).strip(),
             region=str(data.get("region", "latam")).strip(),
@@ -72,11 +74,30 @@ class MeasurementPlan:
 
 
 @dataclass(frozen=True)
+class ContentPackage:
+    format_id: str
+    state: str
+    headline: str
+    angle: str
+    factual_summary: str
+    short_video_script: str
+    platform_copy: dict[str, str]
+    visual_brief: list[str]
+    sources: list[str]
+    requires_human_review: bool = True
+    external_actions_enabled: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class PipelineItem:
     candidate: Candidate
     decision: EditorialDecision
     measurement_plan: MeasurementPlan
     commercial_opportunity: CommercialOpportunity | None = None
+    content_package: ContentPackage | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -93,6 +114,11 @@ class PipelineItem:
             "commercial_opportunity": (
                 self.commercial_opportunity.to_dict()
                 if self.commercial_opportunity
+                else None
+            ),
+            "content_package": (
+                self.content_package.to_dict()
+                if self.content_package
                 else None
             ),
         }

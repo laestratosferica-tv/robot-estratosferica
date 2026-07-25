@@ -1,0 +1,68 @@
+name: Threads Credential Check
+
+on:
+  push:
+    branches:
+      - agent/reactivate-threads-v1
+    paths:
+      - .github/workflows/threads-auth-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Threads token without publishing
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check required secrets
+        env:
+          THREADS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+        run: |
+          test -n "$THREADS_TOKEN" || {
+            echo "THREADS_USER_ACCESS_TOKEN is missing"
+            exit 1
+          }
+          test -n "$THREADS_USER_ID" || {
+            echo "THREADS_USER_ID is missing"
+            exit 1
+          }
+
+      - name: Validate token with read-only profile request
+        env:
+          THREADS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+        run: |
+          HTTP_STATUS=$(curl --silent --show-error             --output /tmp/threads-profile.json             --write-out "%{http_code}"             --get "https://graph.threads.net/v1.0/me"             --data-urlencode "fields=id,username"             --data-urlencode "access_token=$THREADS_TOKEN")
+
+          HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          status = int(os.environ["HTTP_STATUS"])
+          payload = json.loads(
+              Path("/tmp/threads-profile.json").read_text(encoding="utf-8")
+          )
+          if status != 200:
+              error = payload.get("error", {})
+              print(
+                  "Threads rejected the credential:",
+                  error.get("type", "unknown"),
+                  error.get("code", "unknown"),
+                  error.get("message", "no message"),
+              )
+              raise SystemExit(1)
+
+          returned_id = str(payload.get("id", ""))
+          expected_id = os.environ["THREADS_USER_ID"]
+          if not returned_id or returned_id != expected_id:
+              print("Threads token is valid but the configured account ID differs")
+              raise SystemExit(1)
+
+          print("Threads credential is valid and belongs to the configured account")
+          print("No content was created or published")
+          PY

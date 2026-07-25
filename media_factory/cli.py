@@ -7,10 +7,12 @@ from pathlib import Path
 from .commercial import detect_opportunity
 from .config import load_config
 from .editor import evaluate_candidate
+from .guardrails import validate_content_package
 from .metrics import build_measurement_plan
 from .models import Candidate, PipelineItem
 from .queue import save_queue
 from .radar import load_source_registry, normalize_story
+from .studio import build_content_package
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,11 +42,21 @@ def main() -> int:
     pipeline_items = []
     for candidate, decision in zip(candidates, decisions):
         opportunity = detect_opportunity(candidate, decision)
+        content_package = build_content_package(
+            candidate, decision, opportunity
+        )
+        if content_package:
+            errors = validate_content_package(content_package)
+            if errors:
+                raise ValueError(
+                    f"Paquete bloqueado por controles: {', '.join(errors)}"
+                )
         pipeline_items.append(
             PipelineItem(
                 candidate=candidate,
                 decision=decision,
                 commercial_opportunity=opportunity,
+                content_package=content_package,
                 measurement_plan=build_measurement_plan(decision, opportunity),
             )
         )

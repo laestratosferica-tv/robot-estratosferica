@@ -92,12 +92,48 @@ class ContentPackage:
 
 
 @dataclass(frozen=True)
+class StoryboardScene:
+    scene_id: str
+    start_second: int
+    end_second: int
+    purpose: str
+    voiceover: str
+    on_screen_text: str
+    visual_direction: str
+    audio_direction: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class Storyboard:
+    state: str
+    master_format: str
+    duration_seconds: int
+    frames_per_second: int
+    captions_required: bool
+    visual_style: list[str]
+    scenes: list[StoryboardScene]
+    source_card: dict[str, str]
+    requires_human_review: bool = True
+    production_enabled: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            **asdict(self),
+            "scenes": [scene.to_dict() for scene in self.scenes],
+        }
+
+
+@dataclass(frozen=True)
 class PipelineItem:
     candidate: Candidate
     decision: EditorialDecision
     measurement_plan: MeasurementPlan
     commercial_opportunity: CommercialOpportunity | None = None
     content_package: ContentPackage | None = None
+    storyboard: Storyboard | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -120,5 +156,8 @@ class PipelineItem:
                 self.content_package.to_dict()
                 if self.content_package
                 else None
+            ),
+            "storyboard": (
+                self.storyboard.to_dict() if self.storyboard else None
             ),
         }

@@ -1,0 +1,82 @@
+{
+  "version": "1.0.0",
+  "max_age_days": 14,
+  "media_reuse_allowed": false,
+  "disallowed_keywords": [
+    "betting",
+    "gambling",
+    "casino",
+    "apuestas",
+    "cuotas"
+  ],
+  "sources": [
+    {
+      "id": "xbox_wire_es_latam",
+      "name": "Xbox Wire en Español",
+      "tier": "primary",
+      "enabled": true,
+      "allowed_domains": ["news.xbox.com"],
+      "territories": [
+        "gaming_esports",
+        "ai_innovation_future",
+        "brands_activations"
+      ],
+      "requires_corroboration": false
+    },
+    {
+      "id": "riot_games_latam",
+      "name": "Riot Games LATAM",
+      "tier": "primary",
+      "enabled": true,
+      "allowed_domains": ["riotgames.com"],
+      "territories": [
+        "gaming_esports",
+        "ai_innovation_future",
+        "brands_activations"
+      ],
+      "requires_corroboration": false
+    },
+    {
+      "id": "esports_insider",
+      "name": "Esports Insider",
+      "tier": "specialist",
+      "enabled": true,
+      "allowed_domains": ["esportsinsider.com"],
+      "territories": [
+        "gaming_esports",
+        "ai_innovation_future",
+        "brands_activations"
+      ],
+      "requires_corroboration": true
+    },
+    {
+      "id": "sportspro",
+      "name": "SportsPro",
+      "tier": "specialist",
+      "enabled": true,
+      "allowed_domains": ["sportspro.com"],
+      "territories": [
+        "sport_technology_entertainment",
+        "ai_innovation_future",
+        "brands_activations"
+      ],
+      "requires_corroboration": true
+    },
+    {
+      "id": "think_with_google",
+      "name": "Think with Google",
+      "tier": "industry_research",
+      "enabled": true,
+      "allowed_domains": [
+        "thinkwithgoogle.com",
+        "business.google.com"
+      ],
+      "territories": [
+        "sport_technology_entertainment",
+        "ai_innovation_future",
+        "brands_activations"
+      ],
+      "requires_corroboration": true
+    }
+  ]
+}

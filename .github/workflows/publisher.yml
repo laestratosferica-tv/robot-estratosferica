@@ -10,6 +10,8 @@ on:
 
 jobs:
   publish:
+    # Freno central: sin esta variable explícita el flujo no puede publicar.
+    if: vars.PRODUCTION_ARMED == 'true'
     runs-on: ubuntu-latest
 
     steps:

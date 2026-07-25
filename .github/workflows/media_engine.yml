@@ -27,6 +27,8 @@ jobs:
 
   run-engine:
 
+    # Freno central: evita reactivar todas las redes por accidente.
+    if: vars.PRODUCTION_ARMED == 'true'
     runs-on: ubuntu-latest
 
     steps:

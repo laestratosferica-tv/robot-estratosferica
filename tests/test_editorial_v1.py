@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from media_factory.commercial import detect_opportunity
@@ -9,15 +10,18 @@ from media_factory.editor import evaluate_candidate
 from media_factory.metrics import build_measurement_plan
 from media_factory.models import Candidate, PipelineItem
 from media_factory.queue import save_queue
+from media_factory.radar import RadarRejected, load_source_registry, normalize_story
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "editorial_v1.json"
+SOURCES_PATH = ROOT / "config" / "sources_v1.json"
 
 
 class EditorialV1Tests(unittest.TestCase):
     def setUp(self) -> None:
         self.config = load_config(CONFIG_PATH)
+        self.sources = load_source_registry(SOURCES_PATH)
 
     def test_configuration_is_safe(self) -> None:
         safe = self.config["safe_mode"]
@@ -58,6 +62,7 @@ class EditorialV1Tests(unittest.TestCase):
         decision = evaluate_candidate(candidate, self.config)
         opportunity = detect_opportunity(candidate, decision)
         item = PipelineItem(
+            candidate=candidate,
             decision=decision,
             commercial_opportunity=opportunity,
             measurement_plan=build_measurement_plan(decision, opportunity),
@@ -81,6 +86,34 @@ class EditorialV1Tests(unittest.TestCase):
         self.assertIsNotNone(opportunity)
         self.assertEqual(opportunity.status, "research_only")
         self.assertIn("sin aprobación humana", opportunity.next_step)
+
+    def test_radar_accepts_recent_allowed_source(self) -> None:
+        candidate = normalize_story(
+            {
+                "title": "XBOX y Meta amplían una experiencia de juego",
+                "source_url": "https://news.xbox.com/es-latam/example",
+                "source_id": "xbox_wire_es_latam",
+                "published_at": "2026-07-21",
+                "territory": "brands_activations",
+            },
+            self.sources,
+            today=date(2026, 7, 25),
+        )
+        self.assertEqual(candidate.source_id, "xbox_wire_es_latam")
+
+    def test_radar_blocks_betting_content(self) -> None:
+        with self.assertRaisesRegex(RadarRejected, "blocked_topic"):
+            normalize_story(
+                {
+                    "title": "New esports betting market",
+                    "source_url": "https://esportsinsider.com/example",
+                    "source_id": "esports_insider",
+                    "published_at": "2026-07-24",
+                    "territory": "gaming_esports",
+                },
+                self.sources,
+                today=date(2026, 7, 25),
+            )
 
     def test_unsafe_configuration_is_blocked(self) -> None:
         unsafe = json.loads(json.dumps(self.config))

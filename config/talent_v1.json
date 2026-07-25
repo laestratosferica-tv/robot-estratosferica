@@ -1,0 +1,60 @@
+{
+  "version": "1.0.0",
+  "privacy_class": "public_safe_configuration",
+  "disclosure": "Contenido narrado por un personaje virtual de La Estratosférica.",
+  "publication_requires_human_review": true,
+  "characters": [
+    {
+      "id": "la_senal",
+      "display_name": "La Señal",
+      "enabled": true,
+      "kind": "fully_fictional",
+      "role": "field_correspondent",
+      "territories": ["gaming_esports", "ai_innovation_future", "sport_technology_entertainment"],
+      "formats": ["radar_estratosferico", "esto_cambia_el_juego"],
+      "priority": 80,
+      "voice_profile_id": "synthetic_pending",
+      "visual_identity_version": "concept-v0",
+      "performance_rules": ["actuar_dentro_de_la_historia", "curiosidad_activa", "no_posar_como_influencer"]
+    },
+    {
+      "id": "la_analista",
+      "display_name": "La Analista",
+      "enabled": true,
+      "kind": "fully_fictional",
+      "role": "strategic_analyst",
+      "territories": ["brands_activations", "gaming_esports", "sport_technology_entertainment", "ai_innovation_future"],
+      "formats": ["brand_play", "esto_cambia_el_juego"],
+      "priority": 90,
+      "voice_profile_id": "synthetic_pending",
+      "visual_identity_version": "concept-v0",
+      "performance_rules": ["conectar_datos_y_contexto", "cuestionar_sin_cinismo", "explicar_con_claridad"]
+    },
+    {
+      "id": "jose_luis_curador",
+      "display_name": "José Luis — Curador",
+      "enabled": false,
+      "kind": "authorized_human_based_virtual_character",
+      "role": "founder_curator",
+      "territories": ["brands_activations", "ai_innovation_future", "sport_technology_entertainment"],
+      "formats": ["brand_play", "esto_cambia_el_juego"],
+      "priority": 100,
+      "voice_profile_id": "private_asset_required",
+      "visual_identity_version": "private_asset_required",
+      "activation_requirement": "private_identity_package_approved",
+      "performance_rules": ["apariciones_especiales", "lectura_creativa_y_comercial", "nunca_suplantar_acciones_personales"]
+    }
+  ],
+  "format_preference": {
+    "radar_estratosferico": ["la_senal", "la_analista"],
+    "esto_cambia_el_juego": ["la_analista", "la_senal"],
+    "brand_play": ["la_analista", "la_senal"]
+  },
+  "forbidden_public_fields": [
+    "face_reference",
+    "voice_sample",
+    "biometric_model",
+    "private_asset_path",
+    "consent_record"
+  ]
+}

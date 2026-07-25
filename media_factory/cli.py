@@ -4,9 +4,11 @@ import argparse
 import json
 from pathlib import Path
 
+from .commercial import detect_opportunity
 from .config import load_config
 from .editor import evaluate_candidate
-from .models import Candidate
+from .metrics import build_measurement_plan
+from .models import Candidate, PipelineItem
 from .queue import save_queue
 
 
@@ -25,9 +27,19 @@ def main() -> int:
     limit = int(config["safe_mode"]["max_candidates_per_run"])
     candidates = [Candidate.from_dict(item) for item in raw_candidates[:limit]]
     decisions = [evaluate_candidate(item, config) for item in candidates]
-    accepted = [item for item in decisions if item.accepted]
+    pipeline_items = []
+    for candidate, decision in zip(candidates, decisions):
+        opportunity = detect_opportunity(candidate, decision)
+        pipeline_items.append(
+            PipelineItem(
+                decision=decision,
+                commercial_opportunity=opportunity,
+                measurement_plan=build_measurement_plan(decision, opportunity),
+            )
+        )
+    accepted = [item for item in pipeline_items if item.decision.accepted]
     package_limit = int(config["safe_mode"]["max_packages_per_run"])
-    rejected = [item for item in decisions if not item.accepted]
+    rejected = [item for item in pipeline_items if not item.decision.accepted]
     save_queue(accepted[:package_limit] + rejected, args.output)
     print(f"Dry run completo: {len(decisions)} candidatos, 0 publicaciones")
     return 0

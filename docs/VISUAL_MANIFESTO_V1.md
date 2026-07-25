@@ -59,7 +59,7 @@ FFmpeg para voz, música, efectos, subtítulos, mezcla y exportación.
 ### Renderizador expresivo
 
 Generación de imágenes, 3D o video generativo únicamente cuando el concepto lo
-+necesite y el costo esté aprobado.
+necesite y el costo esté aprobado.
 
 ### Intervención humana
 

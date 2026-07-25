@@ -1,0 +1,42 @@
+[
+  {
+    "title": "XBOX y Meta: más formas de disfrutar XBOX Game Pass",
+    "summary": "Una alianza integra una edición de Game Pass en Meta Horizon+.",
+    "source_url": "https://news.xbox.com/es-latam/2026/07/21/xbox-y-meta-mas-formas-de-disfrutar-xbox-game-pass/",
+    "source_id": "xbox_wire_es_latam",
+    "published_at": "2026-07-21",
+    "territory": "brands_activations",
+    "region": "latam",
+    "is_verified": true,
+    "has_media_rights": true,
+    "claims_supported": true,
+    "signals": {
+      "latam_relevance": 0.8,
+      "explanatory_value": 0.85,
+      "angle_originality": 0.8,
+      "verifiability": 1,
+      "conversation_potential": 0.75,
+      "commercial_potential": 0.9
+    }
+  },
+  {
+    "title": "Lenovo explica cómo mide una activación auténtica en esports",
+    "summary": "La marca plantea medir experiencia, aprendizaje y producto, no solo alcance.",
+    "source_url": "https://esportsinsider.com/2026/07/lenovo-legion-esports-world-cup-interview",
+    "source_id": "esports_insider",
+    "published_at": "2026-07-17",
+    "territory": "brands_activations",
+    "region": "global_relevant_to_latam",
+    "is_verified": true,
+    "has_media_rights": true,
+    "claims_supported": true,
+    "signals": {
+      "latam_relevance": 0.65,
+      "explanatory_value": 0.95,
+      "angle_originality": 0.9,
+      "verifiability": 0.9,
+      "conversation_potential": 0.8,
+      "commercial_potential": 1
+    }
+  }
+]

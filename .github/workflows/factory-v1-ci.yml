@@ -1,0 +1,43 @@
+name: Factory V1 CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Editorial and safety tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Verify production remains disabled
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          config = json.loads(
+              Path("config/editorial_v1.json").read_text(encoding="utf-8")
+          )
+          safe_mode = config["safe_mode"]
+          assert safe_mode["dry_run"] is True
+          assert safe_mode["publishing_enabled"] is False
+          assert safe_mode["social_tokens_allowed"] is False
+          print("Safety gate OK: dry-run activo y publicación deshabilitada")
+          PY

@@ -1,0 +1,19 @@
+[
+  {
+    "title": "Ejemplo: una liga latinoamericana prueba una nueva experiencia digital",
+    "source_url": "https://example.com/demo-source",
+    "territory": "gaming_esports",
+    "region": "latam",
+    "is_verified": true,
+    "has_media_rights": true,
+    "claims_supported": true,
+    "signals": {
+      "latam_relevance": 0.9,
+      "explanatory_value": 0.8,
+      "angle_originality": 0.75,
+      "verifiability": 1,
+      "conversation_potential": 0.7,
+      "commercial_potential": 0.5
+    }
+  }
+]

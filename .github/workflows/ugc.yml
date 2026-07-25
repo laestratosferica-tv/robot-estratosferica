@@ -11,6 +11,8 @@ concurrency:
 
 jobs:
   ugc_mode_b:
+    # Freno central: también protege las ejecuciones manuales heredadas.
+    if: vars.PRODUCTION_ARMED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

@@ -1,0 +1,41 @@
+name: Factory V1 - Safe Dry Run
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run safety tests
+        env:
+          PYTHONPATH: .
+        run: python -m unittest discover -s tests -v
+
+      - name: Generate review queue
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m media_factory.cli \
+            --config config/editorial_v1.json \
+            --input fixtures/candidates.json \
+            --output artifacts/editorial_queue.json
+
+      - name: Upload dry-run result
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-v1-review-queue
+          path: artifacts/editorial_queue.json
+          if-no-files-found: error

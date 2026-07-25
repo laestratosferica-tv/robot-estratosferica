@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#050812"/>
+      <stop offset="0.55" stop-color="#0B1020"/>
+      <stop offset="1" stop-color="#10162A"/>
+    </linearGradient>
+    <linearGradient id="signal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#B9FF3D"/>
+      <stop offset="0.5" stop-color="#41EAD4"/>
+      <stop offset="1" stop-color="#9B5CFF"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <circle cx="960" cy="170" r="360" fill="none" stroke="#41EAD4" stroke-opacity=".12" stroke-width="2"/>
+  <circle cx="960" cy="170" r="250" fill="none" stroke="#9B5CFF" stroke-opacity=".18" stroke-width="2"/>
+  <path d="M-80 1430 C260 1150 610 1600 1180 1230" fill="none" stroke="#B9FF3D" stroke-opacity=".12" stroke-width="3"/>
+
+  <g font-family="DejaVu Sans, sans-serif">
+    <text x="74" y="105" fill="#C7D0E0" font-size="24" font-weight="700" letter-spacing="6">LA ESTRATOSFÉRICA TV</text>
+    <rect x="74" y="148" width="254" height="54" rx="27" fill="#B9FF3D"/>
+    <text x="201" y="184" text-anchor="middle" fill="#07100A" font-size="23" font-weight="800" letter-spacing="3">BRAND PLAY</text>
+    <text x="1000" y="183" text-anchor="end" fill="#7F8AA2" font-size="22" font-weight="700">01 / 06</text>
+
+    <text x="74" y="405" fill="#F3F7FF" font-size="91" font-weight="900" letter-spacing="-3">
+      <tspan x="74" dy="0">NO ES SOLO</tspan>
+      <tspan x="74" dy="102">UNA ALIANZA</tspan>
+    </text>
+    <rect x="74" y="558" width="520" height="10" rx="5" fill="url(#signal)"/>
+
+    <g transform="translate(540 965)">
+      <circle r="285" fill="none" stroke="#41EAD4" stroke-opacity=".22" stroke-width="3"/>
+      <circle r="205" fill="none" stroke="#9B5CFF" stroke-opacity=".38" stroke-width="3"/>
+      <circle r="118" fill="none" stroke="#B9FF3D" stroke-opacity=".85" stroke-width="6" filter="url(#glow)"/>
+      <circle cx="-205" cy="-20" r="92" fill="#0E1729" stroke="#41EAD4" stroke-width="3"/>
+      <circle cx="205" cy="-20" r="92" fill="#0E1729" stroke="#9B5CFF" stroke-width="3"/>
+      <path d="M-108 -20 H108" stroke="url(#signal)" stroke-width="9" stroke-linecap="round"/>
+      <circle r="23" fill="#B9FF3D"/>
+      <text x="-205" y="-11" text-anchor="middle" fill="#F3F7FF" font-size="26" font-weight="800">XBOX</text>
+      <text x="205" y="-11" text-anchor="middle" fill="#F3F7FF" font-size="26" font-weight="800">META</text>
+      <text x="0" y="195" text-anchor="middle" fill="#B9FF3D" font-size="23" font-weight="700" letter-spacing="3">CONEXIÓN</text>
+    </g>
+
+    <text x="74" y="1435" fill="#41EAD4" font-size="25" font-weight="800" letter-spacing="3">LA SEÑAL DETRÁS DEL ANUNCIO</text>
+    <text x="74" y="1510" fill="#F3F7FF" font-size="45" font-weight="800">
+      <tspan x="74" dy="0">Producto + plataforma</tspan>
+      <tspan x="74" dy="58">+ hábito de consumo</tspan>
+    </text>
+
+    <rect x="74" y="1680" width="932" height="134" rx="28" fill="#101B2F" stroke="#263653" stroke-width="2"/>
+    <text x="112" y="1735" fill="#9AA7BD" font-size="22" font-weight="700" letter-spacing="2">PREGUNTA ESTRATOSFÉRICA</text>
+    <text x="112" y="1785" fill="#F3F7FF" font-size="31" font-weight="800">¿Qué podría funcionar en Latinoamérica?</text>
+
+    <text x="74" y="1870" fill="#758198" font-size="19">Borrador visual · Sin publicación · Fuente en descripción</text>
+  </g>
+</svg>

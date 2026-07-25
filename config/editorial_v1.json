@@ -1,0 +1,53 @@
+{
+  "version": "1.0.0",
+  "mission": "Construir una fábrica autónoma de historias, audiencias y oportunidades comerciales para la cultura digital latinoamericana.",
+  "safe_mode": {
+    "dry_run": true,
+    "publishing_enabled": false,
+    "social_tokens_allowed": false,
+    "runway_enabled": false,
+    "max_candidates_per_run": 3,
+    "max_packages_per_run": 1
+  },
+  "territories": {
+    "gaming_esports": 50,
+    "sport_technology_entertainment": 20,
+    "ai_innovation_future": 15,
+    "brands_activations": 15
+  },
+  "formats": [
+    "radar_estratosferico",
+    "esto_cambia_el_juego",
+    "brand_play"
+  ],
+  "platform_order": [
+    "instagram",
+    "facebook",
+    "youtube",
+    "threads",
+    "tiktok"
+  ],
+  "editorial_score": {
+    "minimum": 65,
+    "weights": {
+      "latam_relevance": 25,
+      "explanatory_value": 20,
+      "angle_originality": 20,
+      "verifiability": 15,
+      "conversation_potential": 10,
+      "commercial_potential": 10
+    }
+  },
+  "hard_reject": [
+    "missing_source",
+    "duplicate_story",
+    "unverified_rumor",
+    "unlicensed_media_dependency",
+    "unsupported_claim",
+    "outside_editorial_territory"
+  ],
+  "allowed_output_states": [
+    "draft",
+    "needs_review"
+  ]
+}

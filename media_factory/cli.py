@@ -10,6 +10,7 @@ from .editor import evaluate_candidate
 from .metrics import build_measurement_plan
 from .models import Candidate, PipelineItem
 from .queue import save_queue
+from .radar import load_source_registry, normalize_story
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -17,6 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", required=True)
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", default="artifacts/editorial_queue.json")
+    parser.add_argument("--sources")
     return parser
 
 
@@ -25,13 +27,22 @@ def main() -> int:
     config = load_config(args.config)
     raw_candidates = json.loads(Path(args.input).read_text(encoding="utf-8"))
     limit = int(config["safe_mode"]["max_candidates_per_run"])
-    candidates = [Candidate.from_dict(item) for item in raw_candidates[:limit]]
+    if args.sources:
+        registry = load_source_registry(args.sources)
+        candidates = [
+            normalize_story(item, registry) for item in raw_candidates[:limit]
+        ]
+    else:
+        candidates = [
+            Candidate.from_dict(item) for item in raw_candidates[:limit]
+        ]
     decisions = [evaluate_candidate(item, config) for item in candidates]
     pipeline_items = []
     for candidate, decision in zip(candidates, decisions):
         opportunity = detect_opportunity(candidate, decision)
         pipeline_items.append(
             PipelineItem(
+                candidate=candidate,
                 decision=decision,
                 commercial_opportunity=opportunity,
                 measurement_plan=build_measurement_plan(decision, opportunity),

@@ -9,6 +9,8 @@ class Candidate:
     title: str
     source_url: str
     territory: str
+    source_id: str = ""
+    published_at: str = ""
     region: str = "latam"
     is_duplicate: bool = False
     is_verified: bool = True
@@ -22,6 +24,8 @@ class Candidate:
             title=str(data.get("title", "")).strip(),
             source_url=str(data.get("source_url", "")).strip(),
             territory=str(data.get("territory", "")).strip(),
+            source_id=str(data.get("source_id", "")).strip(),
+            published_at=str(data.get("published_at", "")).strip(),
             region=str(data.get("region", "latam")).strip(),
             is_duplicate=bool(data.get("is_duplicate", False)),
             is_verified=bool(data.get("is_verified", True)),
@@ -69,12 +73,21 @@ class MeasurementPlan:
 
 @dataclass(frozen=True)
 class PipelineItem:
+    candidate: Candidate
     decision: EditorialDecision
     measurement_plan: MeasurementPlan
     commercial_opportunity: CommercialOpportunity | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "story": {
+                "title": self.candidate.title,
+                "source_url": self.candidate.source_url,
+                "source_id": self.candidate.source_id,
+                "published_at": self.candidate.published_at,
+                "territory": self.candidate.territory,
+                "region": self.candidate.region,
+            },
             "decision": self.decision.to_dict(),
             "measurement_plan": self.measurement_plan.to_dict(),
             "commercial_opportunity": (

@@ -42,3 +42,44 @@ class EditorialDecision:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class CommercialOpportunity:
+    kind: str
+    score: int
+    status: str
+    rationale: str
+    next_step: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class MeasurementPlan:
+    primary_goal: str
+    pre_publish_checks: list[str]
+    post_publish_metrics: list[str]
+    commercial_metrics: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class PipelineItem:
+    decision: EditorialDecision
+    measurement_plan: MeasurementPlan
+    commercial_opportunity: CommercialOpportunity | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "decision": self.decision.to_dict(),
+            "measurement_plan": self.measurement_plan.to_dict(),
+            "commercial_opportunity": (
+                self.commercial_opportunity.to_dict()
+                if self.commercial_opportunity
+                else None
+            ),
+        }

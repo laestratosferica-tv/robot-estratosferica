@@ -7,12 +7,13 @@ from pathlib import Path
 from .commercial import detect_opportunity
 from .config import load_config
 from .editor import evaluate_candidate
-from .guardrails import validate_content_package
+from .guardrails import validate_content_package, validate_storyboard
 from .metrics import build_measurement_plan
 from .models import Candidate, PipelineItem
 from .queue import save_queue
 from .radar import load_source_registry, normalize_story
 from .studio import build_content_package
+from .storyboard import build_storyboard
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,12 +52,20 @@ def main() -> int:
                 raise ValueError(
                     f"Paquete bloqueado por controles: {', '.join(errors)}"
                 )
+        storyboard = build_storyboard(candidate, content_package)
+        if storyboard:
+            errors = validate_storyboard(storyboard)
+            if errors:
+                raise ValueError(
+                    f"Storyboard bloqueado por controles: {', '.join(errors)}"
+                )
         pipeline_items.append(
             PipelineItem(
                 candidate=candidate,
                 decision=decision,
                 commercial_opportunity=opportunity,
                 content_package=content_package,
+                storyboard=storyboard,
                 measurement_plan=build_measurement_plan(decision, opportunity),
             )
         )

@@ -1,6 +1,4 @@
-name: Robot UGC Runner (Modo B)
-
-name: ugc (DISABLED)
+name: UGC (manual, production gated)
 on:
  
   workflow_dispatch: {}

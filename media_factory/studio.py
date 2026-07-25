@@ -37,6 +37,7 @@ def build_content_package(
     candidate: Candidate,
     decision: EditorialDecision,
     opportunity: CommercialOpportunity | None,
+    talent: dict[str, str] | None = None,
 ) -> ContentPackage | None:
     if not decision.accepted:
         return None
@@ -94,4 +95,5 @@ def build_content_package(
             "Formato maestro vertical 1080x1920, adaptable a 1:1 y 16:9.",
         ],
         sources=[candidate.source_url],
+        talent=talent or {},
     )

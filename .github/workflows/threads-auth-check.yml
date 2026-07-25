@@ -36,7 +36,7 @@ jobs:
           THREADS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
         run: |
-          HTTP_STATUS=$(curl --silent --show-error             --output /tmp/threads-profile.json             --write-out "%{http_code}"             --get "https://graph.threads.net/$THREADS_USER_ID"             --data-urlencode "fields=id,username"             --data-urlencode "access_token=$THREADS_TOKEN")
+          HTTP_STATUS=$(curl --silent --show-error             --output /tmp/threads-profile.json             --write-out "%{http_code}"             --get "https://graph.threads.net/me"             --data-urlencode "fields=id,username"             --data-urlencode "access_token=$THREADS_TOKEN")
 
           HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
           import json

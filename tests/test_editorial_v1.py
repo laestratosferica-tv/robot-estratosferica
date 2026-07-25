@@ -7,12 +7,13 @@ from pathlib import Path
 from media_factory.commercial import detect_opportunity
 from media_factory.config import ConfigurationError, load_config, validate_config
 from media_factory.editor import evaluate_candidate
-from media_factory.guardrails import validate_content_package
+from media_factory.guardrails import validate_content_package, validate_storyboard
 from media_factory.metrics import build_measurement_plan
 from media_factory.models import Candidate, PipelineItem
 from media_factory.queue import save_queue
 from media_factory.radar import RadarRejected, load_source_registry, normalize_story
 from media_factory.studio import build_content_package
+from media_factory.storyboard import build_storyboard
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,6 +71,7 @@ class EditorialV1Tests(unittest.TestCase):
             content_package=build_content_package(
                 candidate, decision, opportunity
             ),
+            storyboard=None,
             measurement_plan=build_measurement_plan(decision, opportunity),
         )
         with tempfile.TemporaryDirectory() as directory:
@@ -149,6 +151,29 @@ class EditorialV1Tests(unittest.TestCase):
         )
         decision = evaluate_candidate(candidate, self.config)
         self.assertIsNone(build_content_package(candidate, decision, None))
+
+    def test_storyboard_is_safe_30_second_production_plan(self) -> None:
+        candidate = Candidate(
+            title="XBOX y Meta amplían una experiencia de juego",
+            summary="Una alianza integra dos servicios de juego.",
+            source_url="https://news.xbox.com/es-latam/example",
+            territory="brands_activations",
+            signals={key: 1 for key in self.config["editorial_score"]["weights"]},
+        )
+        decision = evaluate_candidate(candidate, self.config)
+        opportunity = detect_opportunity(candidate, decision)
+        package = build_content_package(candidate, decision, opportunity)
+        storyboard = build_storyboard(candidate, package)
+        self.assertIsNotNone(storyboard)
+        self.assertEqual(storyboard.duration_seconds, 30)
+        self.assertEqual(len(storyboard.scenes), 6)
+        self.assertFalse(storyboard.production_enabled)
+        self.assertTrue(storyboard.captions_required)
+        self.assertEqual(validate_storyboard(storyboard), [])
+        self.assertEqual(
+            storyboard.scenes[-1].end_second,
+            storyboard.duration_seconds,
+        )
 
     def test_unsafe_configuration_is_blocked(self) -> None:
         unsafe = json.loads(json.dumps(self.config))

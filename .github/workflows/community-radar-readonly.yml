@@ -1,0 +1,47 @@
+name: Community Radar Read Only
+
+on:
+  pull_request:
+    paths:
+      - "community_commercial_radar.py"
+      - "threads_reply_collector.py"
+      - "tests/test_community_commercial_radar.py"
+      - "tests/test_threads_reply_collector.py"
+      - ".github/workflows/community-radar-readonly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  safety-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - run: python -m unittest tests.test_community_commercial_radar tests.test_threads_reply_collector
+
+  live-readonly-scan:
+    if: github.event_name == 'pull_request'
+    needs: safety-tests
+    runs-on: ubuntu-latest
+    env:
+      THREADS_USER_ACCESS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - name: Confirm token is available
+        run: test -n "$THREADS_USER_ACCESS_TOKEN"
+      - name: Read and classify public replies
+        run: python threads_reply_collector.py --thread-limit 10 --reply-limit 100
+      - uses: actions/upload-artifact@v4
+        with:
+          name: threads-commercial-radar
+          path: artifacts/threads-commercial-radar.json
+          retention-days: 7

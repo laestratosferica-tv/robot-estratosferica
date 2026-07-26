@@ -24,7 +24,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PUBLISH_SHA: 4e9981edb199ca2d2ebad08aeaa9778e89b03776
+          PUBLISH_SHA: 04a2fe4fceca6fa5421d2136a9af445f2d10cd0f
         shell: bash
         run: |
           set -euo pipefail

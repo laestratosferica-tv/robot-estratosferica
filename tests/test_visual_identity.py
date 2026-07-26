@@ -41,6 +41,35 @@ class VisualIdentityTests(unittest.TestCase):
                 self.assertEqual(card.size, (1080, 1350))
                 self.assertEqual(card.format, "PNG")
 
+    def test_categories_change_background_structure_not_only_color(self):
+        modes = {
+            pillar: direction["background_mode"]
+            for pillar, direction in CATEGORY_DIRECTIONS.items()
+        }
+        self.assertEqual(len(set(modes.values())), 8)
+        self.assertEqual(CATEGORY_DIRECTIONS["gaming"]["background_mode"], "full_bleed")
+        self.assertEqual(CATEGORY_DIRECTIONS["luxury"]["background_mode"], "gallery_window")
+        self.assertNotEqual(
+            CATEGORY_DIRECTIONS["technology"]["focal_anchor"],
+            CATEGORY_DIRECTIONS["advertising"]["focal_anchor"],
+        )
+
+    def test_background_palette_is_derived_from_each_photo(self):
+        outputs = []
+        for source_color in ("#143B7A", "#C45C21"):
+            source = Image.new("RGB", (900, 900), source_color)
+            payload = io.BytesIO()
+            source.save(payload, format="JPEG")
+            rendered = build_threads_card(
+                image_bytes=payload.getvalue(),
+                headline="El fondo responde a la historia",
+                badge_text="SEÑAL",
+                pillar="fashion",
+            )
+            card = Image.open(io.BytesIO(rendered)).convert("RGB")
+            outputs.append(card.getpixel((20, 700)))
+        self.assertNotEqual(outputs[0], outputs[1])
+
 
 if __name__ == "__main__":
     unittest.main()

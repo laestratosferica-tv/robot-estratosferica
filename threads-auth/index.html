@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Conexión de Threads · La Estratosférica</title>
+  <style>
+    :root{color-scheme:dark;--bg:#070812;--panel:#111426;--ink:#f4f6ff;--muted:#aab1ca;--accent:#8c5cff;--ok:#62e6b5;--bad:#ff6b86}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 15% 10%,#24104b 0,transparent 34%),radial-gradient(circle at 85% 85%,#092f35 0,transparent 32%),var(--bg);font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;color:var(--ink);padding:24px}
+    main{width:min(680px,100%);background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid #ffffff18;border-radius:28px;padding:clamp(28px,6vw,52px);box-shadow:0 30px 90px #0008}
+    .eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#bda9ff;font-weight:800}.orb{width:52px;height:52px;border-radius:50%;background:conic-gradient(from 180deg,var(--accent),#43d8d3,var(--accent));box-shadow:0 0 45px #8c5cff77;margin-bottom:30px}
+    h1{font-size:clamp(34px,7vw,64px);line-height:.98;letter-spacing:-.045em;margin:12px 0 22px}p{color:var(--muted);line-height:1.6;font-size:17px}
+    .status{margin:28px 0;padding:20px;border-radius:18px;background:#ffffff09;border:1px solid #ffffff12}.status strong{display:block;color:var(--ok);margin-bottom:8px}.status.error strong{color:var(--bad)}
+    code{display:block;overflow-wrap:anywhere;background:#050611;border-radius:12px;padding:14px;margin:12px 0;color:#dde1f5;font-size:13px}
+    button{appearance:none;border:0;border-radius:999px;padding:14px 20px;background:var(--ink);color:#090a12;font-weight:800;font-size:15px;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
+    small{display:block;margin-top:24px;color:#727b9a;line-height:1.5}
+  </style>
+</head>
+<body>
+<main>
+  <div class="orb" aria-hidden="true"></div>
+  <div class="eyebrow">La Estratosférica · Acceso seguro</div>
+  <h1 id="title">Comprobando conexión…</h1>
+  <p id="message">Estamos leyendo la respuesta temporal de Meta. Esta página no almacena ni envía información.</p>
+  <section class="status" id="status" hidden>
+    <strong id="status-title"></strong>
+    <code id="value"></code>
+    <button id="copy" type="button">Copiar código temporal</button>
+  </section>
+  <small>Cierra esta página si no iniciaste tú la conexión. El código es temporal, se queda en este navegador y debe manejarse como información privada.</small>
+</main>
+<script>
+  const params=new URLSearchParams(location.search);
+  const code=params.get("code");
+  const error=params.get("error");
+  const description=params.get("error_description");
+  const title=document.querySelector("#title");
+  const message=document.querySelector("#message");
+  const status=document.querySelector("#status");
+  const statusTitle=document.querySelector("#status-title");
+  const value=document.querySelector("#value");
+  const copy=document.querySelector("#copy");
+  status.hidden=false;
+  if(code){
+    title.textContent="Meta autorizó la conexión";
+    message.textContent="La primera parte terminó correctamente. Conserva esta página abierta mientras La Estratosférica completa el intercambio seguro.";
+    statusTitle.textContent="Código temporal recibido";
+    value.textContent=code;
+    copy.addEventListener("click",async()=>{
+      await navigator.clipboard.writeText(code);
+      copy.textContent="Código copiado";
+    });
+  }else{
+    status.classList.add("error");
+    statusTitle.textContent=error?"Meta devolvió un error":"No llegó un código";
+    value.textContent=description||error||"Abre esta página desde el enlace de autorización de Threads.";
+    copy.hidden=true;
+    title.textContent="La conexión no terminó";
+    message.textContent="No se cambió ninguna credencial ni se publicó contenido.";
+  }
+</script>
+</body>
+</html>

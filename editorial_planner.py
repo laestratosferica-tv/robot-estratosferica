@@ -1,5 +1,7 @@
 import random
 
+from visual_identity import get_visual_direction
+
 
 GAMER_CTAS = [
     "¿W o humo?",
@@ -141,7 +143,13 @@ def build_runway_prompt(title, style_family):
     )
 
 
-def build_editorial_plan(item, default_cta=None, runway_enabled=False, runway_force=False):
+def build_editorial_plan(
+    item,
+    default_cta=None,
+    runway_enabled=False,
+    runway_force=False,
+    trend_profile="evergreen",
+):
     raw_title = item.get("title", "") or ""
     pillar = item.get("pillar", "gaming")
     style_family = choose_style_family(raw_title, pillar)
@@ -150,6 +158,7 @@ def build_editorial_plan(item, default_cta=None, runway_enabled=False, runway_fo
     badge_text = pick_badge_by_title(raw_title, pillar)
     use_runway = should_use_runway(style_family, runway_enabled, runway_force)
     runway_prompt = build_runway_prompt(raw_title, style_family)
+    visual_direction = get_visual_direction(pillar, trend_profile)
     return {
         "pillar": pillar,
         "style_family": style_family,
@@ -159,4 +168,6 @@ def build_editorial_plan(item, default_cta=None, runway_enabled=False, runway_fo
         "use_runway": use_runway,
         "runway_prompt": runway_prompt,
         "motion_level": "high" if pillar in {"gaming", "technology", "advertising"} else "medium",
+        "visual_direction": visual_direction,
+        "trend_profile": visual_direction["trend_profile"],
     }

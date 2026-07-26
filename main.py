@@ -976,6 +976,7 @@ def threads_publish_text_image(
     badge_text: str,
     pillar: str,
     logo_path: Optional[str] = None,
+    trend_profile: str = "evergreen",
 ) -> Dict[str, Any]:
     if dry_run or (not ENABLE_THREADS_PUBLISH):
         print("[DRY_RUN] Threads disabled or dry_run, no publico.")
@@ -993,6 +994,7 @@ def threads_publish_text_image(
         badge_text=badge_text,
         pillar=pillar,
         logo_path=logo_path,
+        trend_profile=trend_profile,
     )
     r2_url = upload_image_bytes_to_r2_public(
         graphic_bytes, ".png", prefix=threads_media_prefix
@@ -2519,6 +2521,11 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             default_cta=cta_text,
             runway_enabled=RUNWAY_ENABLED and bool(RUNWAY_API_KEY),
             runway_force=RUNWAY_FORCE,
+            trend_profile=(
+                cfg.get("editorial_strategy", {})
+                .get("visual_identity", {})
+                .get("active_trend_profile", "evergreen")
+            ),
         )
 
         threads_res = threads_publish_text_image(
@@ -2532,6 +2539,7 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             badge_text=plan["badge_text"],
             pillar=plan["pillar"],
             logo_path=asset_logo_default,
+            trend_profile=plan["trend_profile"],
         )
 
         reel_url = None

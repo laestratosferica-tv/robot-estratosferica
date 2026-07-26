@@ -9,6 +9,7 @@ from content_strategy import (
     rank_articles_by_strategy,
 )
 from editorial_planner import build_editorial_plan
+from visual_identity import BRAND_DNA, get_visual_direction
 
 
 class ContentStrategyTests(unittest.TestCase):
@@ -63,6 +64,31 @@ class ContentStrategyTests(unittest.TestCase):
                 plan = build_editorial_plan({"title": "New culture signal", "pillar": pillar})
                 self.assertEqual(plan["pillar"], pillar)
                 self.assertEqual(plan["style_family"], family)
+
+    def test_visual_identity_mix_protects_brand_recognition(self):
+        self.assertEqual(sum(BRAND_DNA["mix"].values()), 100)
+        self.assertEqual(BRAND_DNA["mix"]["brand_dna"], 70)
+        self.assertLessEqual(BRAND_DNA["mix"]["trend_signal"], 10)
+
+    def test_categories_change_more_than_accent_color(self):
+        gaming = get_visual_direction("gaming")
+        luxury = get_visual_direction("luxury")
+        food = get_visual_direction("gastronomy")
+        self.assertNotEqual(gaming["layout"], luxury["layout"])
+        self.assertNotEqual(gaming["saturation"], food["saturation"])
+        self.assertNotEqual(luxury["headline_scale"], gaming["headline_scale"])
+
+    def test_trend_profile_is_controlled_and_never_auto_adopted(self):
+        plan = build_editorial_plan(
+            {"title": "New culture signal", "pillar": "fashion"},
+            trend_profile="sport_luxe_2026_q3",
+        )
+        self.assertEqual(plan["trend_profile"], "sport_luxe_2026_q3")
+        self.assertEqual(plan["visual_direction"]["trend"]["name"], "Sport-Luxe Digital")
+
+    def test_unknown_trend_falls_back_to_evergreen(self):
+        direction = get_visual_direction("technology", "unreviewed_hype")
+        self.assertEqual(direction["trend_profile"], "evergreen")
 
 
 if __name__ == "__main__":

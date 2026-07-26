@@ -7,8 +7,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-import requests
-
 from community_commercial_radar import prioritize_interactions
 
 
@@ -25,14 +23,18 @@ class ThreadsReadOnlyClient:
         *,
         graph_base: str = DEFAULT_GRAPH_BASE,
         timeout: float = 30.0,
-        session: Optional[requests.Session] = None,
+        session: Optional[Any] = None,
     ) -> None:
         if not access_token.strip():
             raise ValueError("THREADS_USER_ACCESS_TOKEN is required")
         self.access_token = access_token.strip()
         self.graph_base = graph_base.rstrip("/")
         self.timeout = timeout
-        self.session = session or requests.Session()
+        if session is None:
+            import requests
+
+            session = requests.Session()
+        self.session = session
 
     def _get(self, path_or_url: str, *, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         url = (

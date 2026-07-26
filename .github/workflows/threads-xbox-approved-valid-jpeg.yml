@@ -1,0 +1,181 @@
+name: Publish validated Xbox JPEG test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/threads-xbox-approved-valid-jpeg.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: threads-xbox-approved-valid-jpeg
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish validated approved Xbox JPEG to Threads
+    if: github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Publish validated Xbox JPEG test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      THREADS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
+      THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+      BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+      R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+      POST_TEXT: |-
+        Xbox está probando una nueva forma de jugar en la nube: Xbox Insiders pueden transmitir juegos seleccionados de su biblioteca gratis con anuncios.
+
+        La publicidad aparece antes de comenzar, no interrumpe la partida y cada sesión tiene un límite de una hora.
+
+        Esto puede abrir dos oportunidades: acceso más económico para los jugadores y una nueva vitrina para las marcas.
+
+        ¿Aceptarías ver un anuncio antes de jugar a cambio de acceder gratis?
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate account and decode approved JPEG
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$THREADS_TOKEN"
+          test -n "$THREADS_USER_ID"
+          base64 --decode editorial_examples/approved/xbox-anuncios-1080x1350.jpg.b64 > /tmp/xbox-approved.jpg
+          file /tmp/xbox-approved.jpg | grep -q 'JPEG image data'
+          identify /tmp/xbox-approved.jpg | grep -q '1080x1350'
+          HTTP_STATUS=$(curl --silent --show-error --output /tmp/profile.json --write-out "%{http_code}" --get "https://graph.threads.net/me" --data-urlencode "fields=id,username" --data-urlencode "access_token=$THREADS_TOKEN")
+          HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/profile.json").read_text())
+          ok = int(os.environ["HTTP_STATUS"]) == 200 and str(payload.get("id", "")) == os.environ["THREADS_USER_ID"] and payload.get("username") == "laestratosfericatv"
+          if not ok:
+              raise SystemExit("Threads account validation failed")
+          print("Validated @laestratosfericatv and approved JPEG")
+          PY
+
+      - name: Upload validated JPEG
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$R2_ENDPOINT_URL"
+          test -n "$BUCKET_NAME"
+          test -n "$R2_PUBLIC_BASE_URL"
+          python -m pip install --quiet boto3
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import boto3
+          source = Path("/tmp/xbox-approved.jpg")
+          key = "threads-approved-tests/xbox-anuncios-20260726-valid.jpg"
+          client = boto3.client("s3", endpoint_url=os.environ["R2_ENDPOINT_URL"], aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"], aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"])
+          client.put_object(Bucket=os.environ["BUCKET_NAME"], Key=key, Body=source.read_bytes(), ContentType="image/jpeg", CacheControl="public, max-age=31536000, immutable")
+          Path("/tmp/image-url").write_text(os.environ["R2_PUBLIC_BASE_URL"].rstrip("/") + "/" + key)
+          print("Validated JPEG uploaded")
+          PY
+          IMAGE_URL=$(cat /tmp/image-url)
+          for attempt in 1 2 3 4 5; do
+            if curl --silent --show-error --fail --location --head "$IMAGE_URL" | grep -qi 'content-type: image/jpeg'; then exit 0; fi
+            sleep 3
+          done
+          echo "Validated JPEG did not become publicly available"
+          exit 1
+
+      - name: Create image container
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE_URL=$(cat /tmp/image-url)
+          HTTP_STATUS=$(curl --silent --show-error --output /tmp/container.json --write-out "%{http_code}" --request POST "https://graph.threads.net/$THREADS_USER_ID/threads" --data-urlencode "media_type=IMAGE" --data-urlencode "image_url=$IMAGE_URL" --data-urlencode "text=$POST_TEXT" --data-urlencode "access_token=$THREADS_TOKEN")
+          HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/container.json").read_text())
+          if int(os.environ["HTTP_STATUS"]) != 200 or not payload.get("id"):
+              error = payload.get("error", {})
+              print("Threads container error:", error.get("code", "unknown"), error.get("type", "unknown"), error.get("message", ""))
+              raise SystemExit(1)
+          Path("/tmp/container-id").write_text(str(payload["id"]))
+          print("Validated image container created")
+          PY
+
+      - name: Wait until image is ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTAINER_ID=$(cat /tmp/container-id)
+          for attempt in $(seq 1 30); do
+            HTTP_STATUS=$(curl --silent --show-error --output /tmp/status.json --write-out "%{http_code}" --get "https://graph.threads.net/$CONTAINER_ID" --data-urlencode "fields=status,error_message" --data-urlencode "access_token=$THREADS_TOKEN")
+            RESULT=$(HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/status.json").read_text())
+          print(payload.get("status", "ERROR") if int(os.environ["HTTP_STATUS"]) == 200 else "ERROR")
+          PY
+            )
+            if [ "$RESULT" = "FINISHED" ]; then exit 0; fi
+            if [ "$RESULT" = "ERROR" ]; then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/status.json").read_text())
+          print("Threads processing error:", payload.get("error_message", "unknown"))
+          PY
+              exit 1
+            fi
+            sleep 3
+          done
+          echo "Threads image container did not become ready"
+          exit 1
+
+      - name: Publish once
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTAINER_ID=$(cat /tmp/container-id)
+          HTTP_STATUS=$(curl --silent --show-error --output /tmp/published.json --write-out "%{http_code}" --request POST "https://graph.threads.net/$THREADS_USER_ID/threads_publish" --data-urlencode "creation_id=$CONTAINER_ID" --data-urlencode "access_token=$THREADS_TOKEN")
+          HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/published.json").read_text())
+          if int(os.environ["HTTP_STATUS"]) != 200 or not payload.get("id"):
+              error = payload.get("error", {})
+              print("Threads publish error:", error.get("code", "unknown"), error.get("type", "unknown"), error.get("message", ""))
+              raise SystemExit(1)
+          Path("/tmp/post-id").write_text(str(payload["id"]))
+          print("Validated approved image post published once")
+          PY
+
+      - name: Verify exact text, image type and permalink
+        shell: bash
+        run: |
+          set -euo pipefail
+          POST_ID=$(cat /tmp/post-id)
+          for attempt in 1 2 3 4 5; do
+            HTTP_STATUS=$(curl --silent --show-error --output /tmp/post.json --write-out "%{http_code}" --get "https://graph.threads.net/$POST_ID" --data-urlencode "fields=id,username,text,timestamp,permalink,media_type" --data-urlencode "access_token=$THREADS_TOKEN")
+            if HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/post.json").read_text())
+          ok = int(os.environ["HTTP_STATUS"]) == 200 and payload.get("username") == "laestratosfericatv" and payload.get("text") == os.environ["POST_TEXT"] and payload.get("media_type") == "IMAGE" and bool(payload.get("permalink"))
+          if not ok:
+              raise SystemExit(1)
+          print("PERMALINK=" + payload["permalink"])
+          PY
+            then exit 0; fi
+            sleep 3
+          done
+          echo "Post was published but final verification failed"
+          exit 1

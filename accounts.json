@@ -2,7 +2,7 @@
   "accounts": [
     {
       "account_id": "estratosferica",
-      "niche": "gaming_esports",
+      "niche": "gaming_powered_digital_culture",
       "rss_feeds": [
         "https://www.dexerto.com/feed/",
         "https://www.pcgamer.com/rss/",
@@ -14,20 +14,28 @@
         "https://www.gamesradar.com/rss/",
         "https://www.eurogamer.net/feed",
         "https://www.hltv.org/rss/news",
-
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCvqRdlKsE5Q8mf8YXbdIJLw",
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCzVgCrOcBAWYEHTtVOMPAtw",
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCzvDSoNrl2Uva7t_Z936VUw",
-        "https://www.youtube.com/feeds/videos.xml?channel_id=UCey_lF3R2uW6ndgqH4sE5Sg"
+        "https://www.youtube.com/feeds/videos.xml?channel_id=UCey_lF3R2uW6ndgqH4sE5Sg",
+        "https://techcrunch.com/feed/",
+        "https://www.theverge.com/rss/index.xml",
+        "https://blog.google/technology/ai/rss/",
+        "https://blog.hubspot.com/marketing/rss.xml",
+        "https://www.producthunt.com/feed",
+        "https://hypebeast.com/feed",
+        "https://www.highsnobiety.com/rss/",
+        "https://www.dezeen.com/feed/",
+        "https://www.eater.com/rss/index.xml"
       ],
       "max_per_feed": 3,
       "shuffle_articles": true,
-      "max_ai_items": 20,
+      "max_ai_items": 24,
       "assets": {
         "bg": "assets/bg.jpg",
         "logo": "assets/logo.png",
         "music": "assets/music.mp3",
-        "cta": "Sigue para más hype esports"
+        "cta": "Sigue para más"
       },
       "threads": {
         "user_id": "me",
@@ -44,6 +52,77 @@
         "ig_media_prefix": "ig_media/estratosferica",
         "ig_queue_prefix": "ugc/ig_queue/estratosferica",
         "reels_prefix": "ugc/reels/estratosferica"
+      },
+      "editorial_strategy": {
+        "brand_positioning": "La plataforma de cultura digital que conecta gaming, tecnología y la forma en que la nueva generación compra, viste, come y vive.",
+        "content_thesis": "Todo parte del gaming y la tecnología, y se expande únicamente cuando existe una conexión real con cultura digital, creadores, comunidad o consumo futuro.",
+        "target": "Gamers, creadores, emprendedores digitales y marcas de Colombia y LATAM que quieren entender, vivir o venderle al target del futuro.",
+        "language": "es-LATAM",
+        "tone": [
+          "cool",
+          "entretenido",
+          "premium",
+          "vendible",
+          "visual",
+          "humano"
+        ],
+        "exclusions": [
+          "look de noticiero",
+          "promesas de dinero fácil",
+          "rumores sin fuente",
+          "publicidad encubierta",
+          "lujo aspiracional vacío",
+          "temas lifestyle sin conexión digital"
+        ],
+        "pillar_weights": {
+          "gaming": 35,
+          "technology": 25,
+          "advertising": 10,
+          "fashion": 8,
+          "gastronomy": 7,
+          "lifestyle": 7,
+          "luxury": 4,
+          "monetization": 4
+        },
+        "commercial_engines": [
+          "pauta_y_patrocinios",
+          "branded_content",
+          "afiliación_y_comercio",
+          "eventos_digitales_e_híbridos",
+          "transmisiones_en_vivo",
+          "servicios_creativos_con_ia",
+          "generación_de_leads"
+        ],
+        "community_goal": "Convertir interacción en señales de interés, prospectos y oportunidades comerciales que José Luis pueda cerrar personalmente.",
+        "require_graphic": true,
+        "require_source": true,
+        "human_review_for_sales_outreach": true,
+        "commercial_radar": {
+          "enabled": true,
+          "mode": "analysis_only",
+          "platforms": [
+            "threads"
+          ],
+          "minimum_commercial_score": 25,
+          "hot_lead_score": 60,
+          "collect_public_interactions": true,
+          "generate_reply_drafts": true,
+          "auto_like": false,
+          "auto_comment": false,
+          "auto_reply": false,
+          "auto_dm": false,
+          "require_human_approval": true,
+          "closer": "José Luis",
+          "lead_types": [
+            "pauta",
+            "patrocinio",
+            "branded_content",
+            "eventos",
+            "transmisiones",
+            "servicios_creativos",
+            "alianzas"
+          ]
+        }
       }
     },
     {

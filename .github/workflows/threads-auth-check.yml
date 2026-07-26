@@ -12,12 +12,27 @@ permissions:
   contents: read
 
 jobs:
+  configuration:
+    name: Verify OAuth configuration secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check app secret without revealing it
+        env:
+          THREADS_APP_SECRET: ${{ secrets.THREADS_APP_SECRET }}
+        run: |
+          test -n "$THREADS_APP_SECRET" || {
+            echo "THREADS_APP_SECRET is missing"
+            exit 1
+          }
+          echo "Threads app secret is configured"
+
   validate:
-    name: Validate Threads token without publishing
+    name: Validate existing Threads token without publishing
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check required secrets
+      - name: Check existing token secrets
         env:
           THREADS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
@@ -36,7 +51,12 @@ jobs:
           THREADS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
         run: |
-          HTTP_STATUS=$(curl --silent --show-error             --output /tmp/threads-profile.json             --write-out "%{http_code}"             --get "https://graph.threads.net/me"             --data-urlencode "fields=id,username"             --data-urlencode "access_token=$THREADS_TOKEN")
+          HTTP_STATUS=$(curl --silent --show-error \
+            --output /tmp/threads-profile.json \
+            --write-out "%{http_code}" \
+            --get "https://graph.threads.net/me" \
+            --data-urlencode "fields=id,username" \
+            --data-urlencode "access_token=$THREADS_TOKEN")
 
           HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
           import json

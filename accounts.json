@@ -98,14 +98,14 @@
         "require_source": true,
         "human_review_for_sales_outreach": true,
         "commercial_radar": {
-          "enabled": false,
+          "enabled": true,
           "mode": "analysis_only",
           "platforms": [
             "threads"
           ],
           "minimum_commercial_score": 25,
           "hot_lead_score": 60,
-          "collect_public_interactions": false,
+          "collect_public_interactions": true,
           "generate_reply_drafts": true,
           "auto_like": false,
           "auto_comment": false,

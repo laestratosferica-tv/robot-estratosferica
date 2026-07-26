@@ -3,10 +3,14 @@ from typing import Any, Dict, List
 
 
 DEFAULT_WEIGHTS = {
-    "gaming": 50,
+    "gaming": 35,
     "technology": 25,
-    "advertising": 15,
-    "monetization": 10,
+    "advertising": 10,
+    "fashion": 8,
+    "gastronomy": 7,
+    "lifestyle": 7,
+    "luxury": 4,
+    "monetization": 4,
 }
 
 KEYWORDS = {
@@ -18,28 +22,62 @@ KEYWORDS = {
     "technology": [
         "technology", "tech", "artificial intelligence", " ai ", "openai",
         "google ai", "gemini", "hardware", "gpu", "processor", "software",
-        "app", "creator tool", "virtual reality", "cybersecurity",
+        "app", "creator tool", "virtual reality", "cybersecurity", "tecnología",
+        "inteligencia artificial", "realidad virtual",
     ],
     "advertising": [
         "advertising", "marketing", "campaign", "brand", "branding", "creative",
         "social media", "content strategy", "audience", "creator economy",
+        "publicidad", "campaña", "creatividad", "creadores",
+    ],
+    "fashion": [
+        "fashion", "streetwear", "sneaker", "style", "designer", "runway",
+        "collaboration", "drop", "moda", "tenis", "colección", "ropa",
+    ],
+    "gastronomy": [
+        "food", "restaurant", "chef", "drink", "cocktail", "coffee", "culinary",
+        "gastronomy", "comida", "restaurante", "gastronomía", "café", "cocina",
+    ],
+    "lifestyle": [
+        "lifestyle", "travel", "wellness", "fitness", "home", "mobility",
+        "experience", "culture", "viaje", "bienestar", "hogar", "experiencia",
+    ],
+    "luxury": [
+        "luxury", "premium", "watch", "jewelry", "supercar", "yacht", "hotel",
+        "lujo", "reloj", "joyería", "exclusivo", "alta gama",
     ],
     "monetization": [
         "monetization", "affiliate", "subscription", "sponsor", "revenue",
         "business model", "startup", "ecommerce", "product hunt", "creator fund",
+        "monetización", "afiliado", "patrocinio", "negocio digital",
     ],
 }
 
 DOMAIN_HINTS = {
     "gaming": ["dexerto.com", "pcgamer.com", "gamespot.com", "esports", "dotesports.com", "hltv.org"],
-    "technology": ["techcrunch.com", "blog.google", "openai.com"],
-    "advertising": ["hubspot.com", "marketingdirecto.com"],
-    "monetization": ["producthunt.com"],
+    "technology": ["techcrunch.com", "blog.google", "openai.com", "theverge.com", "wired.com"],
+    "advertising": ["hubspot.com", "marketingdirecto.com", "adweek.com"],
+    "fashion": ["hypebeast.com", "highsnobiety.com", "vogue.com", "complex.com/style"],
+    "gastronomy": ["eater.com", "foodandwine.com", "bonappetit.com"],
+    "lifestyle": ["dezeen.com", "travelandleisure.com", "fastcompany.com"],
+    "luxury": ["luxurydaily.com", "robbreport.com", "wallpaper.com"],
+    "monetization": ["producthunt.com", "shopify.com"],
 }
 
-RISKY_MONETIZATION_TERMS = [
+COMMERCIAL_ANGLES = {
+    "gaming": ["patrocinio", "torneos", "transmisión_en_vivo", "activación_de_marca"],
+    "technology": ["afiliación", "demo_de_producto", "contenido_patronicado", "generación_de_leads"],
+    "advertising": ["branded_content", "servicios_creativos", "caso_de_estudio", "consultoría"],
+    "fashion": ["drops", "afiliación", "colaboración", "live_shopping"],
+    "gastronomy": ["experiencia_patronicada", "reseña_comercial", "evento", "reservas"],
+    "lifestyle": ["afiliación", "experiencia_de_marca", "membresía", "guía"],
+    "luxury": ["lead_calificado", "evento_privado", "producción_premium", "alianza"],
+    "monetization": ["lead_magnet", "afiliación", "servicio", "formación"],
+}
+
+RISKY_TERMS = [
     "guaranteed income", "get rich quick", "crypto pump", "casino", "betting",
-    "ingreso garantizado", "dinero fácil", "apuesta",
+    "ingreso garantizado", "dinero fácil", "apuesta", "rumor sin confirmar",
 ]
 
 
@@ -62,13 +100,15 @@ def classify_item(item: Dict[str, Any]) -> str:
 
 
 def is_editorially_safe(item: Dict[str, Any], pillar: str) -> bool:
-    if pillar != "monetization":
-        return True
     text = " ".join([
         str(item.get("title", "")),
         str(item.get("summary", "")),
     ]).lower()
-    return not any(term in text for term in RISKY_MONETIZATION_TERMS)
+    return not any(term in text for term in RISKY_TERMS)
+
+
+def commercial_angles_for_pillar(pillar: str) -> List[str]:
+    return list(COMMERCIAL_ANGLES.get(pillar, []))
 
 
 def rank_articles_by_strategy(
@@ -88,6 +128,7 @@ def rank_articles_by_strategy(
         if not is_editorially_safe(item, pillar):
             continue
         item["pillar"] = pillar
+        item["commercial_angles"] = commercial_angles_for_pillar(pillar)
         buckets.setdefault(pillar, []).append(item)
 
     for bucket in buckets.values():

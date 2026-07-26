@@ -1,0 +1,61 @@
+name: Verify published LCS CDMX piece
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/verify-threads-lcs-cdmx-published.yml
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: github.event_name == 'push' && github.run_attempt == 1 && github.event.head_commit.message == 'Verify published LCS CDMX piece'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      THREADS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Find and verify the published piece
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          HTTP_STATUS=$(curl --silent --show-error --output /tmp/recent.json --write-out "%{http_code}" --get "https://graph.threads.net/me/threads" --data-urlencode "fields=id,username,text,timestamp,permalink,media_type" --data-urlencode "limit=20" --data-urlencode "access_token=$THREADS_TOKEN")
+          HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/recent.json").read_text())
+          if int(os.environ["HTTP_STATUS"]) != 200:
+              raise SystemExit("Could not read recent Threads posts")
+          target = next((p for p in payload.get("data", []) if p.get("username") == "laestratosfericatv" and str(p.get("text", "")).startswith("La LCS aterriza por primera vez en Ciudad de México") and p.get("media_type") == "IMAGE" and p.get("permalink")), None)
+          if not target:
+              raise SystemExit("Published LCS CDMX piece was not found")
+          result = {
+              "verified": True,
+              "username": target["username"],
+              "media_type": target["media_type"],
+              "text": target["text"],
+              "permalink": target["permalink"],
+              "post_id": target["id"],
+              "timestamp": target.get("timestamp", ""),
+              "verified_at": datetime.now(timezone.utc).isoformat(),
+          }
+          Path("artifacts/threads-lcs-cdmx-published-verification.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print("PERMALINK=" + target["permalink"])
+          PY
+      - name: Record verified result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/threads-lcs-cdmx-published-verification.json
+          git commit -m "Record verified LCS CDMX publication"
+          git push origin HEAD:main

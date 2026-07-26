@@ -32,6 +32,155 @@ jobs:
           }
           echo "Threads app secret is configured"
 
+  exchange:
+    name: Exchange OAuth code without publishing
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      THREADS_APP_ID: "1418265033091931"
+      THREADS_REDIRECT_URI: "https://estratosferica-threads-auth.joseluca83.chatgpt.site"
+      THREADS_APP_SECRET: ${{ secrets.THREADS_APP_SECRET }}
+      THREADS_AUTH_CODE: ${{ secrets.THREADS_AUTH_CODE }}
+      EXPECTED_THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+    steps:
+      - name: Check exchange secrets
+        run: |
+          test -n "$THREADS_APP_SECRET" || { echo "THREADS_APP_SECRET is missing"; exit 1; }
+          test -n "$THREADS_AUTH_CODE" || { echo "THREADS_AUTH_CODE is missing"; exit 1; }
+          test -n "$EXPECTED_THREADS_USER_ID" || { echo "THREADS_USER_ID is missing"; exit 1; }
+
+      - name: Exchange authorization code for short-lived token
+        run: |
+          HTTP_STATUS=$(curl --silent --show-error             --output /tmp/threads-short.json             --write-out "%{http_code}"             --request POST "https://graph.threads.net/oauth/access_token"             --form-string "client_id=$THREADS_APP_ID"             --form-string "client_secret=$THREADS_APP_SECRET"             --form-string "grant_type=authorization_code"             --form-string "redirect_uri=$THREADS_REDIRECT_URI"             --form-string "code=$THREADS_AUTH_CODE")
+
+          HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          status = int(os.environ["HTTP_STATUS"])
+          try:
+              payload = json.loads(Path("/tmp/threads-short.json").read_text())
+          except Exception:
+              print(f"Meta returned an unreadable OAuth response (HTTP {status})")
+              raise SystemExit(1)
+          token = payload.get("access_token")
+          if status != 200 or not token:
+              error = payload.get("error", {})
+              print(
+                  "Meta rejected the authorization code:",
+                  error.get("type", "unknown"),
+                  error.get("code", "unknown"),
+              )
+              raise SystemExit(1)
+          print(f"::add-mask::{token}")
+          Path("/tmp/threads-short.token").write_text(token)
+          print("Authorization code exchanged successfully")
+          PY
+
+      - name: Exchange for a 60-day token
+        run: |
+          SHORT_TOKEN=$(cat /tmp/threads-short.token)
+          HTTP_STATUS=$(curl --silent --show-error             --output /tmp/threads-long.json             --write-out "%{http_code}"             --get "https://graph.threads.net/access_token"             --data-urlencode "grant_type=th_exchange_token"             --data-urlencode "client_secret=$THREADS_APP_SECRET"             --data-urlencode "access_token=$SHORT_TOKEN")
+
+          HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          status = int(os.environ["HTTP_STATUS"])
+          try:
+              payload = json.loads(Path("/tmp/threads-long.json").read_text())
+          except Exception:
+              print(f"Meta returned an unreadable long-token response (HTTP {status})")
+              raise SystemExit(1)
+          token = payload.get("access_token")
+          if status != 200 or not token:
+              error = payload.get("error", {})
+              print(
+                  "Meta rejected the long-token exchange:",
+                  error.get("type", "unknown"),
+                  error.get("code", "unknown"),
+              )
+              raise SystemExit(1)
+          print(f"::add-mask::{token}")
+          Path("/tmp/threads-long.token").write_text(token)
+          Path("/tmp/threads-expires.txt").write_text(str(payload.get("expires_in", "")))
+          print("Long-lived Threads token created")
+          PY
+
+      - name: Validate the new token with a read-only request
+        run: |
+          LONG_TOKEN=$(cat /tmp/threads-long.token)
+          HTTP_STATUS=$(curl --silent --show-error             --output /tmp/threads-profile.json             --write-out "%{http_code}"             --get "https://graph.threads.net/me"             --data-urlencode "fields=id,username"             --data-urlencode "access_token=$LONG_TOKEN")
+
+          HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          status = int(os.environ["HTTP_STATUS"])
+          try:
+              payload = json.loads(Path("/tmp/threads-profile.json").read_text())
+          except Exception:
+              print(f"Threads returned an unreadable profile response (HTTP {status})")
+              raise SystemExit(1)
+          if status != 200 or not payload.get("id"):
+              error = payload.get("error", {})
+              print(
+                  "Threads rejected the new token:",
+                  error.get("type", "unknown"),
+                  error.get("code", "unknown"),
+              )
+              raise SystemExit(1)
+          expected = os.environ["EXPECTED_THREADS_USER_ID"]
+          if str(payload["id"]) != expected:
+              print("New token belongs to a different Threads account")
+              raise SystemExit(1)
+          metadata = {
+              "id": str(payload["id"]),
+              "username": payload.get("username", ""),
+              "expires_in": Path("/tmp/threads-expires.txt").read_text(),
+              "published": False,
+          }
+          Path("/tmp/threads-token-metadata.json").write_text(
+              json.dumps(metadata, indent=2),
+              encoding="utf-8",
+          )
+          print("New Threads token validated for the configured account")
+          print("No content was created or published")
+          PY
+
+      - name: Encrypt token for secure handoff
+        run: |
+          cat > /tmp/threads-public.pem <<'EOF'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAvCzApSzeUr4tse3DLWFd
+          n6zDPudV5/spli37foxco7MN/x9OyTtHvEf7Tvv/OCP8xlgbfKkU9MCl/lFQV9UN
+          8tP/+cOAHVWbJ6XgcUB7JMHDccbfbX3bFyY+1lYTgvTggotnCYt3pEoKdqHozVAF
+          AVbJKvR0sQyxFjVERSHxRZztM2BeSXRh9ZcN30OdyXGCcvGSQIeEoCLsA05s5URU
+          7GpjYGVED8/InqWZnuK02sRZ7hY5qojRr8iERD4S46LuNps2AKeX5OxqjSGqnAkJ
+          Qa0oqnyzEURQS21uo+oke+nx3YuckqzZmAUohA8Hel1mjN4O9vMd+/b2tbwl0bZW
+          11E5Mgo7YZgjTx9opTYVx3AEJ2Lo3rfe8214DR58vYV5nJ+A3DgBBDh59M2Q3g5q
+          Q4BegxvfAMUDItos7PzND81rIdqWNSVXa92Dq1TCwU6BWWsF31z8B8usEaidLUds
+          sVYYz/PuwdtQ8cZGE4idskXAsmSEPXvtVPYRc2vwKpE7AgMBAAE=
+          -----END PUBLIC KEY-----
+          EOF
+          openssl pkeyutl -encrypt             -pubin -inkey /tmp/threads-public.pem             -in /tmp/threads-long.token             -out /tmp/threads-token.enc             -pkeyopt rsa_padding_mode:oaep             -pkeyopt rsa_oaep_md:sha256
+          shred -u /tmp/threads-short.token /tmp/threads-long.token
+          echo "Token encrypted; plaintext was removed from the runner"
+
+      - name: Upload encrypted handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: threads-token-encrypted
+          path: |
+            /tmp/threads-token.enc
+            /tmp/threads-token-metadata.json
+          retention-days: 1
+          if-no-files-found: error
+
   validate:
     name: Diagnose existing Threads token without publishing
     runs-on: ubuntu-latest
@@ -57,12 +206,7 @@ jobs:
           THREADS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
         run: |
-          HTTP_STATUS=$(curl --silent --show-error \
-            --output /tmp/threads-profile.json \
-            --write-out "%{http_code}" \
-            --get "https://graph.threads.net/me" \
-            --data-urlencode "fields=id,username" \
-            --data-urlencode "access_token=$THREADS_TOKEN")
+          HTTP_STATUS=$(curl --silent --show-error             --output /tmp/threads-profile.json             --write-out "%{http_code}"             --get "https://graph.threads.net/me"             --data-urlencode "fields=id,username"             --data-urlencode "access_token=$THREADS_TOKEN")
 
           HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
           import json

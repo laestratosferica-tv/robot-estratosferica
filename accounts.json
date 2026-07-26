@@ -96,7 +96,33 @@
         "community_goal": "Convertir interacción en señales de interés, prospectos y oportunidades comerciales que José Luis pueda cerrar personalmente.",
         "require_graphic": true,
         "require_source": true,
-        "human_review_for_sales_outreach": true
+        "human_review_for_sales_outreach": true,
+        "commercial_radar": {
+          "enabled": false,
+          "mode": "analysis_only",
+          "platforms": [
+            "threads"
+          ],
+          "minimum_commercial_score": 25,
+          "hot_lead_score": 60,
+          "collect_public_interactions": false,
+          "generate_reply_drafts": true,
+          "auto_like": false,
+          "auto_comment": false,
+          "auto_reply": false,
+          "auto_dm": false,
+          "require_human_approval": true,
+          "closer": "José Luis",
+          "lead_types": [
+            "pauta",
+            "patrocinio",
+            "branded_content",
+            "eventos",
+            "transmisiones",
+            "servicios_creativos",
+            "alianzas"
+          ]
+        }
       }
     },
     {

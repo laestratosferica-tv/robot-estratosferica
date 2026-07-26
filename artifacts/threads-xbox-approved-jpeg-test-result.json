@@ -1,0 +1,11 @@
+{
+  "workflow": "Final approved Xbox JPEG test",
+  "publish_commit": "aed0a8557c1fc643b3bc88309d553864ba9c8dcf",
+  "run_id": 30207980782,
+  "status": "completed",
+  "conclusion": "failure",
+  "run_url": "https://github.com/laestratosferica-tv/robot-estratosferica/actions/runs/30207980782",
+  "permalink": "",
+  "verified_permalink_in_logs": false,
+  "recorded_at": "2026-07-26T15:20:52.301178+00:00"
+}

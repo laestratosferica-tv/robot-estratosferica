@@ -10,6 +10,10 @@ PILLAR_COLORS = {
     "gaming": "#A855F7",
     "technology": "#00D4FF",
     "advertising": "#FF3D8D",
+    "fashion": "#FF7A00",
+    "gastronomy": "#FFCB45",
+    "lifestyle": "#3DE2B4",
+    "luxury": "#D8B45B",
     "monetization": "#B7FF3C",
 }
 
@@ -17,7 +21,11 @@ PILLAR_LABELS = {
     "gaming": "GAMING + ESPORTS",
     "technology": "TECNOLOGÍA + IA",
     "advertising": "PUBLICIDAD + CREATIVIDAD",
-    "monetization": "OPORTUNIDADES DIGITALES",
+    "fashion": "MODA + CULTURA URBANA",
+    "gastronomy": "GASTRONOMÍA + EXPERIENCIAS",
+    "lifestyle": "ESTILO DE VIDA DIGITAL",
+    "luxury": "LUJO CONTEMPORÁNEO",
+    "monetization": "NEGOCIOS + OPORTUNIDADES",
 }
 
 

@@ -37,6 +37,101 @@ def _cover(image: Image.Image, size: tuple[int, int]) -> Image.Image:
     return ImageOps.fit(image.convert("RGB"), size, method=Image.Resampling.LANCZOS)
 
 
+def _contain(image: Image.Image, size: tuple[int, int]) -> Image.Image:
+    return ImageOps.contain(image.convert("RGB"), size, method=Image.Resampling.LANCZOS)
+
+
+def _photo_anchor(anchor: str) -> tuple[float, float]:
+    return {
+        "left": (0.22, 0.5),
+        "right": (0.78, 0.5),
+        "top": (0.5, 0.22),
+        "center": (0.5, 0.5),
+    }.get(anchor, (0.5, 0.5))
+
+
+def _average_color(image: Image.Image) -> tuple[int, int, int]:
+    sample = image.convert("RGB").resize((1, 1), Image.Resampling.BOX)
+    return sample.getpixel((0, 0))
+
+
+def _render_dynamic_background(
+    source: Image.Image,
+    direction: dict,
+    width: int,
+    height: int,
+) -> Image.Image:
+    """Build a category-specific canvas while deriving its atmosphere from the photo."""
+    mode = direction["background_mode"]
+    anchor = _photo_anchor(direction["focal_anchor"])
+    accent = _hex_rgb(direction["accent"])
+    secondary = _hex_rgb(direction["secondary"])
+    average = _average_color(source)
+
+    photo = ImageOps.fit(
+        source.convert("RGB"),
+        (width, height),
+        method=Image.Resampling.LANCZOS,
+        centering=anchor,
+    )
+    photo = ImageEnhance.Contrast(photo).enhance(direction["contrast"])
+    photo = ImageEnhance.Color(photo).enhance(direction["saturation"])
+
+    if mode in {"full_bleed", "warm_focus"}:
+        canvas = photo
+        if mode == "warm_focus":
+            warmth = Image.new("RGB", (width, height), accent)
+            canvas = Image.blend(canvas, warmth, direction["tint_strength"])
+        return canvas.convert("RGBA")
+
+    atmosphere = photo.filter(ImageFilter.GaussianBlur(34))
+    adaptive = tuple(round((a + b) / 2) for a, b in zip(average, secondary))
+    atmosphere = Image.blend(
+        atmosphere,
+        Image.new("RGB", (width, height), adaptive),
+        direction["tint_strength"],
+    ).convert("RGBA")
+
+    if mode == "split_focus":
+        panel = ImageOps.fit(source.convert("RGB"), (width // 2, height), centering=anchor)
+        atmosphere.alpha_composite(panel.convert("RGBA"), (width // 2, 0))
+        return atmosphere
+
+    if mode == "signal_split":
+        panel = ImageOps.fit(
+            source.convert("RGB"),
+            (int(width * 0.58), int(height * 0.72)),
+            centering=anchor,
+        )
+        atmosphere.alpha_composite(panel.convert("RGBA"), (int(width * 0.42), 150))
+        return atmosphere
+
+    if mode == "duotone_collage":
+        gray = photo.convert("L").convert("RGB")
+        color_layer = Image.new("RGB", (width, height), secondary)
+        duotone = Image.blend(gray, color_layer, 0.32)
+        crop = ImageOps.fit(source.convert("RGB"), (int(width * 0.56), int(height * 0.64)), centering=anchor)
+        canvas = duotone.convert("RGBA")
+        canvas.alpha_composite(crop.convert("RGBA"), (int(width * 0.38), 180))
+        return canvas
+
+    canvas_color = tuple(round((a * 0.45) + (b * 0.55)) for a, b in zip(average, accent))
+    canvas = Image.new("RGBA", (width, height), (*canvas_color, 255))
+    canvas = Image.alpha_composite(canvas, atmosphere.putalpha(110) or atmosphere)
+    if mode == "gallery_window":
+        inset_size = (int(width * 0.72), int(height * 0.52))
+        position = (int(width * 0.20), 210)
+    elif mode == "editorial_inset":
+        inset_size = (int(width * 0.84), int(height * 0.58))
+        position = (int(width * 0.08), 170)
+    else:
+        inset_size = (int(width * 0.90), int(height * 0.54))
+        position = (int(width * 0.05), 185)
+    inset = ImageOps.fit(source.convert("RGB"), inset_size, centering=anchor)
+    canvas.alpha_composite(inset.convert("RGBA"), position)
+    return canvas
+
+
 def _fit_headline(
     draw: ImageDraw.ImageDraw,
     text: str,
@@ -132,12 +227,13 @@ def build_threads_card(
 ) -> bytes:
     direction = get_visual_direction(pillar, trend_profile)
     source = Image.open(io.BytesIO(image_bytes))
-    background = _cover(source, (width, height))
-    background = ImageEnhance.Contrast(background).enhance(direction["contrast"])
-    background = ImageEnhance.Color(background).enhance(direction["saturation"])
-
+    background = _render_dynamic_background(source, direction, width, height)
     blurred = background.filter(ImageFilter.GaussianBlur(18))
-    background = Image.blend(background, blurred, direction["blur_mix"]).convert("RGBA")
+    background = Image.blend(
+        background.convert("RGB"),
+        blurred.convert("RGB"),
+        direction["blur_mix"],
+    ).convert("RGBA")
 
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
@@ -176,7 +272,7 @@ def build_threads_card(
         scale=direction["headline_scale"],
     )
     line_h = int(font.size * 1.05)
-    y = height - 455
+    y = height - (410 if direction["headline_anchor"] == "bottom_left" else 455)
     for line in lines:
         draw.text((70, y + 5), line, font=font, fill=(0, 0, 0, 170), stroke_width=5, stroke_fill=(0, 0, 0, 170))
         draw.text((70, y), line, font=font, fill="white", stroke_width=1, stroke_fill="white")

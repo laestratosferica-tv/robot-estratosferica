@@ -12,6 +12,8 @@ from urllib.parse import urljoin, urlparse, parse_qs
 from typing import Optional, Tuple, Dict, Any, List
 from editorial_planner import build_editorial_plan
 from editorial_renderers import render_editorial_asset
+from editorial_graphics import build_threads_card
+from content_strategy import rank_articles_by_strategy
 
 import requests
 import boto3
@@ -770,13 +772,17 @@ def openai_text(prompt: str) -> str:
 # Copy (AFILADO)
 # =========================
 
-THREADS_PROMPT_SHARP = """Eres editor de una cuenta de gaming/esports en español LATAM.
-Objetivo: maximizar comentarios (polémica sana, postura, duda, debate).
+THREADS_PROMPT_SHARP = """Eres editor de La Estratosférica, un medio visual en español LATAM para gamers, creadores digitales y personas curiosas por la tecnología.
+Pilar de esta pieza: {pillar}
+Objetivo: informar, entretener y abrir conversación sin perder utilidad ni potencial comercial.
 Reglas:
-- 1 HOOK fuerte (1 línea) tipo: "¿X murió?" / "Esto es una estafa?" / "Riot la cagó?" (sin insultos)
-- 2-3 líneas cortas con la noticia + postura/opinión con carácter
-- 1 pregunta al final para pelear en comentarios
-- Máximo 55 palabras (sin contar la fuente)
+- 1 HOOK fuerte y corto.
+- 2-3 líneas con el hecho confirmado y por qué importa al gamer, creador o marca.
+- Si el tema lo permite, incluye un ángulo útil: herramienta, tendencia, oportunidad, costo, audiencia o negocio; nunca inventes ofertas, cifras ni beneficios.
+- Tono cool, entretenido y vendible; nada formal ni estilo noticiero.
+- 1 pregunta natural al final.
+- Máximo 70 palabras sin contar la fuente.
+- Todo en español; explica términos técnicos brevemente.
 - Cierra con: Fuente: {link}
 Título: {title}
 """
@@ -825,7 +831,8 @@ GAMER_CTAS = [
 def build_threads_text(item: Dict[str, Any], mode: str = "new") -> str:
     title = item.get("title", "")
     link = item.get("link", "")
-    prompt = THREADS_PROMPT_SHARP.format(title=title, link=link)
+    pillar = item.get("pillar", "gaming")
+    prompt = THREADS_PROMPT_SHARP.format(title=title, link=link, pillar=pillar)
     if mode == "repost":
         prompt += "\nExtra: reescribe como REPOST con otro ángulo, sin sonar repetido."
     text = openai_text(prompt).strip()
@@ -965,6 +972,10 @@ def threads_publish_text_image(
     text: str,
     image_url_from_news: str,
     threads_media_prefix: str,
+    headline: str,
+    badge_text: str,
+    pillar: str,
+    logo_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     if dry_run or (not ENABLE_THREADS_PUBLISH):
         print("[DRY_RUN] Threads disabled or dry_run, no publico.")
@@ -975,9 +986,16 @@ def threads_publish_text_image(
     if not access_token:
         raise RuntimeError("Falta THREADS_USER_ACCESS_TOKEN")
 
-    img_bytes, ext = download_image_bytes(image_url_from_news)
+    img_bytes, _ = download_image_bytes(image_url_from_news)
+    graphic_bytes = build_threads_card(
+        image_bytes=img_bytes,
+        headline=headline,
+        badge_text=badge_text,
+        pillar=pillar,
+        logo_path=logo_path,
+    )
     r2_url = upload_image_bytes_to_r2_public(
-        img_bytes, ext, prefix=threads_media_prefix
+        graphic_bytes, ".png", prefix=threads_media_prefix
     )
     print("Imagen rehost R2:", r2_url)
 
@@ -2461,7 +2479,11 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
         return {"generated_at": iso_now(), "account_id": account_id, "skipped": True}
 
     articles = fetch_rss_articles(rss_feeds, max_per_feed=max_per_feed, shuffle=shuffle)
-    processed = list(articles[:max_ai_items])
+    processed = rank_articles_by_strategy(
+        articles,
+        strategy=cfg.get("editorial_strategy", {}),
+        limit=max_ai_items,
+    )
 
     state = load_threads_state(state_key)
 
@@ -2492,6 +2514,12 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             continue
 
         chosen_img = imgs[0]
+        plan = build_editorial_plan(
+            item=item,
+            default_cta=cta_text,
+            runway_enabled=RUNWAY_ENABLED and bool(RUNWAY_API_KEY),
+            runway_force=RUNWAY_FORCE,
+        )
 
         threads_res = threads_publish_text_image(
             user_id=threads_user_id,
@@ -2500,6 +2528,10 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
             text=threads_text,
             image_url_from_news=chosen_img,
             threads_media_prefix=threads_media_prefix,
+            headline=plan["title_text"],
+            badge_text=plan["badge_text"],
+            pillar=plan["pillar"],
+            logo_path=asset_logo_default,
         )
 
         reel_url = None
@@ -2515,13 +2547,6 @@ def run_account(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
                 chosen_music = pick_music_path()
                 chosen_logo = pick_logo_path(asset_logo_default)
-
-                plan = build_editorial_plan(
-                    item=item,
-                    default_cta=cta_text,
-                    runway_enabled=RUNWAY_ENABLED and bool(RUNWAY_API_KEY),
-                    runway_force=RUNWAY_FORCE,
-                )
 
                 with tempfile.TemporaryDirectory() as td:
 

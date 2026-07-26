@@ -24,6 +24,14 @@ class WorkflowSafetyTests(unittest.TestCase):
         content = (WORKFLOWS / "editorial.yml").read_text(encoding="utf-8")
         self.assertNotIn('default: "true"', content)
 
+    def test_ugc_workflow_has_one_name_and_no_implicit_push(self):
+        content = (WORKFLOWS / "ugc.yml").read_text(encoding="utf-8")
+        self.assertEqual(
+            sum(line.startswith("name:") for line in content.splitlines()),
+            1,
+        )
+        self.assertNotIn("push:", content)
+
 
 if __name__ == "__main__":
     unittest.main()

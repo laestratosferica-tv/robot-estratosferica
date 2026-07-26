@@ -2,7 +2,7 @@
   "accounts": [
     {
       "account_id": "estratosferica",
-      "niche": "gaming_esports",
+      "niche": "gaming_technology_creativity",
       "rss_feeds": [
         "https://www.dexerto.com/feed/",
         "https://www.pcgamer.com/rss/",
@@ -14,11 +14,14 @@
         "https://www.gamesradar.com/rss/",
         "https://www.eurogamer.net/feed",
         "https://www.hltv.org/rss/news",
-
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCvqRdlKsE5Q8mf8YXbdIJLw",
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCzVgCrOcBAWYEHTtVOMPAtw",
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCzvDSoNrl2Uva7t_Z936VUw",
-        "https://www.youtube.com/feeds/videos.xml?channel_id=UCey_lF3R2uW6ndgqH4sE5Sg"
+        "https://www.youtube.com/feeds/videos.xml?channel_id=UCey_lF3R2uW6ndgqH4sE5Sg",
+        "https://techcrunch.com/feed/",
+        "https://blog.google/technology/ai/rss/",
+        "https://blog.hubspot.com/marketing/rss.xml",
+        "https://www.producthunt.com/feed"
       ],
       "max_per_feed": 3,
       "shuffle_articles": true,
@@ -27,7 +30,7 @@
         "bg": "assets/bg.jpg",
         "logo": "assets/logo.png",
         "music": "assets/music.mp3",
-        "cta": "Sigue para más hype esports"
+        "cta": "Sigue para más"
       },
       "threads": {
         "user_id": "me",
@@ -44,6 +47,29 @@
         "ig_media_prefix": "ig_media/estratosferica",
         "ig_queue_prefix": "ugc/ig_queue/estratosferica",
         "reels_prefix": "ugc/reels/estratosferica"
+      },
+      "editorial_strategy": {
+        "target": "Gamers y creadores digitales de LATAM interesados en esports, tecnología, IA, publicidad y oportunidades reales.",
+        "language": "es-LATAM",
+        "tone": [
+          "cool",
+          "entretenido",
+          "vendible",
+          "visual"
+        ],
+        "exclusions": [
+          "look de noticiero",
+          "promesas de dinero fácil",
+          "rumores sin fuente",
+          "publicidad encubierta"
+        ],
+        "pillar_weights": {
+          "gaming": 50,
+          "technology": 25,
+          "advertising": 15,
+          "monetization": 10
+        },
+        "require_graphic": true
       }
     },
     {

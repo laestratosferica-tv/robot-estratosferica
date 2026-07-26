@@ -9,6 +9,13 @@ GAMER_CTAS = [
     "¿Esto cuenta o no?",
 ]
 
+PILLAR_CTAS = {
+    "gaming": GAMER_CTAS,
+    "technology": ["¿Lo usarías o pasas?", "¿Upgrade o puro humo?", "¿Esto sí cambia el juego?"],
+    "advertising": ["¿Campañón o humazo?", "¿Te vendería o no?", "¿Idea brutal o reciclada?"],
+    "monetization": ["¿Oportunidad o humo?", "¿Pagarías por esto?", "¿Negocio real o promesa?"],
+}
+
 
 def _clean(text):
     return (text or "").strip()
@@ -19,15 +26,20 @@ def _has_any(text, words):
     return any(w in t for w in words)
 
 
-def pick_cta_by_style(style_family, default_cta=None):
+def pick_cta_by_style(style_family, default_cta=None, pillar="gaming"):
     if default_cta and default_cta.strip() and default_cta.strip().lower() != "sigue para más":
         return default_cta.strip()
+    return random.choice(PILLAR_CTAS.get(pillar, GAMER_CTAS))
 
-    return random.choice(GAMER_CTAS)
 
-
-def pick_badge_by_title(title):
+def pick_badge_by_title(title, pillar="gaming"):
     t = _clean(title).lower()
+    if pillar == "technology":
+        return "TECH"
+    if pillar == "advertising":
+        return "CREA"
+    if pillar == "monetization":
+        return "OPORTUNIDAD"
 
     if _has_any(t, ["final", "grand final", "grand finals", "playoffs", "masters", "worlds", "champion", "campeón"]):
         return "FINAL"
@@ -80,8 +92,23 @@ def build_reel_gamer_title(headline):
     ])
 
 
-def choose_style_family(title):
-    return "reel_gamer"
+def build_visual_title(headline, pillar="gaming"):
+    if pillar == "technology":
+        return random.choice(["ESTO CAMBIA EL JUEGO", "¿UPGRADE O HUMO?", "NUEVA HERRAMIENTA"])
+    if pillar == "advertising":
+        return random.choice(["¿CAMPAÑÓN O HUMO?", "ESTA IDEA SÍ VENDE", "MIRA LA JUGADA"])
+    if pillar == "monetization":
+        return random.choice(["¿NEGOCIO O HUMO?", "AQUÍ HAY OPORTUNIDAD", "¿PAGARÍAS POR ESTO?"])
+    return build_reel_gamer_title(headline)
+
+
+def choose_style_family(title, pillar="gaming"):
+    return {
+        "gaming": "reel_gamer",
+        "technology": "reel_tech",
+        "advertising": "reel_creative",
+        "monetization": "reel_opportunity",
+    }.get(pillar, "reel_gamer")
 
 
 def should_use_runway(style_family, runway_enabled, runway_force):
@@ -96,23 +123,24 @@ def should_use_runway(style_family, runway_enabled, runway_force):
 
 def build_runway_prompt(title, style_family):
     return (
-        "High-energy gaming motion background, fast camera movement, "
-        "subtle glitch, intense esports vibe, punchy, social reel energy, "
-        "not news style, not cinematic trailer. Headline context: " + (title or "")
+        "High-energy digital culture motion background, fast camera movement, "
+        "subtle glitch, modern Latin creator vibe, punchy social reel energy, "
+        "not news style, not corporate flyer. Style: " + style_family +
+        ". Headline context: " + (title or "")
     )
 
 
 def build_editorial_plan(item, default_cta=None, runway_enabled=False, runway_force=False):
     raw_title = item.get("title", "") or ""
-
-    style_family = choose_style_family(raw_title)
-    title_text = build_reel_gamer_title(raw_title)
-    cta_text = pick_cta_by_style(style_family, default_cta)
-    badge_text = pick_badge_by_title(raw_title)
+    pillar = item.get("pillar", "gaming")
+    style_family = choose_style_family(raw_title, pillar)
+    title_text = build_visual_title(raw_title, pillar)
+    cta_text = pick_cta_by_style(style_family, default_cta, pillar)
+    badge_text = pick_badge_by_title(raw_title, pillar)
     use_runway = should_use_runway(style_family, runway_enabled, runway_force)
     runway_prompt = build_runway_prompt(raw_title, style_family)
-
     return {
+        "pillar": pillar,
         "style_family": style_family,
         "title_text": title_text,
         "cta_text": cta_text,

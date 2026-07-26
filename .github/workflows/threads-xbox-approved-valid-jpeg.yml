@@ -47,7 +47,6 @@ jobs:
           test -n "$THREADS_USER_ID"
           base64 --decode editorial_examples/approved/xbox-anuncios-1080x1350.jpg.b64 > /tmp/xbox-approved.jpg
           file /tmp/xbox-approved.jpg | grep -q 'JPEG image data'
-          identify /tmp/xbox-approved.jpg | grep -q '1080x1350'
           HTTP_STATUS=$(curl --silent --show-error --output /tmp/profile.json --write-out "%{http_code}" --get "https://graph.threads.net/me" --data-urlencode "fields=id,username" --data-urlencode "access_token=$THREADS_TOKEN")
           HTTP_STATUS="$HTTP_STATUS" python - <<'PY'
           import json

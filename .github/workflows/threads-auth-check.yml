@@ -34,7 +34,7 @@ jobs:
 
   exchange:
     name: Exchange OAuth code without publishing
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:

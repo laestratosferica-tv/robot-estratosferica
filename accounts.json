@@ -97,6 +97,23 @@
         "require_graphic": true,
         "require_source": true,
         "human_review_for_sales_outreach": true,
+        "visual_identity": {
+          "principle": "Reconocible siempre, repetitiva nunca.",
+          "mix": {
+            "brand_dna": 70,
+            "category_language": 20,
+            "trend_signal": 10
+          },
+          "fixed_assets": [
+            "arco_orbital",
+            "sello_LETV",
+            "degradado_cian_violeta_magenta",
+            "base_oscura_premium"
+          ],
+          "active_trend_profile": "sport_luxe_2026_q3",
+          "trend_review_required": true,
+          "auto_adopt_trends": false
+        },
         "commercial_radar": {
           "enabled": true,
           "mode": "analysis_only",

@@ -3,6 +3,7 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 from .models import ContentPackage, Storyboard
+from .content_punch import validate_content_punch
 
 
 PLATFORM_LIMITS = {
@@ -36,6 +37,18 @@ def validate_content_package(package: ContentPackage) -> list[str]:
     visual_text = " ".join(package.visual_brief).lower()
     if "original" not in visual_text or "no descargar" not in visual_text:
         errors.append("missing_visual_rights_instruction")
+    punch_errors = validate_content_punch(package.content_punch)
+    errors.extend(punch_errors)
+    if not package.content_punch.get("gate_passed"):
+        errors.append("content_punch_gate_failed")
+    for required_label in (
+        "gancho dominante:",
+        "valor concreto visible:",
+        "pregunta o tensión visible:",
+        "acción esperada:",
+    ):
+        if required_label not in visual_text:
+            errors.append(f"missing_visual_punch_instruction:{required_label}")
     return errors
 
 

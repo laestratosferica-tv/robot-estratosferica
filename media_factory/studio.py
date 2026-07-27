@@ -6,6 +6,7 @@ from .models import (
     ContentPackage,
     EditorialDecision,
 )
+from .audience_intelligence import build_audience_experiment
 
 
 FORMAT_BY_TERRITORY = {
@@ -96,4 +97,7 @@ def build_content_package(
         ],
         sources=[candidate.source_url],
         talent=talent or {},
+        audience_experiment=build_audience_experiment(
+            candidate, opportunity
+        ),
     )

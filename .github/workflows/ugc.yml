@@ -10,7 +10,7 @@ concurrency:
 jobs:
   ugc_mode_b:
     # Freno central: también protege las ejecuciones manuales heredadas.
-    if: vars.PRODUCTION_ARMED == 'true'
+    if: vars.LEGACY_WORKFLOWS_ARMED == 'true' && vars.PRODUCTION_ARMED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -68,16 +68,16 @@ jobs:
           MUSIC_VOLUME: "0.35"
 
           # --- Instagram publish ---
-          ENABLE_IG_PUBLISH: "true"
+          ENABLE_IG_PUBLISH: "false"
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           GRAPH_VERSION: "v25.0"
 
           # --- Facebook publish ---
-          ENABLE_FB_PUBLISH: "true"
+          ENABLE_FB_PUBLISH: "false"
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
 
           # --- Control ---
-          DRY_RUN: "false"
+          DRY_RUN: "true"
           HTTP_TIMEOUT: "30"

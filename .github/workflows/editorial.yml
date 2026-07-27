@@ -1,16 +1,12 @@
 name: Robot Editorial (Modo A) - Auto
 
 on:
-  schedule:
-    - cron: "0 14 * * *" # 9am Colombia
-    - cron: "0 20 * * *" # 3pm Colombia -> Runway forzado
-    - cron: "0 2 * * *"  # 9pm Colombia
   workflow_dispatch:
     inputs:
       dry_run:
         description: "Simular (no publica en redes)"
         required: false
-        default: "false"
+        default: "true"
       publish_ig:
         description: "Publicar en Instagram"
         required: false
@@ -35,7 +31,7 @@ concurrency:
 jobs:
   run-editorial:
     # Freno central: sin esta variable explícita el flujo no puede ejecutarse.
-    if: vars.PRODUCTION_ARMED == 'true'
+    if: vars.LEGACY_WORKFLOWS_ARMED == 'true' && vars.PRODUCTION_ARMED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -69,20 +65,20 @@ jobs:
           # -------------------
           # PUBLICATION FLAGS
           # -------------------
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
+          DRY_RUN: "true"
 
-          ENABLE_IG_PUBLISH: ${{ github.event_name == 'schedule' && 'true' || github.event_name == 'workflow_dispatch' && github.event.inputs.publish_ig || 'false' }}
-          ENABLE_THREADS_PUBLISH: ${{ github.event_name == 'schedule' && 'true' || github.event_name == 'workflow_dispatch' && github.event.inputs.publish_threads || 'false' }}
+          ENABLE_IG_PUBLISH: "false"
+          ENABLE_THREADS_PUBLISH: "false"
 
-          ENABLE_FB_PUBLISH: "true"
+          ENABLE_FB_PUBLISH: "false"
           ENABLE_YT_PUBLISH: "false"
           ENABLE_TIKTOK_PUBLISH: "false"
 
           # -------------------
           # RUNWAY
           # -------------------
-          RUNWAY_ENABLED: ${{ github.event_name == 'schedule' && 'true' || github.event_name == 'workflow_dispatch' && github.event.inputs.runway_enabled || 'false' }}
-          RUNWAY_FORCE: ${{ github.event_name == 'schedule' && github.event.schedule == '0 20 * * *' && 'true' || github.event_name == 'workflow_dispatch' && github.event.inputs.runway_force || 'false' }}
+          RUNWAY_ENABLED: "false"
+          RUNWAY_FORCE: "false"
 
           EVENT_NAME: ${{ github.event_name }}
           EVENT_SCHEDULE: ${{ github.event.schedule }}

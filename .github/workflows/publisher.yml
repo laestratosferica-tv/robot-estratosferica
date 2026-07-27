@@ -1,17 +1,12 @@
 name: Publisher Mode B Turbo
 
 on:
-  schedule:
-    - cron: "0 12 * * *" # 7am Colombia
-    - cron: "0 16 * * *" # 11am Colombia
-    - cron: "0 20 * * *" # 3pm Colombia
-    - cron: "0 0 * * *"  # 7pm Colombia
   workflow_dispatch:
 
 jobs:
   publish:
     # Freno central: sin esta variable explícita el flujo no puede publicar.
-    if: vars.PRODUCTION_ARMED == 'true'
+    if: vars.LEGACY_WORKFLOWS_ARMED == 'true' && vars.PRODUCTION_ARMED == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -54,13 +49,13 @@ jobs:
           B_OPENAI_POLISH_MIN_EDITORIAL: 3.0
 
           # PLATAFORMAS
-          ENABLE_INSTAGRAM: true
-          ENABLE_FACEBOOK: true
-          ENABLE_SHORTS: true
+          ENABLE_INSTAGRAM: false
+          ENABLE_FACEBOOK: false
+          ENABLE_SHORTS: false
           ENABLE_TIKTOK: false
 
           # ESTADO
-          DRY_RUN: false
+          DRY_RUN: true
 
           # GRAPH
           GRAPH_VERSION: v25.0

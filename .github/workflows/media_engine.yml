@@ -1,26 +1,6 @@
 name: MEDIA ENGINE
 
 on:
-  schedule:
-
-    # Trend hunter
-    - cron: "0 9 * * *"
-
-    # Noticias RSS
-    - cron: "0 11 * * *"
-
-    # Twitch clip hunter
-    - cron: "0 15 * * *"
-
-    # UGC reels
-    - cron: "0 18 * * *"
-
-    # Viral engine
-    - cron: "0 21 * * *"
-
-    # Analytics
-    - cron: "0 23 * * *"
-
   workflow_dispatch:
 
 jobs:
@@ -28,7 +8,7 @@ jobs:
   run-engine:
 
     # Freno central: evita reactivar todas las redes por accidente.
-    if: vars.PRODUCTION_ARMED == 'true'
+    if: vars.LEGACY_WORKFLOWS_ARMED == 'true' && vars.PRODUCTION_ARMED == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -106,13 +86,13 @@ jobs:
 
           RUNWAY_API_KEY: ${{ secrets.RUNWAY_API_KEY }}
 
-          ENABLE_THREADS_PUBLISH: "true"
-          ENABLE_IG_PUBLISH: "true"
-          ENABLE_FB_PUBLISH: "true"
-          ENABLE_YT_PUBLISH: "true"
-          ENABLE_TIKTOK_PUBLISH: "true"
+          ENABLE_THREADS_PUBLISH: "false"
+          ENABLE_IG_PUBLISH: "false"
+          ENABLE_FB_PUBLISH: "false"
+          ENABLE_YT_PUBLISH: "false"
+          ENABLE_TIKTOK_PUBLISH: "false"
 
-          ENABLE_REELS: "true"
-          RUNWAY_ENABLED: "true"
+          ENABLE_REELS: "false"
+          RUNWAY_ENABLED: "false"
 
-          DRY_RUN: "false"
+          DRY_RUN: "true"

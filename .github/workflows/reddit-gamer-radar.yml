@@ -3,11 +3,9 @@ name: reddit-gamer-radar
 on:
   workflow_dispatch:
 
-  schedule:
-    - cron: "20 */2 * * *"
-
 jobs:
   radar:
+    if: vars.LEGACY_WORKFLOWS_ARMED == 'true'
     runs-on: ubuntu-latest
 
     steps:

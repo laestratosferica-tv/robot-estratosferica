@@ -1,16 +1,6 @@
 name: Threads Credential Check
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - .github/workflows/threads-auth-check.yml
-  push:
-    branches:
-      - agent/reactivate-threads-v1
-    paths:
-      - .github/workflows/threads-auth-check.yml
   workflow_dispatch:
 
 permissions:

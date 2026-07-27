@@ -40,10 +40,10 @@
       "threads": {
         "user_id": "me",
         "state_key": "accounts/estratosferica/threads_state.json",
-        "auto_post": true,
-        "auto_post_limit": 1,
-        "dry_run": false,
-        "repost_enable": true,
+        "auto_post": false,
+        "auto_post_limit": 0,
+        "dry_run": true,
+        "repost_enable": false,
         "repost_max_times": 3,
         "repost_window_days": 7
       },

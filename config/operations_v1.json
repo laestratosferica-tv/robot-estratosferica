@@ -30,6 +30,7 @@
     "factory-v1-dry-run.yml": "coordinator",
     "hype-packer.yml": "legacy_quarantine",
     "media_engine.yml": "legacy_quarantine",
+    "platform-credential-diagnostic.yml": "controlled_diagnostic",
     "publisher.yml": "legacy_quarantine",
     "reddit-gamer-radar.yml": "legacy_quarantine",
     "threads-auth-check.yml": "controlled_diagnostic",

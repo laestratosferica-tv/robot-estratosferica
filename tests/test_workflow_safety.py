@@ -90,6 +90,17 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertIn("artifacts/coordinator-health.json", content)
         self.assertIn("artifacts/platform-readiness.json", content)
 
+    def test_credential_diagnostic_is_manual_and_read_only(self):
+        content = (
+            WORKFLOWS / "platform-credential-diagnostic.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("schedule:", content)
+        self.assertIn("contents: read", content)
+        self.assertIn("python platform_credential_diagnostic.py", content)
+        self.assertNotIn("PRODUCTION_ARMED", content)
+        self.assertNotIn("ENABLE_", content)
+
     def test_threads_diagnostic_does_not_rotate_by_default(self):
         content = (
             WORKFLOWS / "threads-auth-check.yml"

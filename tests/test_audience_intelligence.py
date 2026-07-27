@@ -77,6 +77,27 @@ class AudienceIntelligenceTests(unittest.TestCase):
         self.assertFalse(report["automatic_strategy_changes_enabled"])
         self.assertTrue(report["requires_human_review"])
 
+    def test_question_follows_the_verified_story_context(self):
+        atlas = Candidate(
+            title="Google presenta AI & Economy ATLAS",
+            summary=(
+                "El estudio analiza 15 millones de interacciones agregadas "
+                "en más de 150 países para entender la colaboración con IA "
+                "en el trabajo."
+            ),
+            source_url="https://example.com/atlas",
+            territory="ai_innovation_future",
+        )
+        experiment = build_audience_experiment(atlas)
+        self.assertEqual(
+            experiment["learning_question"],
+            "¿La IA ya te ahorra tiempo o todavía te complica el trabajo?",
+        )
+        self.assertEqual(
+            experiment["answer_options"],
+            ["Me ahorra tiempo", "Me complica", "Todavía no la uso"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,11 @@ BRAND_DNA = {
     "core_gradient": ["#19D9FF", "#6D5CFF", "#FF3E9D"],
     "base": "#070812",
     "light": "#F7F6F2",
+    "signature_weights": {
+        "full": 60,
+        "short": 20,
+        "none": 20,
+    },
     "mix": {
         "brand_dna": 70,
         "category_language": 20,
@@ -196,6 +201,10 @@ def validate_visual_system() -> None:
         raise ValueError("Trend signal cannot overpower the identity")
     if len(BRAND_DNA["core_gradient"]) != 3:
         raise ValueError("The orbital gradient requires three stops")
+    if sum(BRAND_DNA["signature_weights"].values()) != 100:
+        raise ValueError("Brand signature weights must total 100")
+    if BRAND_DNA["signature_weights"]["full"] <= BRAND_DNA["signature_weights"]["short"]:
+        raise ValueError("The full brand name must appear more often than LETV")
     required = {
         "accent",
         "secondary",

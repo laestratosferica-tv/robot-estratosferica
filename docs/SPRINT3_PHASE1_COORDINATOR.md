@@ -45,6 +45,23 @@ El resultado se guarda en `phase1-acceptance.json`.
 El inventario de credenciales recibe únicamente indicadores booleanos. No
 recibe, muestra, valida por red ni almacena tokens.
 
+## Diagnóstico controlado por red
+
+`platform-credential-diagnostic.yml` es un workflow manual separado. Comprueba
+Threads, Instagram, Facebook y YouTube con el alcance mínimo de autenticación:
+
+- Threads, Instagram y Facebook: consulta `GET` de identificación.
+- YouTube: intercambio OAuth del refresh token, sin llamar a la API de videos.
+
+El artefacto solo informa `valid`, `missing`, `incomplete`,
+`invalid_or_expired`, `rate_limited`, `network_error` o `service_error`.
+Nunca incluye tokens, identificadores, nombres de cuentas ni cuerpos de
+respuesta. El diagnóstico no publica, no escribe externamente y reporta costo
+USD 0.00.
+
+Crear este workflow no lo ejecuta. La primera comprobación real debe lanzarse
+manualmente y con autorización independiente.
+
 ## Threads
 
 `threads-auth-check.yml` separa dos operaciones:
@@ -66,6 +83,7 @@ código OAuth temporal.
 - Costo y operaciones facturables incluidos en el reporte de salud.
 - No se cambian tokens, permisos ni credenciales.
 - Las brechas de credenciales se informan; no bloquean el dry run editorial.
+- El diagnóstico real de credenciales nunca se ejecuta automáticamente.
 - Una renovación de Threads requiere seleccionar explícitamente
   `prepare_rotation`.
 

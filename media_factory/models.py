@@ -85,6 +85,7 @@ class ContentPackage:
     visual_brief: list[str]
     sources: list[str]
     talent: dict[str, str] = field(default_factory=dict)
+    audience_experiment: dict[str, Any] = field(default_factory=dict)
     requires_human_review: bool = True
     external_actions_enabled: bool = False
 

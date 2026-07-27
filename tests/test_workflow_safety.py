@@ -76,6 +76,30 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertFalse(report["external_writes_enabled"])
         self.assertFalse(report["paid_generation_enabled"])
 
+    def test_safe_coordinator_uses_presence_flags_not_secret_values(self):
+        content = (
+            WORKFLOWS / "factory-v1-dry-run.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("python phase1_coordinator.py", content)
+        self.assertIn(
+            "THREADS_USER_ACCESS_TOKEN_CONFIGURED:", content
+        )
+        self.assertNotIn(
+            "THREADS_USER_ACCESS_TOKEN: ${{ secrets.", content
+        )
+        self.assertIn("artifacts/coordinator-health.json", content)
+        self.assertIn("artifacts/platform-readiness.json", content)
+
+    def test_threads_diagnostic_does_not_rotate_by_default(self):
+        content = (
+            WORKFLOWS / "threads-auth-check.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("default: validate_existing", content)
+        self.assertIn("if: inputs.mode == 'validate_existing'", content)
+        self.assertEqual(
+            content.count("if: inputs.mode == 'prepare_rotation'"), 2
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

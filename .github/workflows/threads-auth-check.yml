@@ -2,6 +2,15 @@ name: Threads Credential Check
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Acción segura de credenciales"
+        required: true
+        type: choice
+        default: validate_existing
+        options:
+          - validate_existing
+          - prepare_rotation
 
 permissions:
   contents: read
@@ -9,6 +18,7 @@ permissions:
 jobs:
   configuration:
     name: Verify OAuth configuration secrets
+    if: inputs.mode == 'prepare_rotation'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -24,7 +34,7 @@ jobs:
 
   exchange:
     name: Exchange OAuth code without publishing
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: inputs.mode == 'prepare_rotation'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -173,6 +183,7 @@ jobs:
 
   validate:
     name: Diagnose existing Threads token without publishing
+    if: inputs.mode == 'validate_existing'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     continue-on-error: true

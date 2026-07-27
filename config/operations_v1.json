@@ -45,5 +45,37 @@
     "readonly_gate": "vars.READONLY_SCANS_ARMED == 'true'",
     "merge_requires_owner_approval": true,
     "credentials_must_not_change": true
+  },
+  "platform_readiness": {
+    "threads": [
+      "THREADS_USER_ACCESS_TOKEN_CONFIGURED",
+      "THREADS_USER_ID_CONFIGURED"
+    ],
+    "instagram": [
+      "IG_ACCESS_TOKEN_CONFIGURED",
+      "IG_USER_ID_CONFIGURED"
+    ],
+    "facebook": [
+      "FB_PAGE_ACCESS_TOKEN_CONFIGURED",
+      "FB_PAGE_ID_CONFIGURED"
+    ],
+    "youtube": [
+      "YOUTUBE_CLIENT_ID_CONFIGURED",
+      "YOUTUBE_CLIENT_SECRET_CONFIGURED",
+      "YOUTUBE_REFRESH_TOKEN_CONFIGURED"
+    ],
+    "r2": [
+      "R2_ENDPOINT_URL_CONFIGURED",
+      "AWS_ACCESS_KEY_ID_CONFIGURED",
+      "AWS_SECRET_ACCESS_KEY_CONFIGURED",
+      "BUCKET_NAME_CONFIGURED"
+    ],
+    "drive": [
+      "GDRIVE_SERVICE_ACCOUNT_JSON_CONFIGURED",
+      "GDRIVE_FOLDER_ID_CONFIGURED"
+    ],
+    "openai": [
+      "OPENAI_API_KEY_CONFIGURED"
+    ]
   }
 }

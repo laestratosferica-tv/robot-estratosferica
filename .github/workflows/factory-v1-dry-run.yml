@@ -24,7 +24,7 @@ jobs:
           PYTHONPATH: .
         run: python -m unittest discover -s tests -v
 
-      - name: Run the safe Phase 1 coordinator
+      - name: Run five safe Phase 1 acceptance cycles
         env:
           PYTHONPATH: .
           THREADS_USER_ACCESS_TOKEN_CONFIGURED: ${{ secrets.THREADS_USER_ACCESS_TOKEN != '' }}
@@ -43,7 +43,7 @@ jobs:
           GDRIVE_SERVICE_ACCOUNT_JSON_CONFIGURED: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON != '' }}
           GDRIVE_FOLDER_ID_CONFIGURED: ${{ secrets.GDRIVE_FOLDER_ID != '' }}
           OPENAI_API_KEY_CONFIGURED: ${{ secrets.OPENAI_API_KEY != '' }}
-        run: python phase1_coordinator.py
+        run: python phase1_acceptance.py
 
       - name: Upload dry-run result
         uses: actions/upload-artifact@v4
@@ -54,4 +54,5 @@ jobs:
             artifacts/operations-safety.json
             artifacts/platform-readiness.json
             artifacts/coordinator-health.json
+            artifacts/phase1-acceptance.json
           if-no-files-found: error

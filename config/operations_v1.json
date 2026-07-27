@@ -9,6 +9,13 @@
     "paid_generation_enabled": false,
     "dry_run": true
   },
+  "phase1_acceptance": {
+    "required_consecutive_runs": 5,
+    "require_source_registry": true,
+    "require_stable_queue": true,
+    "max_billable_operations_per_run": 0,
+    "max_cost_usd_per_run": 0.0
+  },
   "canonical_paths": {
     "ugc_inbox": "ugc/inbox",
     "ugc_metadata": "ugc/meta",

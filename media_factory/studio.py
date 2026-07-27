@@ -7,6 +7,7 @@ from .models import (
     EditorialDecision,
 )
 from .audience_intelligence import build_audience_experiment
+from .content_punch import build_content_punch
 
 
 FORMAT_BY_TERRITORY = {
@@ -47,7 +48,9 @@ def build_content_package(
     factual_summary = candidate.summary or (
         f"La fuente seleccionada presenta la historia: {candidate.title}."
     )
-    headline = f"{format_id.replace('_', ' ').title()}: {candidate.title}"
+    audience_experiment = build_audience_experiment(candidate, opportunity)
+    content_punch = build_content_punch(candidate, audience_experiment)
+    headline = content_punch["hook"]
     commercial_line = (
         "El valor no está solo en el anuncio: está en cómo conecta "
         "producto, plataforma y hábito de consumo."
@@ -64,21 +67,25 @@ def build_content_package(
     )
     platform_copy = {
         "instagram": (
-            f"{headline}\n\n{factual_summary}\n\n{angle}\n\n"
-            "¿Lo ves funcionando en Latinoamérica?"
+            f"{headline}\n\n{content_punch['concrete_value']}\n\n"
+            f"{content_punch['tension_question']}\n"
+            f"{content_punch['expected_action']}"
         ),
         "facebook": (
-            f"{headline}\n\n{factual_summary} {angle}\n\n"
-            "Queremos entender el cambio, no repetir el anuncio."
+            f"{headline}\n\n{content_punch['concrete_value']}\n\n"
+            f"{content_punch['audience_promise']}\n\n"
+            f"{content_punch['tension_question']}\n"
+            f"{content_punch['expected_action']}"
         ),
         "youtube": (
-            f"{headline}\n\n{factual_summary}\n\n"
-            f"En este análisis: {angle}\nFuente incluida en la descripción."
+            f"{headline}\n\n{content_punch['concrete_value']}\n\n"
+            f"{content_punch['audience_promise']}\n"
+            f"{content_punch['tension_question']}\n"
+            "Fuente incluida en la descripción."
         ),
         "threads": (
-            f"{candidate.title}. {factual_summary} La pregunta para "
-            "Latinoamérica no es cómo copiarlo, sino qué problema "
-            "podría resolver aquí."
+            f"{headline}. {content_punch['concrete_value']} "
+            f"{content_punch['tension_question']}"
         ),
     }
     return ContentPackage(
@@ -90,6 +97,14 @@ def build_content_package(
         short_video_script=script,
         platform_copy=platform_copy,
         visual_brief=[
+            f"Gancho dominante: {content_punch['hook']}",
+            f"Valor concreto visible: {content_punch['concrete_value']}",
+            (
+                "Pregunta o tensión visible: "
+                f"{content_punch['tension_question']}"
+            ),
+            f"Acción esperada: {content_punch['expected_action']}",
+            f"Energía visual: {content_punch['visual_energy']}",
             "Usar gráficos, tipografía e ilustración originales.",
             "No descargar ni reutilizar fotos o videos de la fuente.",
             "Mostrar la fuente como referencia textual.",
@@ -97,7 +112,6 @@ def build_content_package(
         ],
         sources=[candidate.source_url],
         talent=talent or {},
-        audience_experiment=build_audience_experiment(
-            candidate, opportunity
-        ),
+        audience_experiment=audience_experiment,
+        content_punch=content_punch,
     )

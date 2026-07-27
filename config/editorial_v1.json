@@ -35,6 +35,21 @@
       "long_analysis": 5
     }
   },
+  "content_punch_gate": {
+    "enabled": true,
+    "publishing_enabled": false,
+    "requires_human_review": true,
+    "required_fields": [
+      "hook",
+      "concrete_value",
+      "tension_question",
+      "expected_action"
+    ],
+    "high_impact_requires": {
+      "conversation_potential": 0.8,
+      "angle_originality": 0.75
+    }
+  },
   "platform_order": [
     "instagram",
     "facebook",

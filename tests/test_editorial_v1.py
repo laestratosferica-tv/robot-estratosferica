@@ -144,6 +144,15 @@ class EditorialV1Tests(unittest.TestCase):
         self.assertFalse(
             package.audience_experiment["publishing_enabled"]
         )
+        self.assertTrue(package.content_punch["gate_passed"])
+        self.assertEqual(
+            package.content_punch["evidence_origin"],
+            "candidate.summary",
+        )
+        self.assertIn(
+            package.content_punch["tension_question"],
+            package.platform_copy["instagram"],
+        )
         self.assertNotIn("tiktok", package.platform_copy)
         self.assertEqual(validate_content_package(package), [])
 

@@ -35,6 +35,13 @@ ANGLE_BY_FORMAT = {
 }
 
 
+def _sentence(text: str) -> str:
+    value = text.strip()
+    if not value:
+        return value
+    return value if value[-1] in ".!?" else f"{value}."
+
+
 def build_content_package(
     candidate: Candidate,
     decision: EditorialDecision,
@@ -84,7 +91,7 @@ def build_content_package(
             "Fuente incluida en la descripción."
         ),
         "threads": (
-            f"{headline}. {content_punch['concrete_value']} "
+            f"{_sentence(headline)} {_sentence(content_punch['concrete_value'])} "
             f"{content_punch['tension_question']}"
         ),
     }

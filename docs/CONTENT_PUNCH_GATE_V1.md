@@ -19,6 +19,12 @@ Toda pieza debe contener:
 
 Si falta un elemento, la pieza no supera la puerta editorial.
 
+La pregunta se selecciona por afinidad con el título y el resumen verificados,
+no al azar. Cuando el texto contiene cifras, el sistema puede convertirlas en
+valor visible, pero solo copiándolas literalmente de esa evidencia. El gancho
+también debe responder al tema real: una investigación sobre IA y trabajo no se
+presenta como si fuera una herramienta para probar.
+
 ## Adaptación al público
 
 - Gaming y esports: competencia, pertenencia, aprendizaje y escena regional.

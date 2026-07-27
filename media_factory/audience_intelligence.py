@@ -123,10 +123,63 @@ FORMAT_ROTATIONS = {
     "youtube": ["short", "analysis_video", "short", "community_question"],
 }
 
+CONTEXT_KEYWORDS = {
+    "gaming_esports": [
+        {"competir", "competencia", "premio", "torneo", "liga", "equipo"},
+        {"juego", "videojuego", "cobertura", "escena", "latinoamérica"},
+        {"resultado", "análisis", "explica", "cambió"},
+        {"equipo", "jugador", "historia", "premio", "torneo"},
+    ],
+    "sport_technology_entertainment": [
+        {"tecnología", "espectáculo", "show", "experiencia"},
+        {"dato", "estadística", "rendimiento", "medición"},
+        {"rendimiento", "negocio", "innovación", "entretenimiento"},
+        {"explicación", "comparación", "datos"},
+    ],
+    "ai_innovation_future": [
+        {
+            "trabajo",
+            "empleo",
+            "productividad",
+            "automatización",
+            "colaboración",
+            "interacciones",
+            "ahorra",
+            "tiempo",
+        },
+        {"herramienta", "empleo", "creatividad", "negocio"},
+        {"lanzamiento", "función", "producto", "disponible", "probar"},
+        {"tutorial", "prueba", "comparación", "opinión"},
+    ],
+    "brands_activations": [
+        {"recordar", "marca", "emoción", "premio", "experiencia"},
+        {"comunidad", "publicidad", "útil", "utilidad"},
+        {"formato", "evento", "descuento", "contenido"},
+        {"comprar", "recomendación", "resultados", "evidencia"},
+    ],
+}
+
 
 def _stable_index(seed: str, size: int) -> int:
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
     return int(digest[:12], 16) % size
+
+
+def _contextual_question_index(candidate: Candidate) -> int:
+    """Choose the question closest to the verified story, with a stable fallback."""
+    text = f"{candidate.title} {candidate.summary}".casefold()
+    keyword_groups = CONTEXT_KEYWORDS[candidate.territory]
+    scores = [
+        sum(1 for keyword in keywords if keyword in text)
+        for keywords in keyword_groups
+    ]
+    best_score = max(scores, default=0)
+    if best_score:
+        return scores.index(best_score)
+    return _stable_index(
+        f"{candidate.title}:question",
+        len(QUESTION_BANK[candidate.territory]),
+    )
 
 
 def _content_goal(
@@ -149,9 +202,7 @@ def build_audience_experiment(
 ) -> dict[str, Any]:
     """Prepare one measurable community experiment; never publish it."""
     questions = QUESTION_BANK[candidate.territory]
-    question_index = _stable_index(
-        f"{candidate.title}:question", len(questions)
-    )
+    question_index = _contextual_question_index(candidate)
     question = questions[question_index]
     answer_options = OPTION_BANK[candidate.territory][question_index]
     experiment_id = hashlib.sha256(

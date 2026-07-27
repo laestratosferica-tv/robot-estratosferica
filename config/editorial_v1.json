@@ -20,6 +20,21 @@
     "esto_cambia_el_juego",
     "brand_play"
   ],
+  "audience_intelligence": {
+    "enabled": true,
+    "mode": "analysis_only",
+    "publishing_enabled": false,
+    "automatic_strategy_changes_enabled": false,
+    "comparison_window_hours": 48,
+    "minimum_sample_warning": 30,
+    "format_mix": {
+      "short_video": 35,
+      "carousel": 25,
+      "image_or_photo": 20,
+      "conversation_or_poll": 15,
+      "long_analysis": 5
+    }
+  },
   "platform_order": [
     "instagram",
     "facebook",

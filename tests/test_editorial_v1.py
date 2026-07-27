@@ -153,6 +153,7 @@ class EditorialV1Tests(unittest.TestCase):
             package.content_punch["tension_question"],
             package.platform_copy["instagram"],
         )
+        self.assertNotIn("?.", package.platform_copy["threads"])
         self.assertNotIn("tiktok", package.platform_copy)
         self.assertEqual(validate_content_package(package), [])
 
@@ -164,6 +165,27 @@ class EditorialV1Tests(unittest.TestCase):
         )
         decision = evaluate_candidate(candidate, self.config)
         self.assertIsNone(build_content_package(candidate, decision, None))
+
+    def test_threads_copy_does_not_add_a_period_after_a_question(self) -> None:
+        candidate = Candidate(
+            title="Google presenta AI & Economy ATLAS",
+            summary=(
+                "El estudio analiza 15 millones de interacciones agregadas "
+                "en más de 150 países para entender la IA en el trabajo."
+            ),
+            source_url="https://example.com/atlas",
+            territory="ai_innovation_future",
+            signals={key: 1 for key in self.config["editorial_score"]["weights"]},
+        )
+        decision = evaluate_candidate(candidate, self.config)
+        package = build_content_package(candidate, decision, None)
+        self.assertIsNotNone(package)
+        self.assertNotIn("?.", package.platform_copy["threads"])
+        self.assertTrue(
+            package.platform_copy["threads"].startswith(
+                "¿LA IA TE POTENCIA O TE REEMPLAZA? "
+            )
+        )
 
     def test_storyboard_is_safe_30_second_production_plan(self) -> None:
         candidate = Candidate(

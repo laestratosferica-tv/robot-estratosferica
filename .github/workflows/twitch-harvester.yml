@@ -2,8 +2,6 @@ name: Twitch Harvester (Mode E)
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: "0 */2 * * *"   # cada 2 horas
 
 concurrency:
   group: twitch-harvester
@@ -11,6 +9,7 @@ concurrency:
 
 jobs:
   twitch_mode_e:
+    if: vars.LEGACY_WORKFLOWS_ARMED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

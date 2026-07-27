@@ -2,11 +2,10 @@ name: ugc-feedback
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "15 */6 * * *"
 
 jobs:
   feedback:
+    if: vars.LEGACY_WORKFLOWS_ARMED == 'true'
     runs-on: ubuntu-latest
 
     steps:

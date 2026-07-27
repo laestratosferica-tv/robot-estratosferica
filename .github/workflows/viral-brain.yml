@@ -2,8 +2,6 @@ name: Viral Gamer Brain (Modo F)
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: "0 */3 * * *"   # cada 3 horas
 
 concurrency:
   group: robot-publisher
@@ -11,6 +9,7 @@ concurrency:
 
 jobs:
   mode-f:
+    if: vars.LEGACY_WORKFLOWS_ARMED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -73,5 +72,5 @@ jobs:
           # -------------------
           # CONTROL
           # -------------------
-          DRY_RUN: "false"
+          DRY_RUN: "true"
           HTTP_TIMEOUT: "30"

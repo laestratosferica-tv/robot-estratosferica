@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "mode": "production_safety_baseline",
+  "coordinator_workflow": "factory-v1-dry-run.yml",
+  "defaults": {
+    "scheduled_runs_enabled": false,
+    "external_writes_enabled": false,
+    "publishing_enabled": false,
+    "paid_generation_enabled": false,
+    "dry_run": true
+  },
+  "canonical_paths": {
+    "ugc_inbox": "ugc/inbox",
+    "ugc_metadata": "ugc/meta",
+    "ugc_review_queue": "ugc/review",
+    "state": "ugc/state"
+  },
+  "workflow_inventory": {
+    "community-radar-readonly.yml": "controlled_readonly",
+    "drive-sync.yml": "legacy_quarantine",
+    "editorial.yml": "legacy_quarantine",
+    "factory-v1-ci.yml": "ci",
+    "factory-v1-dry-run.yml": "coordinator",
+    "hype-packer.yml": "legacy_quarantine",
+    "media_engine.yml": "legacy_quarantine",
+    "publisher.yml": "legacy_quarantine",
+    "reddit-gamer-radar.yml": "legacy_quarantine",
+    "threads-auth-check.yml": "controlled_diagnostic",
+    "twitch-harvester.yml": "legacy_quarantine",
+    "ugc-mode-c.yml": "legacy_quarantine",
+    "ugc.yml": "legacy_quarantine",
+    "ugc_feedback.yml": "legacy_quarantine",
+    "viral-brain.yml": "legacy_quarantine",
+    "youtube-harvester.yml": "legacy_quarantine"
+  },
+  "legacy_publishers": [
+    "editorial.yml",
+    "media_engine.yml",
+    "publisher.yml",
+    "ugc.yml"
+  ],
+  "activation_rules": {
+    "legacy_gate": "vars.LEGACY_WORKFLOWS_ARMED == 'true'",
+    "production_gate": "vars.PRODUCTION_ARMED == 'true'",
+    "readonly_gate": "vars.READONLY_SCANS_ARMED == 'true'",
+    "merge_requires_owner_approval": true,
+    "credentials_must_not_change": true
+  }
+}

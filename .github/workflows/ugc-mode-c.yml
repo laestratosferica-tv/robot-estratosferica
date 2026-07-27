@@ -2,11 +2,10 @@ name: ugc-mode-c
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "10 * * * *"
 
 jobs:
   clip_generator:
+    if: vars.LEGACY_WORKFLOWS_ARMED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

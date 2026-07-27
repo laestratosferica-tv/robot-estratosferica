@@ -140,6 +140,10 @@ class EditorialV1Tests(unittest.TestCase):
             set(package.platform_copy),
             {"instagram", "facebook", "youtube", "threads"},
         )
+        self.assertTrue(package.audience_experiment["experiment_id"])
+        self.assertFalse(
+            package.audience_experiment["publishing_enabled"]
+        )
         self.assertNotIn("tiktok", package.platform_copy)
         self.assertEqual(validate_content_package(package), [])
 

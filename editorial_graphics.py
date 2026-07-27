@@ -1,4 +1,5 @@
 import io
+import hashlib
 import os
 import textwrap
 from typing import Optional
@@ -184,6 +185,45 @@ def _draw_orbital_signature(
     draw.ellipse((width - 86, 188, width - 62, 212), fill=end_color)
 
 
+def select_brand_signature(seed: str, brand: dict) -> str:
+    """Choose one stable signature variant for a piece: full, short or none."""
+    weights = brand["signature_weights"]
+    bucket = int.from_bytes(
+        hashlib.sha256(seed.encode("utf-8")).digest()[:8],
+        "big",
+    ) % 100
+    if bucket < weights["full"]:
+        return "full"
+    if bucket < weights["full"] + weights["short"]:
+        return "short"
+    return "none"
+
+
+def _draw_brand_signature(
+    draw: ImageDraw.ImageDraw,
+    variant: str,
+    accent: str,
+) -> None:
+    text = {
+        "full": "LA ESTRATOSFÉRICA",
+        "short": "LETV",
+    }.get(variant)
+    if not text:
+        return
+
+    font = _font(25, bold=True)
+    text_box = draw.textbbox((0, 0), text, font=font)
+    capsule_right = 82 + (text_box[2] - text_box[0]) + 26
+    draw.rounded_rectangle(
+        (58, 58, capsule_right, 118),
+        radius=20,
+        fill=(8, 10, 22, 225),
+        outline=accent,
+        width=2,
+    )
+    draw.text((82, 69), text, font=font, fill="white")
+
+
 def _draw_category_texture(
     draw: ImageDraw.ImageDraw,
     layout: str,
@@ -222,6 +262,7 @@ def build_threads_card(
     pillar: str,
     logo_path: Optional[str] = None,
     trend_profile: str = "evergreen",
+    brand_variant: Optional[str] = None,
     width: int = 1080,
     height: int = 1350,
 ) -> bytes:
@@ -254,8 +295,13 @@ def build_threads_card(
         direction["brand"]["core_gradient"],
     )
     _draw_category_texture(draw, direction["layout"], secondary, width, height)
-    draw.rounded_rectangle((58, 58, 424, 118), radius=20, fill=(8, 10, 22, 225), outline=color, width=2)
-    draw.text((82, 69), "LETV  LA ESTRATOSFÉRICA", font=_font(25, bold=True), fill="white")
+    signature = brand_variant or select_brand_signature(
+        f"{pillar}|{headline}|{badge_text}",
+        direction["brand"],
+    )
+    if signature not in {"full", "short", "none"}:
+        raise ValueError("brand_variant must be full, short or none")
+    _draw_brand_signature(draw, signature, color)
 
     badge = (badge_text or "HOT").upper()[:18]
     badge_font = _font(28, bold=True)
@@ -288,13 +334,9 @@ def build_threads_card(
     if direction["trend_profile"] != "evergreen":
         draw.line((width - 270, height - 64, width - 170, height - 64), fill=trend_accent, width=5)
 
-    if logo_path and os.path.exists(logo_path):
-        try:
-            logo = Image.open(logo_path).convert("RGBA")
-            logo.thumbnail((120, 120), Image.Resampling.LANCZOS)
-            background.alpha_composite(logo, (width - logo.width - 62, height - logo.height - 48))
-        except Exception:
-            pass
+    # `logo_path` remains in the public API for compatibility, but this card
+    # deliberately renders only the selected signature. Compositing an
+    # additional logo here would bring back the duplicate-brand problem.
 
     output = io.BytesIO()
     background.convert("RGB").save(output, format="PNG", optimize=True)

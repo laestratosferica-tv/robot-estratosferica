@@ -29,14 +29,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
-    args = build_parser().parse_args()
-    config = load_config(args.config)
-    talent_catalog = load_talent_catalog(args.talent_config)
-    raw_candidates = json.loads(Path(args.input).read_text(encoding="utf-8"))
+def run_factory(
+    config_path: str | Path,
+    input_path: str | Path,
+    output_path: str | Path,
+    *,
+    sources_path: str | Path | None = None,
+    talent_config_path: str | Path = "config/talent_v1.json",
+) -> dict[str, int]:
+    config = load_config(config_path)
+    talent_catalog = load_talent_catalog(talent_config_path)
+    raw_candidates = json.loads(
+        Path(input_path).read_text(encoding="utf-8")
+    )
     limit = int(config["safe_mode"]["max_candidates_per_run"])
-    if args.sources:
-        registry = load_source_registry(args.sources)
+    if sources_path:
+        registry = load_source_registry(sources_path)
         candidates = [
             normalize_story(item, registry) for item in raw_candidates[:limit]
         ]
@@ -83,8 +91,28 @@ def main() -> int:
     accepted = [item for item in pipeline_items if item.decision.accepted]
     package_limit = int(config["safe_mode"]["max_packages_per_run"])
     rejected = [item for item in pipeline_items if not item.decision.accepted]
-    save_queue(accepted[:package_limit] + rejected, args.output)
-    print(f"Dry run completo: {len(decisions)} candidatos, 0 publicaciones")
+    save_queue(accepted[:package_limit] + rejected, output_path)
+    return {
+        "candidate_count": len(decisions),
+        "accepted_count": len(accepted[:package_limit]),
+        "rejected_count": len(rejected),
+        "publication_count": 0,
+    }
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    summary = run_factory(
+        args.config,
+        args.input,
+        args.output,
+        sources_path=args.sources,
+        talent_config_path=args.talent_config,
+    )
+    print(
+        "Dry run completo: "
+        f"{summary['candidate_count']} candidatos, 0 publicaciones"
+    )
     return 0
 
 

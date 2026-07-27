@@ -24,17 +24,26 @@ jobs:
           PYTHONPATH: .
         run: python -m unittest discover -s tests -v
 
-      - name: Validate production safety baseline
-        run: python operations_safety.py --output artifacts/operations-safety.json
-
-      - name: Generate review queue
+      - name: Run the safe Phase 1 coordinator
         env:
           PYTHONPATH: .
-        run: |
-          python -m media_factory.cli \
-            --config config/editorial_v1.json \
-            --input fixtures/candidates.json \
-            --output artifacts/editorial_queue.json
+          THREADS_USER_ACCESS_TOKEN_CONFIGURED: ${{ secrets.THREADS_USER_ACCESS_TOKEN != '' }}
+          THREADS_USER_ID_CONFIGURED: ${{ secrets.THREADS_USER_ID != '' }}
+          IG_ACCESS_TOKEN_CONFIGURED: ${{ secrets.IG_ACCESS_TOKEN != '' }}
+          IG_USER_ID_CONFIGURED: ${{ secrets.IG_USER_ID != '' }}
+          FB_PAGE_ACCESS_TOKEN_CONFIGURED: ${{ secrets.FB_PAGE_ACCESS_TOKEN != '' }}
+          FB_PAGE_ID_CONFIGURED: ${{ secrets.FB_PAGE_ID != '' }}
+          YOUTUBE_CLIENT_ID_CONFIGURED: ${{ secrets.YOUTUBE_CLIENT_ID != '' }}
+          YOUTUBE_CLIENT_SECRET_CONFIGURED: ${{ secrets.YOUTUBE_CLIENT_SECRET != '' }}
+          YOUTUBE_REFRESH_TOKEN_CONFIGURED: ${{ secrets.YOUTUBE_REFRESH_TOKEN != '' }}
+          R2_ENDPOINT_URL_CONFIGURED: ${{ secrets.R2_ENDPOINT_URL != '' }}
+          AWS_ACCESS_KEY_ID_CONFIGURED: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+          AWS_SECRET_ACCESS_KEY_CONFIGURED: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' }}
+          BUCKET_NAME_CONFIGURED: ${{ secrets.BUCKET_NAME != '' }}
+          GDRIVE_SERVICE_ACCOUNT_JSON_CONFIGURED: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON != '' }}
+          GDRIVE_FOLDER_ID_CONFIGURED: ${{ secrets.GDRIVE_FOLDER_ID != '' }}
+          OPENAI_API_KEY_CONFIGURED: ${{ secrets.OPENAI_API_KEY != '' }}
+        run: python phase1_coordinator.py
 
       - name: Upload dry-run result
         uses: actions/upload-artifact@v4
@@ -43,4 +52,6 @@ jobs:
           path: |
             artifacts/editorial_queue.json
             artifacts/operations-safety.json
+            artifacts/platform-readiness.json
+            artifacts/coordinator-health.json
           if-no-files-found: error

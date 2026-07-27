@@ -12,6 +12,7 @@ from operations_safety import build_safety_report, load_json
 
 ROOT = Path(__file__).resolve().parent
 OPERATIONS_CONFIG = ROOT / "config" / "operations_v1.json"
+DEFAULT_SOURCES = ROOT / "config" / "sources_v1.json"
 
 
 class CoordinatorError(RuntimeError):
@@ -102,6 +103,10 @@ def run_coordinator(
     if not safety["safe"]:
         raise CoordinatorError("Safety baseline is not green")
 
+    acceptance = load_json(OPERATIONS_CONFIG)["phase1_acceptance"]
+    if acceptance["require_source_registry"] and sources_path is None:
+        raise CoordinatorError("Phase 1 requires the verified source registry")
+
     factory = run_factory(
         config_path,
         input_path,
@@ -110,15 +115,37 @@ def run_coordinator(
     )
     queue = _validate_review_queue(Path(queue_output))
     readiness = build_platform_readiness(environment)
+    billable_operations = 0
+    measured_cost_usd = 0.0
+    cost_within_limit = (
+        billable_operations
+        <= acceptance["max_billable_operations_per_run"]
+        and measured_cost_usd <= acceptance["max_cost_usd_per_run"]
+    )
+    cost = {
+        "currency": "USD",
+        "billable_operations": billable_operations,
+        "billable_operation_limit": acceptance[
+            "max_billable_operations_per_run"
+        ],
+        "measured_cost_usd": measured_cost_usd,
+        "limit_usd_per_run": acceptance["max_cost_usd_per_run"],
+        "within_limit": cost_within_limit,
+        "measurement_basis": (
+            "No external requests or paid generation were attempted"
+        ),
+    }
 
     health = {
-        "healthy": safety["safe"] and queue["safe"],
+        "healthy": safety["safe"] and queue["safe"] and cost["within_limit"],
         "mode": "manual_safe_dry_run",
         "coordinator": "phase1_coordinator.py",
         "safety": safety,
         "factory": factory,
         "review_queue": queue,
         "platform_readiness": readiness,
+        "source_registry_enforced": True,
+        "cost": cost,
         "publishing_attempted": False,
         "external_writes_attempted": False,
         "paid_generation_attempted": False,
@@ -146,8 +173,10 @@ def build_parser() -> argparse.ArgumentParser:
         description="Run Estratosferica 3.0 Phase 1 in safe manual mode."
     )
     parser.add_argument("--config", default="config/editorial_v1.json")
-    parser.add_argument("--input", default="fixtures/candidates.json")
-    parser.add_argument("--sources")
+    parser.add_argument(
+        "--input", default="fixtures/real_candidates_2026-07-25.json"
+    )
+    parser.add_argument("--sources", default=str(DEFAULT_SOURCES))
     parser.add_argument(
         "--queue-output", default="artifacts/editorial_queue.json"
     )

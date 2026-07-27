@@ -80,7 +80,7 @@ class WorkflowSafetyTests(unittest.TestCase):
         content = (
             WORKFLOWS / "factory-v1-dry-run.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("python phase1_coordinator.py", content)
+        self.assertIn("python phase1_acceptance.py", content)
         self.assertIn(
             "THREADS_USER_ACCESS_TOKEN_CONFIGURED:", content
         )

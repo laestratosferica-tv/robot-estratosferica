@@ -13,13 +13,24 @@ La identidad se construye con una mezcla protegida:
 ## ADN fijo
 
 - Arco orbital.
-- Sello corto `LETV`.
 - Degradado cian → violeta → magenta.
 - Base oscura premium.
 - Firma editorial de La Estratosférica.
 
 Estos elementos deben permanecer incluso cuando cambien la fotografía, el color
 de acento, la composición, la temperatura o la textura.
+
+## Firma variable
+
+La firma textual nunca combina `LETV` y `LA ESTRATOSFÉRICA` en una misma pieza.
+El motor elige de forma aleatoria pero estable para cada noticia:
+
+- 60%: `LA ESTRATOSFÉRICA`, como marca principal.
+- 20%: `LETV`, como sello corto.
+- 20%: sin firma textual; el arco y el lenguaje visual sostienen la marca.
+
+Una noticia conserva la misma variante al regenerarse. Un logo adicional no se
+superpone a la firma elegida.
 
 ## Lenguaje por categoría
 

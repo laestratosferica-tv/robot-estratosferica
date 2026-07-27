@@ -3,8 +3,8 @@ import unittest
 
 from PIL import Image
 
-from editorial_graphics import build_threads_card
-from visual_identity import CATEGORY_DIRECTIONS, get_visual_direction
+from editorial_graphics import build_threads_card, select_brand_signature
+from visual_identity import BRAND_DNA, CATEGORY_DIRECTIONS, get_visual_direction
 
 
 class VisualIdentityTests(unittest.TestCase):
@@ -24,6 +24,27 @@ class VisualIdentityTests(unittest.TestCase):
                 self.assertEqual(direction["brand"]["symbol"], "orbital_arc")
                 self.assertEqual(len(direction["brand"]["core_gradient"]), 3)
 
+    def test_brand_signature_never_combines_full_and_short_names(self):
+        self.assertEqual(
+            set(BRAND_DNA["signature_weights"]),
+            {"full", "short", "none"},
+        )
+        for index in range(200):
+            signature = select_brand_signature(f"story-{index}", BRAND_DNA)
+            self.assertIn(signature, {"full", "short", "none"})
+
+    def test_full_name_is_primary_and_letv_is_secondary(self):
+        weights = BRAND_DNA["signature_weights"]
+        self.assertEqual(sum(weights.values()), 100)
+        self.assertGreater(weights["full"], weights["short"])
+        self.assertGreater(weights["full"], weights["none"])
+
+    def test_brand_selection_is_stable_for_the_same_story(self):
+        seed = "gaming|La misma noticia|SEÑAL"
+        first = select_brand_signature(seed, BRAND_DNA)
+        second = select_brand_signature(seed, BRAND_DNA)
+        self.assertEqual(first, second)
+
     def test_card_renders_in_social_format_for_each_pillar(self):
         source = Image.new("RGB", (900, 900), "#34415C")
         payload = io.BytesIO()
@@ -40,6 +61,24 @@ class VisualIdentityTests(unittest.TestCase):
                 card = Image.open(io.BytesIO(rendered))
                 self.assertEqual(card.size, (1080, 1350))
                 self.assertEqual(card.format, "PNG")
+
+    def test_every_brand_variant_renders(self):
+        source = Image.new("RGB", (900, 900), "#34415C")
+        payload = io.BytesIO()
+        source.save(payload, format="JPEG")
+        for variant in ("full", "short", "none"):
+            with self.subTest(variant=variant):
+                rendered = build_threads_card(
+                    image_bytes=payload.getvalue(),
+                    headline="Una firma por pieza",
+                    badge_text="SEÑAL",
+                    pillar="gaming",
+                    brand_variant=variant,
+                )
+                self.assertEqual(
+                    Image.open(io.BytesIO(rendered)).size,
+                    (1080, 1350),
+                )
 
     def test_categories_change_background_structure_not_only_color(self):
         modes = {

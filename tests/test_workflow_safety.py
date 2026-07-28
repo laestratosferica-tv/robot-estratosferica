@@ -114,6 +114,21 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertNotIn("PRODUCTION_ARMED", content)
         self.assertNotIn("ENABLE_", content)
 
+    def test_editorial_radar_dry_run_is_manual_and_uploads_on_failure(self):
+        content = (
+            WORKFLOWS / "editorial-radar-dry-run.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("schedule:", content)
+        self.assertNotIn("pull_request:", content)
+        self.assertNotIn("push:", content)
+        self.assertIn("contents: read", content)
+        self.assertIn("python -m unittest discover -s tests -v", content)
+        self.assertIn("--registry config/sources_v1.json", content)
+        self.assertIn("if: ${{ always() }}", content)
+        self.assertNotIn("secrets.", content)
+        self.assertNotIn("phase1_coordinator.py", content)
+
     def test_epic_play_radar_is_manual_and_metadata_only(self):
         content = (
             WORKFLOWS / "epic-play-radar-readonly.yml"

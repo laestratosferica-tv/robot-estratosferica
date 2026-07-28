@@ -5,6 +5,7 @@ import hashlib
 import html
 import json
 import re
+from urllib.error import HTTPError, URLError
 from datetime import date
 from pathlib import Path
 from time import struct_time
@@ -30,6 +31,9 @@ DEFAULT_STRATEGY = ROOT / "config" / "content_strategy_v1.json"
 
 class LiveRadarError(RuntimeError):
     pass
+
+
+NETWORK_ERRORS = (ConnectionError, HTTPError, TimeoutError, URLError)
 
 
 POSITIVE_DISCOVERY_TERMS = {
@@ -154,6 +158,40 @@ def _default_parser(feed_url: str) -> Any:
     return feedparser.parse(feed_url)
 
 
+def _source_response(parsed: Any) -> tuple[str, str | None]:
+    """Classify a feed response without treating an empty feed as a failure."""
+    exception = _entry_value(parsed, "bozo_exception", None)
+    if isinstance(exception, NETWORK_ERRORS):
+        return "inaccessible", type(exception).__name__
+    if bool(_entry_value(parsed, "bozo", False)) and not _entry_value(
+        parsed, "entries", []
+    ):
+        return "error", type(exception).__name__ if exception else "parse_error"
+    return "accessible", None
+
+
+def _source_result(
+    source: Mapping[str, Any],
+    feed_url: str,
+    status: str,
+    *,
+    error_type: str | None = None,
+    entries_seen: int = 0,
+    accepted: int = 0,
+    rejected: int = 0,
+) -> dict[str, Any]:
+    return {
+        "source_id": source["id"],
+        "feed_url": feed_url,
+        "status": status,
+        "error_type": error_type,
+        "entries_seen": entries_seen,
+        "accepted": accepted,
+        "rejected": rejected,
+        "network_mode": "rss_read_only",
+    }
+
+
 def collect_live_candidates(
     *,
     registry_path: str | Path = DEFAULT_REGISTRY,
@@ -179,8 +217,41 @@ def collect_live_candidates(
 
     for source in _source_feeds(registry):
         feed_url = str(source["feed_url"])
-        parsed = parser(feed_url)
+        try:
+            parsed = parser(feed_url)
+        except NETWORK_ERRORS as exc:
+            source_results.append(
+                _source_result(
+                    source,
+                    feed_url,
+                    "inaccessible",
+                    error_type=type(exc).__name__,
+                )
+            )
+            continue
+        except Exception as exc:
+            source_results.append(
+                _source_result(
+                    source,
+                    feed_url,
+                    "error",
+                    error_type=type(exc).__name__,
+                )
+            )
+            continue
+
+        source_status, error_type = _source_response(parsed)
         entries = list(_entry_value(parsed, "entries", []))
+        if source_status != "accessible":
+            source_results.append(
+                _source_result(
+                    source,
+                    feed_url,
+                    source_status,
+                    error_type=error_type,
+                )
+            )
+            continue
         accepted_for_source = 0
         rejected_for_source = 0
 
@@ -249,14 +320,14 @@ def collect_live_candidates(
             accepted_for_source += 1
 
         source_results.append(
-            {
-                "source_id": source["id"],
-                "feed_url": feed_url,
-                "entries_seen": min(len(entries), max_per_source),
-                "accepted": accepted_for_source,
-                "rejected": rejected_for_source,
-                "network_mode": "rss_read_only",
-            }
+            _source_result(
+                source,
+                feed_url,
+                "accessible_with_entries" if entries else "accessible_empty",
+                entries_seen=min(len(entries), max_per_source),
+                accepted=accepted_for_source,
+                rejected=rejected_for_source,
+            )
         )
 
     candidates.sort(
@@ -275,8 +346,25 @@ def collect_live_candidates(
         encoding="utf-8",
     )
 
+    accessible_statuses = {"accessible_with_entries", "accessible_empty"}
+    has_accessible_source = any(
+        source["status"] in accessible_statuses for source in source_results
+    )
+    has_failed_source = any(
+        source["status"] in {"inaccessible", "error"}
+        for source in source_results
+    )
+    all_sources_inaccessible = bool(source_results) and all(
+        source["status"] == "inaccessible" for source in source_results
+    )
     report = {
-        "healthy": True,
+        "healthy": has_accessible_source,
+        "status": (
+            "network_failure" if all_sources_inaccessible
+            else "partial" if has_accessible_source and has_failed_source
+            else "ok" if has_accessible_source
+            else "source_failure"
+        ),
         "mode": "live_rss_read_only",
         "scan_date": current_date.isoformat(),
         "sources_scanned": len(source_results),
@@ -321,7 +409,7 @@ def main() -> int:
         f"{report['candidate_count']} candidatos, "
         "0 publicaciones, USD 0.00"
     )
-    return 0
+    return 0 if report["healthy"] else 1
 
 
 if __name__ == "__main__":

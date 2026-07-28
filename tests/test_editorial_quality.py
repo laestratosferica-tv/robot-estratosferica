@@ -72,6 +72,27 @@ class EditorialQualityTests(unittest.TestCase):
             ),
         ))
 
+    def test_truncated_feed_excerpt_is_rejected(self):
+        for summary in (
+            "El encuentro hizo historia y se c…",
+            "Google Earth documenta el estadio...",
+            "La plataforma incorpora una experiencia…",
+        ):
+            with self.subTest(summary=summary):
+                self.assertEqual(
+                    substantive_summary_issue("Historia confirmada", summary),
+                    "summary_truncated",
+                )
+
+    def test_complete_summary_with_period_is_not_truncated(self):
+        self.assertIsNone(substantive_summary_issue(
+            "Google Earth recrea un estadio",
+            (
+                "La plataforma incorpora un recorrido que documenta momentos "
+                "históricos del Estadio Azteca."
+            ),
+        ))
+
     def test_short_labels_are_not_mistaken_for_reported_facts(self):
         for summary in (
             "AI launch graphic",

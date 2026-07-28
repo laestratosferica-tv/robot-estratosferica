@@ -247,6 +247,16 @@ def _is_placeholder(summary: str) -> bool:
     return False
 
 
+def _is_truncated(summary: str) -> bool:
+    """Reject feed excerpts that end mid-sentence or mid-word."""
+    stripped = str(summary or "").rstrip()
+    if not stripped:
+        return False
+    if re.search(r"(?:\.\.\.|…)\s*$", stripped):
+        return True
+    return bool(re.search(r"\b[\wáéíóúüñ]{1,3}[…]\s*$", stripped.casefold()))
+
+
 def _is_visual_metadata_only(title: str, summary: str) -> bool:
     tokens = _tokens(summary)
     token_set = set(tokens)
@@ -314,6 +324,8 @@ def substantive_summary_issue(title: str, summary: str) -> str | None:
         return "summary_equivalent_to_title"
     if _is_placeholder(summary):
         return "summary_placeholder"
+    if _is_truncated(summary):
+        return "summary_truncated"
     if _is_visual_metadata_only(title, summary):
         return "summary_visual_metadata_only"
     if not _has_distinct_informative_proposition(title, summary):

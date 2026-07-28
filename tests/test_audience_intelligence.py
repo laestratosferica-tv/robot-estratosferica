@@ -95,12 +95,30 @@ class AudienceIntelligenceTests(unittest.TestCase):
         experiment = build_audience_experiment(atlas)
         self.assertEqual(
             experiment["learning_question"],
-            "¿La IA ya te ahorra tiempo o todavía te complica el trabajo?",
+            (
+                "¿Qué efecto de esta noticia sobre el trabajo te parece más "
+                "relevante?"
+            ),
         )
         self.assertEqual(
             experiment["answer_options"],
-            ["Me ahorra tiempo", "Me complica", "Todavía no la uso"],
+            ["Productividad", "Empleo", "Creatividad", "Organización"],
         )
+
+    def test_ai_economy_analysis_does_not_get_a_product_trial_question(self):
+        candidate = Candidate(
+            title="Claves para comprender la economía de la IA",
+            summary=(
+                "El informe analiza inversión y adopción de IA en empresas "
+                "de 20 países durante 2025."
+            ),
+            source_url="https://example.com/ai-economy",
+            territory="ai_innovation_future",
+        )
+        experiment = build_audience_experiment(candidate)
+        self.assertIn("análisis económico", experiment["learning_question"])
+        self.assertNotIn("Probarías", experiment["learning_question"])
+        self.assertNotIn("precio", str(experiment).casefold())
 
     def test_game_pass_question_follows_the_selected_story(self):
         candidate = Candidate(

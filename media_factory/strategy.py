@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from .editorial_quality import substantive_summary_issue
 from .models import Candidate
 
 
@@ -321,6 +322,10 @@ def classify_candidate(
     }
     product = products[product_id]
     rights_state, rights_note, rights_ready = _rights_state(data, product_id)
+    evidence_issue = substantive_summary_issue(
+        str(data.get("title", "")),
+        str(data.get("summary", data.get("description", ""))),
+    )
     decision = {
         "content_product_id": product_id,
         "content_product_name": product["name"],
@@ -334,6 +339,8 @@ def classify_candidate(
         "rights_note": rights_note,
         "rights_ready_for_draft": rights_ready,
         "matched_rules": matched_rules,
+        "evidence_sufficient": evidence_issue is None,
+        "evidence_issue": evidence_issue,
         "classification_mode": "deterministic_strategy_v1",
         "requires_human_review": True,
         "external_actions_enabled": False,

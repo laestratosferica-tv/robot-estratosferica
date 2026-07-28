@@ -1,9 +1,13 @@
+import json
 import unittest
+from pathlib import Path
 
 from media_factory.editorial_quality import (
     substantive_summary_issue,
     text_is_equivalent,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class EditorialQualityTests(unittest.TestCase):
@@ -39,6 +43,70 @@ class EditorialQualityTests(unittest.TestCase):
                 "dos estrenos desde su día de lanzamiento."
             ),
         ))
+
+    def test_all_real_run_30399824136_visual_summaries_are_rejected(self):
+        fixture = json.loads(
+            (
+                ROOT
+                / "fixtures"
+                / "real_visual_summaries_run_30399824136.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(len(fixture), 5)
+        for item in fixture:
+            with self.subTest(title=item["title"]):
+                self.assertEqual(
+                    substantive_summary_issue(
+                        item["title"],
+                        item["summary"],
+                    ),
+                    item["expected_rejection"],
+                )
+
+    def test_visual_reference_with_a_verifiable_fact_is_allowed(self):
+        self.assertIsNone(substantive_summary_issue(
+            "Satélite registra cambios en un glaciar",
+            (
+                "La imagen satelital confirma que el glaciar perdió 12 % "
+                "de su superficie desde 2020."
+            ),
+        ))
+
+    def test_short_labels_are_not_mistaken_for_reported_facts(self):
+        for summary in (
+            "AI launch graphic",
+            "Football documentary",
+            "New product cover",
+        ):
+            with self.subTest(summary=summary):
+                self.assertIsNotNone(
+                    substantive_summary_issue("Titular distinto", summary)
+                )
+
+    def test_factual_summaries_pass_across_multiple_topics(self):
+        cases = (
+            (
+                "Nuevo modelo de IA",
+                "La empresa confirmó que el modelo estará disponible el 3 de agosto.",
+            ),
+            (
+                "Cambios en una liga regional",
+                "El torneo sumó cuatro equipos y aumentó la bolsa de premios.",
+            ),
+            (
+                "Análisis del empleo",
+                "El informe analiza 15 millones de registros de 150 países.",
+            ),
+            (
+                "Nueva función de acceso",
+                "La actualización incorpora verificación facial opcional para iniciar sesión.",
+            ),
+        )
+        for title, summary in cases:
+            with self.subTest(title=title):
+                self.assertIsNone(
+                    substantive_summary_issue(title, summary)
+                )
 
 
 if __name__ == "__main__":

@@ -94,7 +94,10 @@
     "unsupported_claim",
     "outside_editorial_territory",
     "missing_substantive_summary",
-    "summary_equivalent_to_title"
+    "summary_equivalent_to_title",
+    "summary_placeholder",
+    "summary_visual_metadata_only",
+    "summary_lacks_distinct_informative_proposition"
   ],
   "allowed_output_states": [
     "draft",

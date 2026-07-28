@@ -170,6 +170,22 @@ class StrategyClassifierTests(unittest.TestCase):
             "comunidad_decide",
         )
 
+    def test_classification_exposes_insufficient_editorial_evidence(self):
+        decision = classify_candidate(
+            Candidate(
+                title="Nueva función de inteligencia artificial",
+                summary="Persona frente a una pantalla con un logo",
+                source_url="https://example.com/visual-metadata",
+                territory="ai_innovation_future",
+            ),
+            self.strategy,
+        )
+        self.assertFalse(decision["evidence_sufficient"])
+        self.assertEqual(
+            decision["evidence_issue"],
+            "summary_visual_metadata_only",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

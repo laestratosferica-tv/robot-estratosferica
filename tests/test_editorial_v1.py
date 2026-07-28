@@ -9,7 +9,11 @@ from media_factory.commercial import detect_opportunity
 from media_factory.cli import run_factory
 from media_factory.config import ConfigurationError, load_config, validate_config
 from media_factory.editor import evaluate_candidate
-from media_factory.guardrails import validate_content_package, validate_storyboard
+from media_factory.guardrails import (
+    validate_content_package,
+    validate_evidence_alignment,
+    validate_storyboard,
+)
 from media_factory.metrics import build_measurement_plan
 from media_factory.models import Candidate, PipelineItem
 from media_factory.queue import save_queue
@@ -103,15 +107,14 @@ class EditorialV1Tests(unittest.TestCase):
         decision = evaluate_candidate(candidate, self.config)
         selection, selection_report = self._selected(candidate, decision)
         opportunity = detect_opportunity(candidate, decision)
+        package = build_content_package(candidate, decision, opportunity)
         item = PipelineItem(
             candidate=candidate,
             decision=decision,
             opportunity_selection=selection,
             commercial_opportunity=opportunity,
-            content_package=build_content_package(
-                candidate, decision, opportunity
-            ),
-            storyboard=None,
+            content_package=package,
+            storyboard=build_storyboard(candidate, package),
             measurement_plan=build_measurement_plan(decision, opportunity),
         )
         with tempfile.TemporaryDirectory() as directory:
@@ -162,10 +165,10 @@ class EditorialV1Tests(unittest.TestCase):
         candidate = self._classified(
             Candidate(
                 candidate_id="radar-candidate-1",
-                title="Historia estable",
+                title="Historia gamer estable",
                 summary=(
-                    "La fuente confirma un cambio de formato para la próxima "
-                    "temporada competitiva regional."
+                    "La fuente confirma un cambio de formato para el próximo "
+                    "torneo gamer regional."
                 ),
                 source_url="https://example.com/stable",
                 source_id="source",
@@ -179,15 +182,14 @@ class EditorialV1Tests(unittest.TestCase):
         decision = evaluate_candidate(candidate, self.config)
         selection, selection_report = self._selected(candidate, decision)
         opportunity = detect_opportunity(candidate, decision)
+        package = build_content_package(candidate, decision, opportunity)
         item = PipelineItem(
             candidate=candidate,
             decision=decision,
             opportunity_selection=selection,
             commercial_opportunity=opportunity,
-            content_package=build_content_package(
-                candidate, decision, opportunity
-            ),
-            storyboard=None,
+            content_package=package,
+            storyboard=build_storyboard(candidate, package),
             measurement_plan=build_measurement_plan(decision, opportunity),
         )
         with tempfile.TemporaryDirectory() as directory:
@@ -305,6 +307,156 @@ class EditorialV1Tests(unittest.TestCase):
             str(queue["items"]),
         )
 
+    def test_real_visual_summaries_produce_zero_pieces_and_empty_queue(self):
+        fixture = json.loads(
+            (
+                ROOT
+                / "fixtures"
+                / "real_visual_summaries_run_30399824136.json"
+            ).read_text(encoding="utf-8")
+        )
+        weights = self.config["editorial_score"]["weights"]
+        raw_candidates = [
+            {
+                "candidate_id": f"real-visual-{index}",
+                "title": item["title"],
+                "summary": item["summary"],
+                "source_url": f"https://blog.google/example-{index}/",
+                "source_id": "google_blog",
+                "territory": "ai_innovation_future",
+                "signals": {key: 1 for key in weights},
+            }
+            for index, item in enumerate(fixture)
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            input_path = root / "candidates.json"
+            queue_path = root / "queue.json"
+            input_path.write_text(
+                json.dumps(raw_candidates, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            result = run_factory(
+                CONFIG_PATH,
+                input_path,
+                queue_path,
+                talent_config_path=ROOT / "config" / "talent_v1.json",
+            )
+            queue = json.loads(queue_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result["selected_count"], 0)
+        self.assertEqual(result["accepted_count"], 0)
+        self.assertEqual(result["publication_count"], 0)
+        self.assertEqual(queue["items"], [])
+        self.assertEqual(
+            queue["opportunity_selection"]["eligible_count"],
+            0,
+        )
+
+    def test_final_gate_blocks_body_question_or_scenes_before_review(self):
+        candidate = self._classified(Candidate(
+            title="Informe analiza inversión en inteligencia artificial",
+            summary=(
+                "El estudio analiza inversión y adopción de IA en empresas "
+                "de 20 países durante 2025."
+            ),
+            source_url="https://example.com/ai-economy",
+            source_id="source",
+            territory="ai_innovation_future",
+            signals={
+                key: 1
+                for key in self.config["editorial_score"]["weights"]
+            },
+        ))
+        decision = evaluate_candidate(candidate, self.config)
+        selection, selection_report = self._selected(candidate, decision)
+        opportunity = detect_opportunity(candidate, decision)
+        package = build_content_package(candidate, decision, opportunity)
+        storyboard = build_storyboard(candidate, package)
+        self.assertEqual(
+            validate_evidence_alignment(candidate, package, storyboard),
+            [],
+        )
+        grounded_output = (
+            package.short_video_script
+            + " "
+            + " ".join(package.platform_copy.values())
+            + " "
+            + " ".join(
+                scene.voiceover + " " + scene.on_screen_text
+                for scene in storyboard.scenes
+            )
+        ).casefold()
+        for unsupported in (
+            "no es solo una alianza",
+            "producto + plataforma",
+            "jugar",
+            "competir",
+        ):
+            self.assertNotIn(unsupported, grounded_output)
+
+        tampered_copy = replace(
+            package,
+            platform_copy={
+                **package.platform_copy,
+                "instagram": "No es solo una alianza.",
+            },
+        )
+        self.assertIn(
+            "unsupported_generated_context:alliance",
+            validate_evidence_alignment(
+                candidate,
+                tampered_copy,
+                storyboard,
+            ),
+        )
+
+        tampered_experiment = {
+            **package.audience_experiment,
+            "learning_question": "¿Probarías esta tecnología hoy?",
+        }
+        tampered_question = replace(
+            package,
+            audience_experiment=tampered_experiment,
+        )
+        self.assertIn(
+            "question_incongruent_with_story_type",
+            validate_evidence_alignment(
+                candidate,
+                tampered_question,
+                storyboard,
+            ),
+        )
+
+        tampered_scene = replace(
+            storyboard.scenes[0],
+            on_screen_text="Producto + plataforma",
+        )
+        tampered_storyboard = replace(
+            storyboard,
+            scenes=[tampered_scene, *storyboard.scenes[1:]],
+        )
+        item = PipelineItem(
+            candidate=candidate,
+            decision=decision,
+            opportunity_selection=selection,
+            commercial_opportunity=opportunity,
+            content_package=package,
+            storyboard=tampered_storyboard,
+            measurement_plan=build_measurement_plan(decision, opportunity),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(
+                ValueError,
+                "final evidence gate",
+            ):
+                save_queue(
+                    [item],
+                    Path(directory) / "queue.json",
+                    selection_report=selection_report,
+                )
+
     def test_radar_accepts_recent_allowed_source(self) -> None:
         candidate = normalize_story(
             {
@@ -394,7 +546,7 @@ class EditorialV1Tests(unittest.TestCase):
         self.assertNotIn("?.", package.platform_copy["threads"])
         self.assertTrue(
             package.platform_copy["threads"].startswith(
-                "¿LA IA TE POTENCIA O TE REEMPLAZA? "
+                "Google presenta AI & Economy ATLAS. "
             )
         )
 

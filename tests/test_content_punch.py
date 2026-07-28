@@ -99,7 +99,7 @@ class ContentPunchTests(unittest.TestCase):
         experiment = build_audience_experiment(candidate)
         plan = build_content_punch(candidate, experiment)
 
-        self.assertEqual(plan["hook"], "¿LA IA TE POTENCIA O TE REEMPLAZA?")
+        self.assertEqual(plan["hook"], candidate.title)
         self.assertEqual(
             plan["concrete_value"],
             "15 MILLONES DE INTERACCIONES · MÁS DE 150 PAÍSES",

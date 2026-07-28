@@ -191,7 +191,8 @@ def _contextual_question_index(candidate: Candidate) -> int:
     )
 
 
-def _story_question(candidate: Candidate) -> tuple[str, list[str]]:
+def story_question(candidate: Candidate) -> tuple[str, list[str]]:
+    """Build a question from the verified story type, never from a random fallback."""
     text = f"{candidate.title} {candidate.summary}".casefold()
     if substantive_summary_issue(candidate.title, candidate.summary):
         return "", []
@@ -214,10 +215,82 @@ def _story_question(candidate: Candidate) -> tuple[str, list[str]]:
                     games[:4],
                 )
 
-    question_index = _contextual_question_index(candidate)
+    if candidate.territory == "ai_innovation_future":
+        if any(term in text for term in CONTEXT_KEYWORDS[
+            "ai_innovation_future"
+        ][0]):
+            return (
+                "¿Qué efecto de esta noticia sobre el trabajo te parece más "
+                "relevante?",
+                ["Productividad", "Empleo", "Creatividad", "Organización"],
+            )
+        economic_terms = {
+            "economía",
+            "economy",
+            "económico",
+            "económica",
+            "inversión",
+            "mercado",
+        }
+        analysis_terms = {
+            "análisis",
+            "analiza",
+            "atlas",
+            "estudio",
+            "informe",
+            "research",
+            "report",
+        }
+        if any(term in text for term in economic_terms) and any(
+            term in text for term in analysis_terms
+        ):
+            return (
+                "¿Qué consecuencia de este análisis económico debería "
+                "examinarse primero?",
+                ["Impacto directo", "Impacto de largo plazo"],
+            )
+        if any(term in text for term in CONTEXT_KEYWORDS[
+            "ai_innovation_future"
+        ][2]):
+            return (
+                "¿Qué necesitarías verificar antes de probar lo anunciado?",
+                ["Utilidad real", "Disponibilidad", "Límites", "Costo"],
+            )
+        return (
+            "¿Qué consecuencia de esta noticia sobre IA debería analizarse "
+            "con más detalle?",
+            ["Impacto inmediato", "Impacto de largo plazo"],
+        )
+
+    if candidate.territory == "gaming_esports":
+        if any(term in text for term in {
+            "competir",
+            "competencia",
+            "equipo",
+            "liga",
+            "premio",
+            "torneo",
+        }):
+            return (
+                "¿Qué aspecto del hecho competitivo anunciado te interesa "
+                "más?",
+                ["Formato", "Equipos", "Calendario", "Premios"],
+            )
+        return (
+            "¿Qué parte de esta noticia gamer debería explicarse mejor?",
+            ["Qué cambia", "A quién afecta", "Cuándo ocurre"],
+        )
+
+    if candidate.territory == "sport_technology_entertainment":
+        return (
+            "¿Qué efecto de esta innovación en el espectáculo debería "
+            "analizarse primero?",
+            ["Experiencia", "Rendimiento", "Acceso"],
+        )
+
     return (
-        QUESTION_BANK[candidate.territory][question_index],
-        list(OPTION_BANK[candidate.territory][question_index]),
+        "¿Qué utilidad concreta encuentras en esta experiencia de marca?",
+        ["Utilidad", "Experiencia", "Acceso"],
     )
 
 
@@ -240,7 +313,7 @@ def build_audience_experiment(
     opportunity: CommercialOpportunity | None = None,
 ) -> dict[str, Any]:
     """Prepare one measurable community experiment; never publish it."""
-    question, answer_options = _story_question(candidate)
+    question, answer_options = story_question(candidate)
     experiment_id = hashlib.sha256(
         f"{candidate.territory}:{candidate.title}:{question}".encode("utf-8")
     ).hexdigest()[:16]

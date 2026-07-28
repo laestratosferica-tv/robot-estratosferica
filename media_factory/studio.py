@@ -19,20 +19,15 @@ FORMAT_BY_TERRITORY = {
 }
 
 ANGLE_BY_FORMAT = {
-    "radar_estratosferico": (
-        "La clave es entender por qué esta señal importa para la cultura gamer "
-        "latinoamericana."
-    ),
-    "esto_cambia_el_juego": (
-        "El valor está en traducir el cambio tecnológico en una consecuencia "
-        "concreta "
-        "para audiencias y negocios."
-    ),
-    "brand_play": (
-        "La lectura útil está en identificar qué problema resuelve la "
-        "activación y qué podría "
-        "adaptarse a Latinoamérica sin copiarla."
-    ),
+    format_id: (
+        "Lectura editorial: conviene distinguir el hecho confirmado de las "
+        "consecuencias que todavía deben evaluarse."
+    )
+    for format_id in {
+        "radar_estratosferico",
+        "esto_cambia_el_juego",
+        "brand_play",
+    }
 }
 
 
@@ -95,19 +90,17 @@ def build_content_package(
     audience_experiment = build_audience_experiment(candidate, opportunity)
     content_punch = build_content_punch(candidate, audience_experiment)
     headline = content_punch["hook"]
-    commercial_line = (
-        "El valor no está solo en el anuncio: está en cómo conecta "
-        "producto, plataforma y hábito de consumo."
-        if opportunity
-        else "Su valor está en lo que revela sobre los cambios de la audiencia."
+    editorial_line = (
+        "Lectura editorial: cualquier consecuencia debe comprobarse a partir "
+        "de la evidencia disponible."
     )
+    closing_question = content_punch["tension_question"]
     script = (
         f"GANCHO\n{candidate.title}\n\n"
         f"CONTEXTO\n{factual_summary}\n\n"
         f"LECTURA ESTRATOSFÉRICA\n{angle}\n\n"
-        f"POR QUÉ IMPORTA\n{commercial_line}\n\n"
-        "CIERRE\n¿Qué tendría que cambiar para que esta idea funcione "
-        "de verdad en Latinoamérica?"
+        f"POR QUÉ IMPORTA\n{editorial_line}\n\n"
+        f"CIERRE\n{closing_question}"
     )
     platform_copy = {
         "instagram": (

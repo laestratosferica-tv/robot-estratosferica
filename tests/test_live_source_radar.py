@@ -141,7 +141,8 @@ class LiveSourceRadarTests(unittest.TestCase):
                     SimpleNamespace(
                         title="Xbox expands play across devices",
                         summary=(
-                            "<p>An official Game Pass ecosystem update.</p> "
+                            "<p>Xbox confirmed an official Game Pass ecosystem "
+                            "update for additional devices.</p> "
                             "The post Xbox expands play across devices "
                             "appeared first on Xbox Wire."
                         ),
@@ -150,7 +151,10 @@ class LiveSourceRadarTests(unittest.TestCase):
                     ),
                     SimpleNamespace(
                         title="Casino partnerships for esports betting",
-                        summary="Blocked topic",
+                        summary=(
+                            "The source announced a casino betting partnership "
+                            "for an esports event."
+                        ),
                         link="https://news.xbox.com/es-latam/blocked/",
                         published_parsed=_parsed_date("2026-07-28"),
                     ),
@@ -160,7 +164,10 @@ class LiveSourceRadarTests(unittest.TestCase):
             entries=[
                 SimpleNamespace(
                     title="Google shares a new AI research update",
-                    summary="<p>New research and developer tools.</p>",
+                    summary=(
+                        "<p>Google published research that documents how "
+                        "developers use the new tools.</p>"
+                    ),
                     link="https://blog.google/technology/ai/example/",
                     published_parsed=_parsed_date("2026-07-27"),
                 )
@@ -219,7 +226,10 @@ class LiveSourceRadarTests(unittest.TestCase):
         )
         self.assertEqual(
             xbox["summary"],
-            "An official Game Pass ecosystem update.",
+            (
+                "Xbox confirmed an official Game Pass ecosystem update "
+                "for additional devices."
+            ),
         )
 
     def test_removes_spanish_feed_boilerplate(self):
@@ -311,6 +321,59 @@ class LiveSourceRadarTests(unittest.TestCase):
             1,
         )
 
+    def test_real_run_30399824136_visual_summaries_leave_empty_radar(self):
+        fixture = json.loads(
+            (
+                ROOT
+                / "fixtures"
+                / "real_visual_summaries_run_30399824136.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        def parser(feed_url: str):
+            if "google" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[
+                SimpleNamespace(
+                    title=item["title"],
+                    summary=item["summary"],
+                    link=f"https://blog.google/example-{index}/",
+                    published_parsed=_parsed_date("2026-07-28"),
+                )
+                for index, item in enumerate(fixture)
+            ])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "candidates.json"
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=output,
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+            )
+            candidates = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(candidates, [])
+        self.assertEqual(report["candidate_count"], 0)
+        self.assertTrue(report["healthy"])
+        self.assertEqual(report["status"], "ok")
+        self.assertEqual(
+            report["rejection_counts"]["summary_visual_metadata_only"],
+            3,
+        )
+        self.assertEqual(
+            report["rejection_counts"]["summary_placeholder"],
+            1,
+        )
+        self.assertEqual(
+            report["rejection_counts"][
+                "summary_lacks_distinct_informative_proposition"
+            ],
+            1,
+        )
+
     def assert_feed_summary_is_cleaned(self, summary, expected):
         def parser(feed_url: str):
             if "xbox" not in feed_url:
@@ -343,7 +406,10 @@ class LiveSourceRadarTests(unittest.TestCase):
             return SimpleNamespace(entries=[
                 SimpleNamespace(
                     title="Experimenta el legado del Estadio Azteca",
-                    summary="Recorrido histórico en Google Earth.",
+                    summary=(
+                        "Google Earth incorpora un recorrido que documenta "
+                        "momentos históricos del estadio."
+                    ),
                     link=(
                         "https://blog.google/intl/es-419/"
                         "actualizaciones-de-producto/informacion/"
@@ -353,7 +419,10 @@ class LiveSourceRadarTests(unittest.TestCase):
                 ),
                 SimpleNamespace(
                     title="EXPERIMENTA EL LEGADO DEL ESTADIO AZTECA",
-                    summary="La misma historia desde un alias del feed.",
+                    summary=(
+                        "Google publicó la misma experiencia desde un alias "
+                        "del feed oficial."
+                    ),
                     link=(
                         "https://blog.google/intl/es-419/feed/"
                         "experimenta-el-legado-del-estadio-azteca/"
@@ -392,13 +461,19 @@ class LiveSourceRadarTests(unittest.TestCase):
                 entries=[
                     SimpleNamespace(
                         title="Win a special Halo-inspired collectible",
-                        summary="A limited promotion.",
+                        summary=(
+                            "Xbox announced a limited promotion for players "
+                            "in selected regions."
+                        ),
                         link="https://news.xbox.com/es-latam/promotion/",
                         published_parsed=_parsed_date("2026-07-28"),
                     ),
                     SimpleNamespace(
                         title="Xbox expands backward compatibility on PC",
-                        summary="A platform and ecosystem update.",
+                        summary=(
+                            "Xbox confirmed that additional games now work "
+                            "through backward compatibility on PC."
+                        ),
                         link="https://news.xbox.com/es-latam/platform-update/",
                         published_parsed=_parsed_date("2026-07-27"),
                     ),
@@ -451,7 +526,10 @@ class LiveSourceRadarTests(unittest.TestCase):
                 entries=[
                     SimpleNamespace(
                         title="Old story",
-                        summary="No longer current",
+                        summary=(
+                            "The source confirmed this product update during "
+                            "the previous month."
+                        ),
                         link=(
                             "https://news.xbox.com/es-latam/old/"
                             if "xbox" in feed_url

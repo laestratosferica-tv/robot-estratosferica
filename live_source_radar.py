@@ -15,12 +15,17 @@ from media_factory.radar import (
     load_source_registry,
     normalize_story,
 )
+from media_factory.strategy import (
+    classify_candidate,
+    load_content_strategy,
+)
 
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_REGISTRY = ROOT / "config" / "sources_v1.json"
 DEFAULT_OUTPUT = ROOT / "artifacts" / "live_candidates.json"
 DEFAULT_REPORT = ROOT / "artifacts" / "live-radar-report.json"
+DEFAULT_STRATEGY = ROOT / "config" / "content_strategy_v1.json"
 
 
 class LiveRadarError(RuntimeError):
@@ -146,6 +151,7 @@ def collect_live_candidates(
     max_candidates: int = 20,
     today: date | None = None,
     parser: Callable[[str], Any] | None = None,
+    strategy_path: str | Path = DEFAULT_STRATEGY,
 ) -> dict[str, Any]:
     if max_per_source < 1 or max_candidates < 1:
         raise LiveRadarError("Radar limits must be positive")
@@ -153,6 +159,7 @@ def collect_live_candidates(
     current_date = today or date.today()
     parser = parser or _default_parser
     registry = load_source_registry(registry_path)
+    strategy = load_content_strategy(strategy_path)
     candidates: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     source_results: list[dict[str, Any]] = []
@@ -214,6 +221,10 @@ def collect_live_candidates(
                     raw,
                     registry,
                     today=current_date,
+                )
+                raw["strategic_classification"] = classify_candidate(
+                    raw,
+                    strategy,
                 )
             except (LiveRadarError, RadarRejected) as exc:
                 reason = str(exc)

@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -14,17 +15,29 @@ from media_factory.queue import save_queue
 from media_factory.radar import RadarRejected, load_source_registry, normalize_story
 from media_factory.studio import build_content_package
 from media_factory.storyboard import build_storyboard
+from media_factory.strategy import classify_candidate, load_content_strategy
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "editorial_v1.json"
 SOURCES_PATH = ROOT / "config" / "sources_v1.json"
+STRATEGY_PATH = ROOT / "config" / "content_strategy_v1.json"
 
 
 class EditorialV1Tests(unittest.TestCase):
     def setUp(self) -> None:
         self.config = load_config(CONFIG_PATH)
         self.sources = load_source_registry(SOURCES_PATH)
+        self.strategy = load_content_strategy(STRATEGY_PATH)
+
+    def _classified(self, candidate: Candidate) -> Candidate:
+        return replace(
+            candidate,
+            strategic_classification=classify_candidate(
+                candidate,
+                self.strategy,
+            ),
+        )
 
     def test_configuration_is_safe(self) -> None:
         safe = self.config["safe_mode"]
@@ -57,10 +70,12 @@ class EditorialV1Tests(unittest.TestCase):
         self.assertIn("unverified_rumor", decision.rejection_reasons)
 
     def test_queue_cannot_publish(self) -> None:
-        candidate = Candidate(
-            title="Historia",
-            source_url="https://example.com/story",
-            territory="ai_innovation_future",
+        candidate = self._classified(
+            Candidate(
+                title="Historia",
+                source_url="https://example.com/story",
+                territory="ai_innovation_future",
+            )
         )
         decision = evaluate_candidate(candidate, self.config)
         opportunity = detect_opportunity(candidate, decision)
@@ -94,17 +109,30 @@ class EditorialV1Tests(unittest.TestCase):
         self.assertTrue(review["candidate_id"])
         self.assertTrue(review["content_fingerprint"])
         self.assertTrue(review["anti_duplicate_id"])
+        strategy = review["strategy"]
+        self.assertEqual(
+            strategy["content_product_id"],
+            "esto_cambia_el_juego",
+        )
+        self.assertTrue(strategy["audience_hypothesis"])
+        self.assertTrue(strategy["expected_community_action"])
+        self.assertTrue(strategy["primary_metric"])
+        self.assertTrue(strategy["commercial_path"])
+        self.assertFalse(strategy["publishing_enabled"])
 
     def test_review_ids_are_stable_for_the_same_radar_candidate(self) -> None:
-        candidate = Candidate(
-            candidate_id="radar-candidate-1",
-            title="Historia estable",
-            source_url="https://example.com/stable",
-            source_id="source",
-            territory="gaming_esports",
-            signals={
-                key: 1 for key in self.config["editorial_score"]["weights"]
-            },
+        candidate = self._classified(
+            Candidate(
+                candidate_id="radar-candidate-1",
+                title="Historia estable",
+                source_url="https://example.com/stable",
+                source_id="source",
+                territory="gaming_esports",
+                signals={
+                    key: 1
+                    for key in self.config["editorial_score"]["weights"]
+                },
+            )
         )
         decision = evaluate_candidate(candidate, self.config)
         opportunity = detect_opportunity(candidate, decision)

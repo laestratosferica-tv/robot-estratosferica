@@ -78,6 +78,22 @@ class LiveSourceRadarTests(unittest.TestCase):
         )
         self.assertTrue(all(item["candidate_id"] for item in candidates))
         self.assertTrue(all(item["is_verified"] for item in candidates))
+        self.assertTrue(
+            all(item["strategic_classification"] for item in candidates)
+        )
+        self.assertTrue(
+            all(
+                item["strategic_classification"]["content_product_id"]
+                for item in candidates
+            )
+        )
+        self.assertTrue(
+            all(
+                item["strategic_classification"]["publishing_enabled"]
+                is False
+                for item in candidates
+            )
+        )
         self.assertGreater(candidates[0]["discovery_priority"], 0)
 
     def test_substantive_platform_story_outranks_a_promotion(self):

@@ -54,6 +54,17 @@ class EpicPlayRadarTests(unittest.TestCase):
         self.assertFalse(candidates[0]["rights"]["download_allowed"])
         self.assertFalse(candidates[0]["workflow"]["automatic_publish_allowed"])
         self.assertTrue(candidates[0]["workflow"]["human_approval_required"])
+        strategy = candidates[0]["strategic_classification"]
+        self.assertEqual(
+            strategy["content_product_id"],
+            "jugada_estratosferica",
+        )
+        self.assertEqual(
+            strategy["rights_state"],
+            "official_embed_or_link",
+        )
+        self.assertFalse(strategy["publishing_enabled"])
+        self.assertFalse(strategy["broadcasting_enabled"])
         self.assertEqual(candidates[0]["creator_name"], "Creadora LATAM")
         self.assertEqual(
             candidates[0]["source_url"],

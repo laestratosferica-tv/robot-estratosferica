@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .models import PipelineItem
+from .strategy import validate_strategy_decision
 
 
 def _stable_id(*parts: str) -> str:
@@ -25,6 +26,17 @@ def _review_record(item: PipelineItem) -> dict:
         item.candidate.source_url,
         json.dumps(platform_copy, ensure_ascii=False, sort_keys=True),
     )
+    strategic_classification = dict(
+        item.candidate.strategic_classification
+    )
+    strategy_errors = validate_strategy_decision(
+        strategic_classification
+    )
+    if strategy_errors:
+        raise ValueError(
+            "Review item blocked by strategy gate: "
+            + ", ".join(strategy_errors)
+        )
     payload["review"] = {
         "review_id": f"review-{candidate_id[:16]}",
         "candidate_id": candidate_id,
@@ -40,6 +52,7 @@ def _review_record(item: PipelineItem) -> dict:
             "published_at": item.candidate.published_at,
         },
         "final_text_by_platform": platform_copy,
+        "strategy": strategic_classification,
     }
     return payload
 

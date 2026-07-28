@@ -7,11 +7,17 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
+from media_factory.strategy import (
+    classify_candidate,
+    load_content_strategy,
+)
+
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_OUTPUT = ROOT / "artifacts" / "epic_play_candidates.json"
 DEFAULT_REPORT = ROOT / "artifacts" / "epic-play-radar-report.json"
 DEFAULT_LIVE_CONFIG = ROOT / "config" / "epic_play_sources_v1.json"
+DEFAULT_STRATEGY = ROOT / "config" / "content_strategy_v1.json"
 
 SUPPORTED_PLATFORMS = {"twitch", "youtube"}
 COMPETITIVE_TERMS = {
@@ -118,6 +124,7 @@ def _normalize_candidate(
     *,
     platform: str,
     today: date,
+    strategy: Mapping[str, Any],
 ) -> dict[str, Any]:
     if platform not in SUPPORTED_PLATFORMS:
         raise EpicPlayRadarError("unsupported_platform")
@@ -165,7 +172,7 @@ def _normalize_candidate(
         + text_score
     )
 
-    return {
+    candidate = {
         "candidate_id": _candidate_id(platform, external_id, source_url),
         "platform": platform,
         "external_id": external_id,
@@ -200,6 +207,11 @@ def _normalize_candidate(
             "human_approval_required": True,
         },
     }
+    candidate["strategic_classification"] = classify_candidate(
+        candidate,
+        strategy,
+    )
+    return candidate
 
 
 def collect_epic_play_candidates(
@@ -209,11 +221,13 @@ def collect_epic_play_candidates(
     report_path: str | Path = DEFAULT_REPORT,
     today: date | None = None,
     max_candidates: int = 25,
+    strategy_path: str | Path = DEFAULT_STRATEGY,
 ) -> dict[str, Any]:
     if max_candidates < 1:
         raise EpicPlayRadarError("max_candidates_must_be_positive")
 
     current_date = today or date.today()
+    strategy = load_content_strategy(strategy_path)
     candidates: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     rejection_counts: dict[str, int] = {}
@@ -229,6 +243,7 @@ def collect_epic_play_candidates(
                     item,
                     platform=platform,
                     today=current_date,
+                    strategy=strategy,
                 )
                 key = (platform, candidate["external_id"])
                 if key in seen:

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from media_factory.cli import run_factory
+from media_factory.strategy import validate_strategy_decision
 from operations_safety import build_safety_report, load_json
 
 
@@ -89,6 +90,10 @@ def _validate_review_queue(path: Path) -> dict[str, Any]:
             errors.append("review item must remain pending human approval")
         if review.get("publish_allowed") is not False:
             errors.append("review item cannot allow publishing")
+        for strategy_error in validate_strategy_decision(
+            review.get("strategy", {})
+        ):
+            errors.append(f"review strategy: {strategy_error}")
     return {
         "safe": not errors,
         "item_count": len(queue.get("items", [])),

@@ -73,6 +73,22 @@ class Phase1CoordinatorTests(unittest.TestCase):
                     for item in queue["items"]
                 )
             )
+            self.assertEqual(
+                health["factory"]["strategy_classified_count"],
+                health["factory"]["candidate_count"],
+            )
+            self.assertTrue(
+                all(
+                    item["review"]["strategy"]["content_product_id"]
+                    for item in queue["items"]
+                )
+            )
+            self.assertTrue(
+                all(
+                    item["review"]["strategy"]["requires_human_review"]
+                    for item in queue["items"]
+                )
+            )
             self.assertTrue(health["source_registry_enforced"])
             self.assertEqual(health["cost"]["billable_operations"], 0)
             self.assertEqual(health["cost"]["measured_cost_usd"], 0.0)

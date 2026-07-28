@@ -19,9 +19,14 @@ class Candidate:
     has_media_rights: bool = True
     claims_supported: bool = True
     signals: dict[str, float] = field(default_factory=dict)
+    strategic_classification: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Candidate":
+        classification = data.get(
+            "strategic_classification",
+            data.get("strategy", {}),
+        )
         return cls(
             title=str(data.get("title", "")).strip(),
             source_url=str(data.get("source_url", "")).strip(),
@@ -36,6 +41,7 @@ class Candidate:
             has_media_rights=bool(data.get("has_media_rights", True)),
             claims_supported=bool(data.get("claims_supported", True)),
             signals=dict(data.get("signals", {})),
+            strategic_classification=dict(classification or {}),
         )
 
 
@@ -150,6 +156,9 @@ class PipelineItem:
                 "published_at": self.candidate.published_at,
                 "territory": self.candidate.territory,
                 "region": self.candidate.region,
+                "strategic_classification": (
+                    self.candidate.strategic_classification
+                ),
             },
             "decision": self.decision.to_dict(),
             "measurement_plan": self.measurement_plan.to_dict(),

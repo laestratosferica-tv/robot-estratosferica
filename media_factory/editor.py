@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .editorial_quality import substantive_summary_issue
 from .models import Candidate, EditorialDecision
 
 
@@ -21,6 +22,12 @@ def _hard_rejections(
         reasons.append("unsupported_claim")
     if candidate.territory not in config["territories"]:
         reasons.append("outside_editorial_territory")
+    summary_issue = substantive_summary_issue(
+        candidate.title,
+        candidate.summary,
+    )
+    if summary_issue:
+        reasons.append(summary_issue)
     configured = set(config.get("hard_reject", []))
     return [reason for reason in reasons if reason in configured]
 

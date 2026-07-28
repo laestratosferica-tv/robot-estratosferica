@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
+from .editorial_quality import text_is_equivalent
 from .models import ContentPackage, Storyboard
 from .content_punch import validate_content_punch
 
@@ -30,6 +31,13 @@ def validate_content_package(package: ContentPackage) -> list[str]:
             errors.append(f"invalid_copy_length:{platform}")
     if not package.sources:
         errors.append("missing_sources")
+    if text_is_equivalent(package.headline, package.factual_summary):
+        errors.append("factual_summary_repeats_headline")
+    if text_is_equivalent(
+        package.headline,
+        str(package.content_punch.get("concrete_value", "")),
+    ):
+        errors.append("concrete_value_repeats_headline")
     for source in package.sources:
         parsed = urlparse(source)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:

@@ -8,6 +8,7 @@ from .models import (
 )
 from .audience_intelligence import build_audience_experiment
 from .content_punch import build_content_punch
+from .editorial_quality import substantive_summary_issue
 
 
 FORMAT_BY_TERRITORY = {
@@ -83,13 +84,14 @@ def build_content_package(
     opportunity: CommercialOpportunity | None,
     talent: dict[str, str] | None = None,
 ) -> ContentPackage | None:
-    if not decision.accepted:
+    if not decision.accepted or substantive_summary_issue(
+        candidate.title,
+        candidate.summary,
+    ):
         return None
     format_id = FORMAT_BY_TERRITORY[candidate.territory]
     angle = ANGLE_BY_FORMAT[format_id]
-    factual_summary = candidate.summary or (
-        f"La fuente seleccionada presenta la historia: {candidate.title}."
-    )
+    factual_summary = candidate.summary
     audience_experiment = build_audience_experiment(candidate, opportunity)
     content_punch = build_content_punch(candidate, audience_experiment)
     headline = content_punch["hook"]

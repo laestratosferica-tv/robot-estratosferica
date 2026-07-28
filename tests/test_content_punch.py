@@ -50,7 +50,7 @@ class ContentPunchTests(unittest.TestCase):
         self.assertEqual(plan["tone"], "analytical")
         self.assertNotIn("ESTO CAMBIA LA CONVERSACIÓN", plan["hook"])
 
-    def test_evidence_falls_back_to_verified_title_without_invention(self):
+    def test_missing_summary_cannot_reuse_title_as_concrete_value(self):
         candidate = Candidate(
             title="LYON anuncia un evento competitivo en Ciudad de México",
             source_url="https://example.com/event",
@@ -58,8 +58,13 @@ class ContentPunchTests(unittest.TestCase):
         )
         experiment = build_audience_experiment(candidate)
         plan = build_content_punch(candidate, experiment)
-        self.assertEqual(plan["concrete_value"], candidate.title)
-        self.assertEqual(plan["evidence_origin"], "candidate.title")
+        self.assertEqual(plan["concrete_value"], "")
+        self.assertEqual(plan["evidence_origin"], "candidate.summary")
+        self.assertFalse(plan["gate_passed"])
+        self.assertIn(
+            "missing_punch_field:concrete_value",
+            validate_content_punch(plan),
+        )
 
     def test_gate_rejects_missing_action(self):
         candidate = Candidate(

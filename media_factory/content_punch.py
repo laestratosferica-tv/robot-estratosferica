@@ -78,7 +78,7 @@ def _contextual_hook(candidate: Candidate, high_impact: bool) -> str:
 
 def _verified_numeric_value(candidate: Candidate) -> str | None:
     """Lift numeric facts from verified copy without generating new claims."""
-    source = candidate.summary.strip() or candidate.title.strip()
+    source = candidate.summary.strip()
     patterns = (
         r"\b\d+(?:[.,]\d+)?\s+millones?\s+de\s+[\wáéíóúüñ-]+",
         r"\bmás\s+de\s+\d+(?:[.,]\d+)?\s+[\wáéíóúüñ-]+",
@@ -106,7 +106,7 @@ def build_content_punch(
         for option in audience_experiment["answer_options"]
         if str(option).strip()
     ]
-    evidence = candidate.summary.strip() or candidate.title.strip()
+    evidence = candidate.summary.strip()
     hook = _contextual_hook(candidate, high_impact)
     concrete_value = _verified_numeric_value(candidate) or evidence
     expected_action = (
@@ -119,9 +119,7 @@ def build_content_punch(
         "primary_audience": AUDIENCE_BY_TERRITORY[candidate.territory],
         "hook": hook,
         "concrete_value": concrete_value,
-        "evidence_origin": (
-            "candidate.summary" if candidate.summary.strip() else "candidate.title"
-        ),
+        "evidence_origin": "candidate.summary",
         "audience_promise": PROMISE_BY_TERRITORY[candidate.territory],
         "tension_question": question,
         "expected_action": expected_action,
@@ -155,10 +153,7 @@ def validate_content_punch(plan: dict[str, Any]) -> list[str]:
     ):
         if not str(plan.get(field, "")).strip():
             errors.append(f"missing_punch_field:{field}")
-    if plan.get("evidence_origin") not in {
-        "candidate.summary",
-        "candidate.title",
-    }:
+    if plan.get("evidence_origin") != "candidate.summary":
         errors.append("unsupported_evidence_origin")
     if plan.get("tone") not in {"analytical", "high_impact"}:
         errors.append("invalid_punch_tone")

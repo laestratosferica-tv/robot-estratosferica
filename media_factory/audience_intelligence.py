@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any
 
+from .editorial_quality import substantive_summary_issue
 from .models import Candidate, CommercialOpportunity
 
 
@@ -164,10 +166,6 @@ GAME_PASS_QUESTIONS = {
         "¿Usarías más Game Pass si viniera incluido con Meta Horizon+?",
         ["Sí", "No", "Depende del precio"],
     ),
-    "general": (
-        "¿Qué cambio haría más útil Game Pass para ti?",
-        ["Mejor catálogo", "Menor precio", "Más juego en nube", "Más dispositivos"],
-    ),
 }
 
 
@@ -195,14 +193,26 @@ def _contextual_question_index(candidate: Candidate) -> int:
 
 def _story_question(candidate: Candidate) -> tuple[str, list[str]]:
     text = f"{candidate.title} {candidate.summary}".casefold()
+    if substantive_summary_issue(candidate.title, candidate.summary):
+        return "", []
     if "game pass" in text:
-        key = (
-            "meta_horizon"
-            if "meta" in text and ("horizon+" in text or "horizon plus" in text)
-            else "general"
-        )
-        question, options = GAME_PASS_QUESTIONS[key]
-        return question, list(options)
+        if "meta" in text and (
+            "horizon+" in text or "horizon plus" in text
+        ):
+            question, options = GAME_PASS_QUESTIONS["meta_horizon"]
+            return question, list(options)
+        if ":" in candidate.title:
+            announced = candidate.title.split(":", 1)[1]
+            games = [
+                item.strip(" .")
+                for item in re.split(r",|\s+y\s+más\b", announced)
+                if item.strip(" .")
+            ]
+            if len(games) >= 2:
+                return (
+                    "¿Cuál de los juegos anunciados te interesa más?",
+                    games[:4],
+                )
 
     question_index = _contextual_question_index(candidate)
     return (

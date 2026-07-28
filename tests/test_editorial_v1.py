@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 
 from media_factory.commercial import detect_opportunity
+from media_factory.cli import run_factory
 from media_factory.config import ConfigurationError, load_config, validate_config
 from media_factory.editor import evaluate_candidate
 from media_factory.guardrails import validate_content_package, validate_storyboard
@@ -58,6 +59,10 @@ class EditorialV1Tests(unittest.TestCase):
     def test_good_candidate_reaches_review(self) -> None:
         candidate = Candidate(
             title="La final regional cambia la economía de los esports",
+            summary=(
+                "El torneo aumentó la bolsa de premios y sumó una nueva "
+                "clasificación para equipos latinoamericanos."
+            ),
             source_url="https://example.com/source",
             territory="gaming_esports",
             signals={key: 0.9 for key in self.config["editorial_score"]["weights"]},
@@ -83,6 +88,10 @@ class EditorialV1Tests(unittest.TestCase):
         candidate = self._classified(
             Candidate(
                 title="Historia",
+                summary=(
+                    "La fuente documenta una función que reduce el tiempo "
+                    "necesario para completar una tarea creativa."
+                ),
                 source_url="https://example.com/story",
                 territory="ai_innovation_future",
                 signals={
@@ -154,6 +163,10 @@ class EditorialV1Tests(unittest.TestCase):
             Candidate(
                 candidate_id="radar-candidate-1",
                 title="Historia estable",
+                summary=(
+                    "La fuente confirma un cambio de formato para la próxima "
+                    "temporada competitiva regional."
+                ),
                 source_url="https://example.com/stable",
                 source_id="source",
                 territory="gaming_esports",
@@ -209,6 +222,10 @@ class EditorialV1Tests(unittest.TestCase):
     def test_commercial_signal_remains_research_only(self) -> None:
         candidate = Candidate(
             title="Nueva activación digital regional",
+            summary=(
+                "La activación permite probar el producto dentro de una "
+                "experiencia interactiva en tres ciudades."
+            ),
             source_url="https://example.com/activation",
             territory="brands_activations",
             signals={key: 1 for key in self.config["editorial_score"]["weights"]},
@@ -218,6 +235,75 @@ class EditorialV1Tests(unittest.TestCase):
         self.assertIsNotNone(opportunity)
         self.assertEqual(opportunity.status, "research_only")
         self.assertIn("sin aprobación humana", opportunity.next_step)
+
+    def test_halo_game_pass_candidate_is_rejected_and_next_reaches_queue(self):
+        halo_title = (
+            "Próximamente en XBOX Game Pass: Halo: Campaign Evolved, "
+            "Beast of Reincarnation y más"
+        )
+        weights = self.config["editorial_score"]["weights"]
+        raw_candidates = [
+            {
+                "candidate_id": "halo-game-pass",
+                "title": halo_title,
+                "summary": halo_title,
+                "source_url": "https://news.xbox.com/es-latam/halo-game-pass/",
+                "source_id": "xbox_wire_es_latam",
+                "territory": "gaming_esports",
+                "signals": {key: 1 for key in weights},
+            },
+            {
+                "candidate_id": "next-substantive-story",
+                "title": "Xbox amplía sus controles de accesibilidad",
+                "summary": (
+                    "La actualización incorpora subtítulos configurables y "
+                    "nuevos controles de contraste para jugadores."
+                ),
+                "source_url": "https://news.xbox.com/es-latam/accessibility/",
+                "source_id": "xbox_wire_es_latam",
+                "territory": "gaming_esports",
+                "signals": {key: 0.9 for key in weights},
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            input_path = root / "candidates.json"
+            queue_path = root / "queue.json"
+            input_path.write_text(
+                json.dumps(raw_candidates, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            result = run_factory(
+                CONFIG_PATH,
+                input_path,
+                queue_path,
+                talent_config_path=ROOT / "config" / "talent_v1.json",
+            )
+            queue = json.loads(queue_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result["rejected_count"], 1)
+        self.assertEqual(result["selected_count"], 1)
+        self.assertEqual(len(queue["items"]), 1)
+        self.assertEqual(
+            queue["items"][0]["review"]["candidate_id"],
+            "next-substantive-story",
+        )
+        ranked = queue["opportunity_selection"]["ranked_candidates"]
+        halo = next(
+            item for item in ranked
+            if item["candidate_id"] == "halo-game-pass"
+        )
+        self.assertFalse(halo["eligible"])
+        self.assertFalse(halo["selected"])
+        self.assertIn(
+            "summary_equivalent_to_title",
+            halo["blocking_reasons"],
+        )
+        self.assertNotIn(
+            halo_title,
+            str(queue["items"]),
+        )
 
     def test_radar_accepts_recent_allowed_source(self) -> None:
         candidate = normalize_story(

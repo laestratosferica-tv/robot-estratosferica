@@ -74,6 +74,18 @@ def _plain_text(value: Any) -> str:
     return " ".join(html.unescape(without_tags).split())
 
 
+def _clean_feed_summary(value: Any) -> str:
+    summary = _plain_text(value)
+    boilerplate_patterns = (
+        r"\s+La entrada .+? se public[oó] primero en .+?\.?$",
+        r"\s+The post .+? appeared first on .+?\.?$",
+        r"\s+(?:Leer m[aá]s|Read|Continue reading)\.?$",
+    )
+    for pattern in boilerplate_patterns:
+        summary = re.sub(pattern, "", summary, flags=re.IGNORECASE)
+    return summary.strip()
+
+
 def _published_date(entry: Any) -> str:
     parsed = _entry_value(entry, "published_parsed") or _entry_value(
         entry,
@@ -178,7 +190,7 @@ def collect_live_candidates(
                 if not source_url or source_url in seen_urls:
                     raise LiveRadarError("missing_or_duplicate_source_url")
                 title = _plain_text(_entry_value(entry, "title"))
-                summary = _plain_text(
+                summary = _clean_feed_summary(
                     _entry_value(
                         entry,
                         "summary",

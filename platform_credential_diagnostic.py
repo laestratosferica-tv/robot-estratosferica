@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -78,10 +79,58 @@ def _diagnose_youtube(
     return _request(request, opener=opener)
 
 
+def _redact(value: Any, secrets: list[str]) -> Any:
+    if not isinstance(value, str):
+        return value
+    safe = value
+    for secret in sorted((item for item in secrets if item), key=len, reverse=True):
+        safe = safe.replace(secret, "***")
+    safe = re.sub(
+        r"(?i)(access[_ -]?token|client[_ -]?secret)([\"'=:\s]+)[^\s,\"'}]+",
+        r"\1\2***",
+        safe,
+    )
+    return safe[:500]
+
+
+def _safe_error_details(
+    error: Exception,
+    *,
+    secrets: list[str],
+) -> dict[str, Any]:
+    if isinstance(error, urllib.error.HTTPError):
+        details: dict[str, Any] = {"http_status": error.code}
+        try:
+            payload = json.loads(error.read(65536).decode("utf-8", errors="replace"))
+        except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+            payload = {}
+
+        provider_error = payload.get("error", payload) if isinstance(payload, dict) else {}
+        if isinstance(provider_error, str):
+            details["provider_error"] = _redact(provider_error, secrets)
+        elif isinstance(provider_error, dict):
+            safe_fields = {
+                "code": "provider_error_code",
+                "error_subcode": "provider_error_subcode",
+                "type": "provider_error_type",
+                "message": "provider_message",
+                "error": "provider_error",
+                "error_description": "provider_message",
+            }
+            for source, target in safe_fields.items():
+                value = provider_error.get(source)
+                if value is not None:
+                    details[target] = _redact(value, secrets)
+        return details
+    if isinstance(error, urllib.error.URLError):
+        return {"network_reason": _redact(str(error.reason), secrets)}
+    return {"exception_type": type(error).__name__}
+
+
 def _safe_status(error: Exception) -> str:
     if isinstance(error, urllib.error.HTTPError):
         if error.code in {400, 401, 403}:
-            return "invalid_or_expired"
+            return "provider_rejected"
         if error.code == 429:
             return "rate_limited"
         return "service_error"
@@ -96,11 +145,17 @@ def build_credential_diagnostic(
     opener: Any = urllib.request.urlopen,
 ) -> dict[str, Any]:
     environment = os.environ if environment is None else environment
+    secrets = [
+        environment.get(name, "").strip()
+        for names in PLATFORM_REQUIREMENTS.values()
+        for name in names
+    ]
     platforms: dict[str, Any] = {}
 
     for platform, names in PLATFORM_REQUIREMENTS.items():
         values = {name: environment.get(name, "").strip() for name in names}
         configured_count = sum(bool(value) for value in values.values())
+        error_details: dict[str, Any] = {}
         if configured_count == 0:
             status = "missing"
             checked = False
@@ -140,6 +195,7 @@ def build_credential_diagnostic(
                     )
             except Exception as error:
                 status = _safe_status(error)
+                error_details = _safe_error_details(error, secrets=secrets)
 
         platforms[platform] = {
             "status": status,
@@ -147,6 +203,7 @@ def build_credential_diagnostic(
             "required_count": len(names),
             "live_readonly_check_performed": checked,
             "secret_values_exposed": False,
+            **error_details,
         }
 
     return {

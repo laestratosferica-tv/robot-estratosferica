@@ -472,6 +472,35 @@ class LiveSourceRadarTests(unittest.TestCase):
             "sport_technology_entertainment",
         )
 
+    def test_game_campaign_is_gaming_not_a_brand_activation(self):
+        def parser(feed_url: str):
+            if "xbox" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[SimpleNamespace(
+                title="Halo: Campaign Evolved",
+                summary=(
+                    "El remake incorpora una campaña cooperativa para cuatro "
+                    "jugadores y añade modificadores de jugabilidad."
+                ),
+                link="https://news.xbox.com/es-latam/halo-campaign/",
+                published_parsed=_parsed_date("2026-07-28"),
+            )])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "candidates.json"
+            collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=output,
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+            )
+            candidates = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["territory"], "gaming_esports")
+
     def test_truncated_feed_uses_bounded_article_evidence(self):
         fetch_calls = []
 

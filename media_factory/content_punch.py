@@ -20,22 +20,15 @@ AUDIENCE_BY_TERRITORY = {
 }
 
 PROMISE_BY_TERRITORY = {
-    "gaming_esports": (
-        "Explicar qué cambia para quien juega, compite o sigue la escena."
-    ),
-    "sport_technology_entertainment": (
-        "Traducir la innovación en una consecuencia visible para el público."
-    ),
-    "ai_innovation_future": (
-        "Convertir la novedad en una decisión útil para trabajo y negocio."
-    ),
-    "brands_activations": (
-        "Separar una experiencia útil de una acción que solo hace ruido."
-    ),
+    territory: (
+        "Lectura editorial: separar el hecho confirmado de sus posibles "
+        "consecuencias."
+    )
+    for territory in AUDIENCE_BY_TERRITORY
 }
 
 VISUAL_ENERGY_BY_TERRITORY = {
-    "gaming_esports": "cinética, competitiva y de alto contraste",
+    "gaming_esports": "dinámica, editorial y de alto contraste",
     "sport_technology_entertainment": "acción, dato protagonista y tensión",
     "ai_innovation_future": "tecnológica, humana y basada en evidencia",
     "brands_activations": "editorial, aspiracional y orientada a resultados",
@@ -64,15 +57,8 @@ def _story_text(candidate: Candidate) -> str:
 
 
 def _contextual_hook(candidate: Candidate, high_impact: bool) -> str:
-    text = _story_text(candidate)
-    if (
-        candidate.territory == "ai_innovation_future"
-        and "ia" in text
-        and any(term in text for term in AI_WORK_TERMS)
-    ):
-        return "¿LA IA TE POTENCIA O TE REEMPLAZA?"
-    if high_impact:
-        return f"ESTO CAMBIA LA CONVERSACIÓN: {candidate.title}"
+    # Hooks stay extractive. Impact framing belongs in explicitly labelled
+    # editorial transitions, not in factual copy.
     return candidate.title
 
 

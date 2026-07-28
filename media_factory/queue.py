@@ -6,8 +6,14 @@ from pathlib import Path
 from typing import Iterable
 
 from .editorial_quality import substantive_summary_issue
-from .guardrails import validate_content_package
+from .guardrails import (
+    validate_content_package,
+    validate_evidence_alignment,
+    validate_storyboard,
+)
 from .models import PipelineItem
+from .storyboard import build_storyboard
+from .studio import build_content_package
 from .strategy import validate_strategy_decision
 
 
@@ -34,6 +40,43 @@ def _review_record(item: PipelineItem) -> dict:
         raise ValueError(
             "Review item blocked by content quality gate: "
             + ", ".join(package_errors)
+        )
+    storyboard = item.storyboard
+    if storyboard is None:
+        raise ValueError("Review item blocked: storyboard is missing")
+    storyboard_errors = validate_storyboard(storyboard)
+    if storyboard_errors:
+        raise ValueError(
+            "Review item blocked by storyboard quality gate: "
+            + ", ".join(storyboard_errors)
+        )
+    alignment_errors = validate_evidence_alignment(
+        item.candidate,
+        package,
+        storyboard,
+    )
+    if alignment_errors:
+        raise ValueError(
+            "Review item blocked by final evidence gate: "
+            + ", ".join(alignment_errors)
+        )
+    expected_package = build_content_package(
+        item.candidate,
+        item.decision,
+        item.commercial_opportunity,
+        package.talent,
+    )
+    expected_storyboard = build_storyboard(
+        item.candidate,
+        expected_package,
+    )
+    if expected_package != package:
+        raise ValueError(
+            "Review item blocked: content differs from grounded builder"
+        )
+    if expected_storyboard != storyboard:
+        raise ValueError(
+            "Review item blocked: storyboard differs from grounded builder"
         )
     platform_copy = dict(package.platform_copy)
     candidate_id = item.candidate.candidate_id or _stable_id(

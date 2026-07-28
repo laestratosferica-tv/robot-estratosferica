@@ -1,0 +1,27 @@
+[
+  {
+    "title": "Claves para comprender la economía de la IA",
+    "summary": "\"Atlas de IA y Economía\" con el logotipo de Google, todo sobre un fondo de cuadrícula verde.",
+    "expected_rejection": "summary_visual_metadata_only"
+  },
+  {
+    "title": "Presentamos Gemini 3.6 Flash, 3.5 Flash-Lite y 3.5 Flash Cyber.",
+    "summary": "una imagen principal que dice 3.6 Flash, 3.5 Flash-Lite y 3.5 Flash Cyber",
+    "expected_rejection": "summary_visual_metadata_only"
+  },
+  {
+    "title": "Presentamos la selfie para iniciar sesión: una nueva forma sencilla de acceder a tu Cuenta de Google",
+    "summary": "Persona con el logo de Google",
+    "expected_rejection": "summary_visual_metadata_only"
+  },
+  {
+    "title": "Experimenta el legado del Estadio Azteca en Google Earth",
+    "summary": "xxx",
+    "expected_rejection": "summary_placeholder"
+  },
+  {
+    "title": "Reconstruyendo el gol perdido de Pelé",
+    "summary": "Pele documentary",
+    "expected_rejection": "summary_lacks_distinct_informative_proposition"
+  }
+]

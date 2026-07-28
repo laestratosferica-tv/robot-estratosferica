@@ -8,7 +8,11 @@ from pathlib import Path
 from .commercial import detect_opportunity
 from .config import load_config
 from .editor import evaluate_candidate
-from .guardrails import validate_content_package, validate_storyboard
+from .guardrails import (
+    validate_content_package,
+    validate_evidence_alignment,
+    validate_storyboard,
+)
 from .metrics import build_measurement_plan
 from .models import Candidate, PipelineItem
 from .queue import save_queue
@@ -116,6 +120,17 @@ def run_factory(
             if errors:
                 raise ValueError(
                     f"Storyboard bloqueado por controles: {', '.join(errors)}"
+                )
+        if content_package and storyboard:
+            errors = validate_evidence_alignment(
+                candidate,
+                content_package,
+                storyboard,
+            )
+            if errors:
+                raise ValueError(
+                    "Pieza bloqueada por incongruencia con la evidencia: "
+                    + ", ".join(errors)
                 )
         pipeline_items.append(
             PipelineItem(

@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from .editorial_quality import text_is_equivalent
-from .models import ContentPackage, Storyboard
+from .audience_intelligence import story_question
+from .editorial_quality import (
+    normalize_editorial_text,
+    substantive_summary_issue,
+    text_is_equivalent,
+    unsupported_context_domains,
+)
+from .models import Candidate, ContentPackage, Storyboard
 from .content_punch import validate_content_punch
 
 
@@ -92,3 +98,117 @@ def validate_storyboard(storyboard: Storyboard) -> list[str]:
     if "original" not in style_text or "sin logos" not in style_text:
         errors.append("missing_original_visual_policy")
     return errors
+
+
+SAFE_STORYBOARD_LABELS = {
+    "Hecho confirmado",
+    "Lectura editorial",
+    "Consecuencias por evaluar",
+    "Sin completar vacíos",
+}
+
+SAFE_EDITORIAL_TRANSITIONS = {
+    (
+        "Lectura editorial: esta pieza separa el hecho confirmado de sus "
+        "posibles consecuencias."
+    ),
+    (
+        "Lectura editorial: conviene distinguir el hecho confirmado de las "
+        "consecuencias que todavía deben evaluarse."
+    ),
+    (
+        "Lectura editorial: cualquier consecuencia debe comprobarse a partir "
+        "de la evidencia disponible."
+    ),
+}
+
+
+def _is_extract_supported(text: str, evidence: str) -> bool:
+    generated_tokens = set(normalize_editorial_text(text).split())
+    evidence_tokens = set(normalize_editorial_text(evidence).split())
+    return bool(generated_tokens) and generated_tokens <= evidence_tokens
+
+
+def validate_evidence_alignment(
+    candidate: Candidate,
+    package: ContentPackage,
+    storyboard: Storyboard,
+) -> list[str]:
+    """Final deterministic gate for factual grounding and story congruence."""
+    errors: list[str] = []
+    summary_issue = substantive_summary_issue(
+        candidate.title,
+        candidate.summary,
+    )
+    if summary_issue:
+        errors.append(summary_issue)
+    if package.factual_summary != candidate.summary:
+        errors.append("package_summary_not_candidate_evidence")
+    if package.headline != candidate.title:
+        errors.append("headline_not_extractively_grounded")
+
+    expected_question, expected_options = story_question(candidate)
+    experiment = package.audience_experiment
+    actual_question = str(experiment.get("learning_question", "")).strip()
+    actual_options = [
+        str(option).strip()
+        for option in experiment.get("answer_options", [])
+    ]
+    if actual_question != expected_question:
+        errors.append("question_incongruent_with_story_type")
+    if actual_options != expected_options:
+        errors.append("question_options_incongruent_with_story_type")
+    if package.content_punch.get("tension_question") != expected_question:
+        errors.append("content_question_not_grounded")
+
+    concrete_value = str(
+        package.content_punch.get("concrete_value", "")
+    ).strip()
+    if not _is_extract_supported(concrete_value, candidate.summary):
+        errors.append("concrete_value_not_extractively_grounded")
+
+    generated_copy = " ".join([
+        package.headline,
+        package.angle,
+        package.factual_summary,
+        package.short_video_script,
+        *package.platform_copy.values(),
+        *package.visual_brief,
+    ])
+    evidence = f"{candidate.title} {candidate.summary}"
+    for domain in unsupported_context_domains(evidence, generated_copy):
+        errors.append(f"unsupported_generated_context:{domain}")
+
+    allowed_voiceovers = {
+        candidate.title,
+        candidate.summary,
+        expected_question,
+        *SAFE_EDITORIAL_TRANSITIONS,
+    }
+    allowed_screen_text = {
+        candidate.title,
+        expected_question,
+        *SAFE_STORYBOARD_LABELS,
+    }
+    for scene in storyboard.scenes:
+        if scene.voiceover not in allowed_voiceovers:
+            errors.append(
+                f"unsupported_storyboard_voiceover:{scene.scene_id}"
+            )
+        if scene.on_screen_text not in allowed_screen_text:
+            errors.append(
+                f"unsupported_storyboard_text:{scene.scene_id}"
+            )
+
+    storyboard_text = " ".join(
+        value
+        for scene in storyboard.scenes
+        for value in (
+            scene.voiceover,
+            scene.on_screen_text,
+            scene.visual_direction,
+        )
+    )
+    for domain in unsupported_context_domains(evidence, storyboard_text):
+        errors.append(f"unsupported_storyboard_context:{domain}")
+    return sorted(set(errors))

@@ -4,6 +4,7 @@ import hashlib
 from dataclasses import replace
 from typing import Any, Iterable, Mapping, Sequence
 
+from .editorial_quality import substantive_summary_issue
 from .models import Candidate, EditorialDecision, OpportunitySelection
 from .strategy import validate_strategy_decision
 
@@ -81,6 +82,12 @@ def _blocking_reasons(
     decision: EditorialDecision,
 ) -> list[str]:
     reasons = list(decision.rejection_reasons)
+    evidence_issue = substantive_summary_issue(
+        candidate.title,
+        candidate.summary,
+    )
+    if evidence_issue:
+        reasons.append(evidence_issue)
     if not decision.accepted and not reasons:
         reasons.append("editorial_score_below_minimum")
     strategy = candidate.strategic_classification

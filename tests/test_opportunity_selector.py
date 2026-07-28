@@ -36,7 +36,10 @@ class OpportunitySelectorTests(unittest.TestCase):
         candidate = Candidate(
             candidate_id=candidate_id,
             title=title,
-            summary="Historia verificada con una consecuencia concreta.",
+            summary=(
+                "La fuente confirma un cambio de formato con una consecuencia "
+                "concreta para la comunidad."
+            ),
             source_url=f"https://example.com/{candidate_id}",
             source_id="source",
             territory="gaming_esports",

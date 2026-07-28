@@ -18,28 +18,9 @@ def build_storyboard(
 ) -> Storyboard | None:
     if package is None:
         return None
-    if package.format_id == "brand_play":
-        mechanism_voiceover = (
-            "La historia conecta una marca, una plataforma y una nueva "
-            "forma de consumo."
-        )
-        mechanism_text = "La experiencia es el canal"
-        why_voiceover = (
-            "El valor no está solo en el anuncio: está en cómo conecta "
-            "producto, plataforma y hábito."
-        )
-        why_text = "Más experiencia, menos anuncio"
-    else:
-        mechanism_voiceover = (
-            "La señal conecta cultura digital, comportamiento de audiencia "
-            "y un cambio de mercado."
-        )
-        mechanism_text = "La señal detrás de la noticia"
-        why_voiceover = (
-            "Importa por lo que revela sobre la forma de jugar, competir "
-            "y construir comunidad."
-        )
-        why_text = "Audiencia + cultura + cambio"
+    question = str(
+        package.audience_experiment.get("learning_question", "")
+    ).strip()
     scenes = [
         StoryboardScene(
             scene_id="hook",
@@ -47,10 +28,10 @@ def build_storyboard(
             end_second=3,
             purpose="Detener el scroll con la señal principal.",
             voiceover=candidate.title,
-            on_screen_text="No es solo una alianza",
+            on_screen_text=candidate.title,
             visual_direction=(
-                "Animación tipográfica original con dos sistemas que se conectan; "
-                "sin logos ni material de terceros."
+                "Animación tipográfica original basada únicamente en el "
+                "titular; sin logos ni material de terceros."
             ),
             audio_direction="Golpe breve y pulso electrónico original.",
         ),
@@ -60,10 +41,10 @@ def build_storyboard(
             end_second=8,
             purpose="Presentar únicamente el hecho confirmado.",
             voiceover=package.factual_summary,
-            on_screen_text="Producto + plataforma",
+            on_screen_text="Hecho confirmado",
             visual_direction=(
-                "Diagrama original de producto, plataforma y usuario con "
-                "etiquetas genéricas."
+                "Composición tipográfica original del resumen factual, sin "
+                "representar elementos no mencionados por la fuente."
             ),
             audio_direction="Base rítmica baja; voz completamente legible.",
         ),
@@ -71,11 +52,15 @@ def build_storyboard(
             scene_id="mechanism",
             start_second=8,
             end_second=13,
-            purpose="Mostrar el mecanismo sin repetir el comunicado.",
-            voiceover=mechanism_voiceover,
-            on_screen_text=mechanism_text,
+            purpose="Separar hechos de interpretación.",
+            voiceover=(
+                "Lectura editorial: esta pieza separa el hecho confirmado "
+                "de sus posibles consecuencias."
+            ),
+            on_screen_text="Lectura editorial",
             visual_direction=(
-                "Tres bloques originales se unen en una ruta visual simple."
+                "Transición original entre dos bloques rotulados Hecho e "
+                "Interpretación."
             ),
             audio_direction="Transición ascendente sutil.",
         ),
@@ -85,10 +70,10 @@ def build_storyboard(
             end_second=20,
             purpose="Añadir la lectura propia de La Estratosférica.",
             voiceover=package.angle,
-            on_screen_text="¿Qué se adapta a LATAM?",
+            on_screen_text="Consecuencias por evaluar",
             visual_direction=(
-                "Mapa abstracto original de Latinoamérica con nodos de "
-                "audiencia, acceso y comunidad."
+                "Gráfico abstracto original con signos de pregunta; no añadir "
+                "lugares, actores ni cifras ausentes de la evidencia."
             ),
             audio_direction="Mantener ritmo; pausa antes de la pregunta.",
         ),
@@ -96,11 +81,14 @@ def build_storyboard(
             scene_id="why_it_matters",
             start_second=20,
             end_second=26,
-            purpose="Explicar el valor estratégico.",
-            voiceover=why_voiceover,
-            on_screen_text=why_text,
+            purpose="Recordar el límite de la evidencia.",
+            voiceover=(
+                "Lectura editorial: cualquier consecuencia debe comprobarse "
+                "a partir de la evidencia disponible."
+            ),
+            on_screen_text="Sin completar vacíos",
             visual_direction=(
-                "Sistema original de tres círculos: producto, plataforma y hábito."
+                "Subrayar visualmente la fuente y el resumen confirmado."
             ),
             audio_direction="Acento sonoro al completar la conexión.",
         ),
@@ -109,15 +97,11 @@ def build_storyboard(
             start_second=26,
             end_second=30,
             purpose="Cerrar con una pregunta que genere conversación útil.",
-            voiceover=(
-                "¿Qué tendría que cambiar para que esta idea funcione de "
-                "verdad en Latinoamérica?"
-            ),
-            on_screen_text="¿Funcionaría aquí?",
+            voiceover=question,
+            on_screen_text=question,
             visual_direction=(
-                "Cierre tipográfico original, identificación del formato "
-                f"{package.format_id.replace('_', ' ').title()} y referencia "
-                "textual de la fuente."
+                "Cierre tipográfico original, identificación editorial de "
+                "La Estratosférica y referencia textual de la fuente."
             ),
             audio_direction="Resolver la música y dejar medio segundo de silencio.",
         ),

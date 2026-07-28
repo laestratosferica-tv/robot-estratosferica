@@ -28,6 +28,8 @@
     "editorial.yml": "legacy_quarantine",
     "factory-v1-ci.yml": "ci",
     "factory-v1-dry-run.yml": "coordinator",
+    "epic-play-radar-readonly.yml": "controlled_readonly",
+    "live-source-radar.yml": "controlled_readonly",
     "hype-packer.yml": "legacy_quarantine",
     "media_engine.yml": "legacy_quarantine",
     "platform-credential-diagnostic.yml": "controlled_diagnostic",

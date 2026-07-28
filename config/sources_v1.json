@@ -15,7 +15,10 @@
       "name": "Xbox Wire en Español",
       "tier": "primary",
       "enabled": true,
+      "feed_url": "https://news.xbox.com/es-latam/feed/",
       "allowed_domains": ["news.xbox.com"],
+      "default_territory": "gaming_esports",
+      "language": "es-419",
       "territories": [
         "gaming_esports",
         "ai_innovation_future",
@@ -77,6 +80,147 @@
         "brands_activations"
       ],
       "requires_corroboration": true
+    },
+    {
+      "id": "google_blog",
+      "name": "Google Blog para Latinoamérica",
+      "tier": "primary",
+      "enabled": true,
+      "feed_url": "https://blog.google/intl/es-419/rss/",
+      "allowed_domains": ["blog.google"],
+      "default_territory": "ai_innovation_future",
+      "language": "es-419",
+      "territories": [
+        "ai_innovation_future",
+        "sport_technology_entertainment",
+        "brands_activations"
+      ],
+      "requires_corroboration": false
+    },
+    {
+      "id": "wired_es_cultura",
+      "name": "WIRED en Español — Cultura",
+      "tier": "specialist",
+      "enabled": true,
+      "feed_candidate_url": "https://es.wired.com/feed/cultura/rss",
+      "automation_status": "candidate_requires_live_validation",
+      "allowed_domains": ["es.wired.com"],
+      "language": "es",
+      "territories": [
+        "gaming_esports",
+        "sport_technology_entertainment",
+        "ai_innovation_future",
+        "brands_activations"
+      ],
+      "requires_corroboration": true,
+      "commercial_lanes": [
+        "entertainment_sponsorships",
+        "streaming_affiliates",
+        "brand_collaborations"
+      ]
+    },
+    {
+      "id": "wired_es_gadgets",
+      "name": "WIRED en Español — Gadgets",
+      "tier": "specialist",
+      "enabled": true,
+      "feed_candidate_url": "https://es.wired.com/feed/gadgets/rss",
+      "automation_status": "candidate_requires_live_validation",
+      "allowed_domains": ["es.wired.com"],
+      "language": "es",
+      "territories": [
+        "gaming_esports",
+        "sport_technology_entertainment",
+        "ai_innovation_future",
+        "brands_activations"
+      ],
+      "requires_corroboration": true,
+      "commercial_lanes": [
+        "hardware_affiliates",
+        "setup_guides",
+        "consumer_technology_sponsors"
+      ]
+    },
+    {
+      "id": "xataka_es",
+      "name": "Xataka",
+      "tier": "specialist",
+      "enabled": true,
+      "feed_candidate_url": "https://www.xataka.com/index.xml",
+      "automation_status": "candidate_requires_live_validation",
+      "allowed_domains": ["xataka.com"],
+      "language": "es",
+      "territories": [
+        "gaming_esports",
+        "sport_technology_entertainment",
+        "ai_innovation_future",
+        "brands_activations"
+      ],
+      "requires_corroboration": true,
+      "commercial_lanes": [
+        "hardware_affiliates",
+        "buying_guides",
+        "consumer_technology_sponsors"
+      ]
+    },
+    {
+      "id": "gamescom_latam",
+      "name": "gamescom latam",
+      "tier": "primary",
+      "enabled": true,
+      "automation_status": "manual_commercial_radar",
+      "allowed_domains": ["latam.gamescom.global"],
+      "language": "en-pt",
+      "territories": [
+        "gaming_esports",
+        "sport_technology_entertainment",
+        "brands_activations"
+      ],
+      "requires_corroboration": false,
+      "commercial_lanes": [
+        "event_coverage",
+        "press_access",
+        "brand_sponsorships"
+      ]
+    },
+    {
+      "id": "fine_dining_lovers_latam",
+      "name": "Fine Dining Lovers LATAM",
+      "tier": "specialist",
+      "enabled": true,
+      "automation_status": "manual_crossover_radar",
+      "allowed_domains": ["finedininglovers.lat"],
+      "language": "es-419",
+      "territories": [
+        "sport_technology_entertainment",
+        "brands_activations"
+      ],
+      "requires_corroboration": true,
+      "commercial_lanes": [
+        "food_brand_sponsorships",
+        "event_hospitality",
+        "gaming_food_collaborations"
+      ]
+    },
+    {
+      "id": "gq_mexico",
+      "name": "GQ México y Latinoamérica",
+      "tier": "specialist",
+      "enabled": true,
+      "automation_status": "manual_crossover_radar",
+      "allowed_domains": ["gq.com.mx"],
+      "language": "es-419",
+      "territories": [
+        "gaming_esports",
+        "sport_technology_entertainment",
+        "brands_activations"
+      ],
+      "requires_corroboration": true,
+      "commercial_lanes": [
+        "premium_lifestyle_sponsors",
+        "fashion_collaborations",
+        "collectibles_and_experiences"
+      ]
     }
   ]
 }

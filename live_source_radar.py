@@ -5,6 +5,7 @@ import hashlib
 import html
 import json
 import re
+import unicodedata
 from urllib.error import HTTPError, URLError
 from datetime import date
 from pathlib import Path
@@ -78,16 +79,16 @@ def _plain_text(value: Any) -> str:
     return " ".join(html.unescape(without_tags).split())
 
 
-def _clean_feed_summary(value: Any) -> str:
+def _clean_feed_summary(value: Any, *, title: str = "") -> str:
     summary = _plain_text(value)
     boilerplate_patterns = (
-        r"\s+La entrada .+? se public[oó] primero en .+?\.?$",
-        r"\s+The post .+? appeared first on .+?\.?$",
-        r"\s+(?:Leer m[aá]s|Read|Continue reading)\.?$",
+        r"(?:^|\s+)La entrada .+? se public[oó] primero en .+?\s*\.?$",
+        r"(?:^|\s+)The post .+? appeared first on .+?\s*\.?$",
+        r"(?:^|\s+)(?:Leer m[aá]s|Read|Continue reading)\s*\.?$",
     )
     for pattern in boilerplate_patterns:
         summary = re.sub(pattern, "", summary, flags=re.IGNORECASE)
-    return summary.strip()
+    return summary.strip() or _plain_text(title)
 
 
 def _published_date(entry: Any) -> str:
@@ -135,6 +136,21 @@ def _signals_for(
 def _candidate_id(source_id: str, source_url: str) -> str:
     raw = f"{source_id}\0{source_url}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+def _story_key(
+    source_id: str,
+    title: str,
+    published_at: str,
+) -> tuple[str, str, str]:
+    normalized = unicodedata.normalize("NFKD", title.casefold())
+    without_marks = "".join(
+        character
+        for character in normalized
+        if not unicodedata.combining(character)
+    )
+    normalized_title = re.sub(r"[\W_]+", " ", without_marks).strip()
+    return source_id, normalized_title, published_at
 
 
 def _source_feeds(registry: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -212,6 +228,7 @@ def collect_live_candidates(
     strategy = load_content_strategy(strategy_path)
     candidates: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
+    seen_story_keys: set[tuple[str, str, str]] = set()
     source_results: list[dict[str, Any]] = []
     rejection_counts: dict[str, int] = {}
 
@@ -261,12 +278,23 @@ def collect_live_candidates(
                 if not source_url or source_url in seen_urls:
                     raise LiveRadarError("missing_or_duplicate_source_url")
                 title = _plain_text(_entry_value(entry, "title"))
+                if not title:
+                    raise LiveRadarError("entry_missing_title")
+                published_at = _published_date(entry)
+                story_key = _story_key(
+                    str(source["id"]),
+                    title,
+                    published_at,
+                )
+                if story_key in seen_story_keys:
+                    raise LiveRadarError("duplicate_story")
                 summary = _clean_feed_summary(
                     _entry_value(
                         entry,
                         "summary",
                         _entry_value(entry, "description", ""),
-                    )
+                    ),
+                    title=title,
                 )
                 discovery_priority, discovery_reasons = _discovery_priority(
                     title,
@@ -281,7 +309,7 @@ def collect_live_candidates(
                     "summary": summary,
                     "source_url": source_url,
                     "source_id": str(source["id"]),
-                    "published_at": _published_date(entry),
+                    "published_at": published_at,
                     "territory": str(source["default_territory"]),
                     "region": (
                         "latam"
@@ -298,8 +326,6 @@ def collect_live_candidates(
                     "discovery_priority": discovery_priority,
                     "discovery_reasons": discovery_reasons,
                 }
-                if not raw["title"]:
-                    raise LiveRadarError("entry_missing_title")
                 candidate = normalize_story(
                     raw,
                     registry,
@@ -316,6 +342,7 @@ def collect_live_candidates(
                 continue
 
             seen_urls.add(candidate.source_url)
+            seen_story_keys.add(story_key)
             candidates.append(raw)
             accepted_for_source += 1
 

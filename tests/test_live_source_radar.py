@@ -657,6 +657,50 @@ class LiveSourceRadarTests(unittest.TestCase):
             "rss_and_approved_article_read_only",
         )
 
+    def test_real_halo_intro_cannot_satisfy_feature_headline(self):
+        def parser(feed_url: str):
+            if "xbox" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[SimpleNamespace(
+                title=(
+                    "Halo: Campaign Evolved – Las nuevas funciones "
+                    "del remake de un clásico"
+                ),
+                summary="Imagen promocional de Halo.",
+                link=(
+                    "https://news.xbox.com/es-latam/2026/07/23/"
+                    "halo-campaign-evolved/"
+                ),
+                published_parsed=_parsed_date("2026-07-28"),
+            )])
+
+        def article_fetcher(*_args):
+            return (
+                "<meta name='description' content='Desde los pasillos del "
+                "Covenant hasta las llanuras del anillo, estos escenarios "
+                "marcaron el inicio del viaje de muchas personas y esta "
+                "edición ofrece mucho más que nostalgia.'>"
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=root / "candidates.json",
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+                article_fetcher=article_fetcher,
+            )
+
+        self.assertEqual(report["candidate_count"], 0)
+        self.assertEqual(
+            report["rejection_counts"][
+                "summary_does_not_fulfill_title_promise"
+            ],
+            1,
+        )
+
     def assert_feed_summary_is_cleaned(self, summary, expected):
         def parser(feed_url: str):
             if "xbox" not in feed_url:

@@ -63,6 +63,16 @@ class Phase1CoordinatorTests(unittest.TestCase):
             self.assertFalse(health["publishing_attempted"])
             self.assertFalse(health["external_writes_attempted"])
             self.assertFalse(health["paid_generation_attempted"])
+            queue = json.loads(queue_path.read_text(encoding="utf-8"))
+            self.assertEqual(queue["schema_version"], "review_queue_v1")
+            self.assertTrue(queue["human_approval_required"])
+            self.assertTrue(
+                all(
+                    item["review"]["status"]
+                    == "pending_human_approval"
+                    for item in queue["items"]
+                )
+            )
             self.assertTrue(health["source_registry_enforced"])
             self.assertEqual(health["cost"]["billable_operations"], 0)
             self.assertEqual(health["cost"]["measured_cost_usd"], 0.0)

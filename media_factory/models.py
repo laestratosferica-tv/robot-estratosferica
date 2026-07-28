@@ -9,6 +9,7 @@ class Candidate:
     title: str
     source_url: str
     territory: str
+    candidate_id: str = ""
     summary: str = ""
     source_id: str = ""
     published_at: str = ""
@@ -25,6 +26,7 @@ class Candidate:
             title=str(data.get("title", "")).strip(),
             source_url=str(data.get("source_url", "")).strip(),
             territory=str(data.get("territory", "")).strip(),
+            candidate_id=str(data.get("candidate_id", "")).strip(),
             summary=str(data.get("summary", "")).strip(),
             source_id=str(data.get("source_id", "")).strip(),
             published_at=str(data.get("published_at", "")).strip(),
@@ -141,6 +143,7 @@ class PipelineItem:
     def to_dict(self) -> dict[str, Any]:
         return {
             "story": {
+                "candidate_id": self.candidate.candidate_id,
                 "title": self.candidate.title,
                 "source_url": self.candidate.source_url,
                 "source_id": self.candidate.source_id,

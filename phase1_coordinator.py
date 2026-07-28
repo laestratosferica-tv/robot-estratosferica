@@ -79,6 +79,16 @@ def _validate_review_queue(path: Path) -> dict[str, Any]:
         errors.append("review queue publishing must be disabled")
     if queue.get("external_actions_enabled") is not False:
         errors.append("review queue external actions must be disabled")
+    if queue.get("schema_version") != "review_queue_v1":
+        errors.append("review queue schema must be review_queue_v1")
+    if queue.get("human_approval_required") is not True:
+        errors.append("review queue must require human approval")
+    for item in queue.get("items", []):
+        review = item.get("review", {})
+        if review.get("status") != "pending_human_approval":
+            errors.append("review item must remain pending human approval")
+        if review.get("publish_allowed") is not False:
+            errors.append("review item cannot allow publishing")
     return {
         "safe": not errors,
         "item_count": len(queue.get("items", [])),

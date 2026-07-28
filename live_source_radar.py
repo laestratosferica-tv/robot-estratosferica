@@ -73,6 +73,12 @@ NEGATIVE_DISCOVERY_TERMS = {
     "launches today": -1,
 }
 
+ROUTINE_ROUNDUP_TERMS = {
+    "la proxima semana en xbox",
+    "la próxima semana en xbox",
+    "next week on xbox",
+}
+
 TERRITORY_SIGNALS = {
     "gaming_esports": {
         "esports",
@@ -220,6 +226,13 @@ def _clean_feed_summary(value: Any, *, title: str = "") -> str:
     return summary.strip()
 
 
+def _routine_roundup_issue(title: str) -> str | None:
+    normalized = _plain_text(title).casefold()
+    if any(term in normalized for term in ROUTINE_ROUNDUP_TERMS):
+        return "routine_release_roundup"
+    return None
+
+
 def _bounded_evidence(value: str) -> str:
     text = _plain_text(value)
     if len(text) <= MAX_EVIDENCE_CHARS:
@@ -349,6 +362,8 @@ def _territory_for(
     )
     if best_score:
         return best_territory
+    if source.get("require_territory_signal", False):
+        raise LiveRadarError("outside_editorial_territory")
     return str(source["default_territory"])
 
 
@@ -414,6 +429,7 @@ def _source_result(
     entries_seen: int = 0,
     accepted: int = 0,
     rejected: int = 0,
+    network_mode: str = "rss_read_only",
 ) -> dict[str, Any]:
     return {
         "source_id": source["id"],
@@ -423,7 +439,7 @@ def _source_result(
         "entries_seen": entries_seen,
         "accepted": accepted,
         "rejected": rejected,
-        "network_mode": "rss_read_only",
+        "network_mode": network_mode,
     }
 
 
@@ -507,9 +523,15 @@ def collect_live_candidates(
                 source_url = str(_entry_value(entry, "link", "")).strip()
                 if not source_url or source_url in seen_urls:
                     raise LiveRadarError("missing_or_duplicate_source_url")
+                allowed_domains = list(source.get("allowed_domains", []))
+                if not _domain_allowed(source_url, allowed_domains):
+                    raise LiveRadarError("source_domain_mismatch")
                 title = _plain_text(_entry_value(entry, "title"))
                 if not title:
                     raise LiveRadarError("entry_missing_title")
+                roundup_issue = _routine_roundup_issue(title)
+                if roundup_issue:
+                    raise LiveRadarError(roundup_issue)
                 published_at = _published_date(entry)
                 story_key = _story_key(
                     str(source["id"]),
@@ -534,9 +556,6 @@ def collect_live_candidates(
                     and article_fetches_for_source
                     < max_article_fetches_per_source
                 ):
-                    allowed_domains = list(source.get("allowed_domains", []))
-                    if not _domain_allowed(source_url, allowed_domains):
-                        raise LiveRadarError("source_domain_mismatch")
                     article_fetches_for_source += 1
                     article_fetch_attempts += 1
                     try:
@@ -619,6 +638,11 @@ def collect_live_candidates(
                 entries_seen=min(len(entries), max_per_source),
                 accepted=accepted_for_source,
                 rejected=rejected_for_source,
+                network_mode=(
+                    "rss_and_approved_article_read_only"
+                    if article_fetches_for_source
+                    else "rss_read_only"
+                ),
             )
         )
 

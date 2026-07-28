@@ -89,6 +89,7 @@
       "feed_url": "https://blog.google/intl/es-419/rss/",
       "allowed_domains": ["blog.google"],
       "default_territory": "ai_innovation_future",
+      "require_territory_signal": true,
       "language": "es-419",
       "territories": [
         "ai_innovation_future",

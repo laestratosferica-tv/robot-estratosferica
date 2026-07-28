@@ -557,6 +557,106 @@ class LiveSourceRadarTests(unittest.TestCase):
         self.assertEqual(report["article_fetch_attempts"], 2)
         self.assertEqual(report["article_fetch_successes"], 0)
 
+    def test_routine_xbox_roundup_is_rejected_before_article_fetch(self):
+        fetch_calls = []
+
+        def parser(feed_url: str):
+            if "xbox" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[SimpleNamespace(
+                title=(
+                    "La Próxima Semana en XBOX: nuevos juegos "
+                    "del 27 al 31 de julio"
+                ),
+                summary="Nuevos lanzamientos…",
+                link="https://news.xbox.com/es-latam/weekly-roundup/",
+                published_parsed=_parsed_date("2026-07-28"),
+            )])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=root / "candidates.json",
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+                article_fetcher=lambda *_args: fetch_calls.append(True),
+            )
+
+        self.assertEqual(fetch_calls, [])
+        self.assertEqual(
+            report["rejection_counts"]["routine_release_roundup"],
+            1,
+        )
+
+    def test_broad_google_source_requires_a_real_territory_signal(self):
+        def parser(feed_url: str):
+            if "google" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[SimpleNamespace(
+                title="Nueva opción para acceder a tu cuenta",
+                summary=(
+                    "El video selfie ofrece otra forma de iniciar sesión "
+                    "cuando no tienes tu dispositivo habitual."
+                ),
+                link="https://blog.google/intl/es-419/account-access/",
+                published_parsed=_parsed_date("2026-07-28"),
+            )])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=root / "candidates.json",
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+            )
+
+        self.assertEqual(report["candidate_count"], 0)
+        self.assertEqual(
+            report["rejection_counts"]["outside_editorial_territory"],
+            1,
+        )
+
+    def test_source_report_discloses_article_read_mode(self):
+        def parser(feed_url: str):
+            if "google" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[SimpleNamespace(
+                title="Nuevo análisis sobre inteligencia artificial",
+                summary="Análisis incompleto…",
+                link="https://blog.google/intl/es-419/ai-analysis/",
+                published_parsed=_parsed_date("2026-07-28"),
+            )])
+
+        def article_fetcher(*_args):
+            return (
+                "<meta name='description' content='El informe analiza cómo "
+                "las empresas usan inteligencia artificial en 20 países.'>"
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=root / "candidates.json",
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+                article_fetcher=article_fetcher,
+            )
+
+        google = next(
+            source for source in report["sources"]
+            if source["source_id"] == "google_blog"
+        )
+        self.assertEqual(
+            google["network_mode"],
+            "rss_and_approved_article_read_only",
+        )
+
     def assert_feed_summary_is_cleaned(self, summary, expected):
         def parser(feed_url: str):
             if "xbox" not in feed_url:

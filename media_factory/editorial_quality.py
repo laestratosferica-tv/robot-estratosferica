@@ -142,6 +142,34 @@ PLACEHOLDER_TERMS = {
     "test",
 }
 
+TITLE_PROMISE_PATTERNS = (
+    r"\bnuevas?\s+(?:funciones?|caracteristicas?)\b",
+    r"\bnew\s+(?:features?|functions?)\b",
+    r"\bque\s+incluye\b",
+    r"\bwhat\s+s\s+new\b",
+)
+
+CONCRETE_CHANGE_PREDICATES = {
+    "actualiza",
+    "actualizan",
+    "adds",
+    "agrega",
+    "agregan",
+    "anade",
+    "anaden",
+    "cambia",
+    "cambian",
+    "incorpora",
+    "incorporan",
+    "incluye",
+    "incluyen",
+    "mejora",
+    "mejoran",
+    "permite",
+    "permiten",
+    "supports",
+}
+
 CONTEXT_DOMAINS = {
     "alliance": {
         "alianza",
@@ -279,6 +307,19 @@ def _is_visual_metadata_only(title: str, summary: str) -> bool:
     )
 
 
+def _unfulfilled_title_promise(title: str, summary: str) -> bool:
+    normalized_title = normalize_editorial_text(title)
+    promises_features = any(
+        re.search(pattern, normalized_title)
+        for pattern in TITLE_PROMISE_PATTERNS
+    )
+    if not promises_features:
+        return False
+    return not bool(
+        set(_tokens(summary)).intersection(CONCRETE_CHANGE_PREDICATES)
+    )
+
+
 def _has_distinct_informative_proposition(title: str, summary: str) -> bool:
     summary_tokens = _tokens(summary)
     title_tokens = set(_tokens(title))
@@ -326,6 +367,8 @@ def substantive_summary_issue(title: str, summary: str) -> str | None:
         return "summary_placeholder"
     if _is_truncated(summary):
         return "summary_truncated"
+    if _unfulfilled_title_promise(title, summary):
+        return "summary_does_not_fulfill_title_promise"
     if _is_visual_metadata_only(title, summary):
         return "summary_visual_metadata_only"
     if not _has_distinct_informative_proposition(title, summary):

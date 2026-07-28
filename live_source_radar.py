@@ -251,15 +251,18 @@ def _bounded_evidence(value: str) -> str:
 def _article_evidence(html_document: str, title: str) -> str:
     parser = _ArticleEvidenceParser()
     parser.feed(str(html_document or ""))
+    first_bounded_candidate = ""
     for description in parser.descriptions:
         evidence = _bounded_evidence(description)
+        first_bounded_candidate = first_bounded_candidate or evidence
         if not substantive_summary_issue(title, evidence):
             return evidence
     for paragraph in parser.paragraphs[:8]:
         evidence = _bounded_evidence(paragraph)
+        first_bounded_candidate = first_bounded_candidate or evidence
         if not substantive_summary_issue(title, evidence):
             return evidence
-    return ""
+    return first_bounded_candidate
 
 
 def _default_article_fetcher(
@@ -572,11 +575,12 @@ def collect_live_candidates(
                     if enriched_summary:
                         summary = enriched_summary
                         summary_origin = "article_page"
-                        article_fetch_successes += 1
                         summary_issue = substantive_summary_issue(
                             title,
                             summary,
                         )
+                        if not summary_issue:
+                            article_fetch_successes += 1
                 if summary_issue:
                     raise LiveRadarError(summary_issue)
                 discovery_priority, discovery_reasons = _discovery_priority(

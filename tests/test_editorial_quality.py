@@ -93,6 +93,30 @@ class EditorialQualityTests(unittest.TestCase):
             ),
         ))
 
+    def test_feature_promise_requires_a_concrete_change(self):
+        self.assertEqual(
+            substantive_summary_issue(
+                (
+                    "Halo: Campaign Evolved – Las nuevas funciones "
+                    "del remake de un clásico"
+                ),
+                (
+                    "Los escenarios marcaron el inicio del viaje de muchas "
+                    "personas y esta edición ofrece más que nostalgia."
+                ),
+            ),
+            "summary_does_not_fulfill_title_promise",
+        )
+
+    def test_feature_promise_passes_with_a_supported_change(self):
+        self.assertIsNone(substantive_summary_issue(
+            "Las nuevas funciones del remake",
+            (
+                "El remake incorpora campaña cooperativa para cuatro "
+                "participantes y añade tres misiones nuevas."
+            ),
+        ))
+
     def test_short_labels_are_not_mistaken_for_reported_facts(self):
         for summary in (
             "AI launch graphic",

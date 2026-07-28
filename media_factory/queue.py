@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Iterable
 
+from .editorial_quality import substantive_summary_issue
+from .guardrails import validate_content_package
 from .models import PipelineItem
 from .strategy import validate_strategy_decision
 
@@ -17,7 +19,23 @@ def _stable_id(*parts: str) -> str:
 def _review_record(item: PipelineItem) -> dict:
     payload = item.to_dict()
     package = item.content_package
-    platform_copy = dict(package.platform_copy) if package else {}
+    summary_issue = substantive_summary_issue(
+        item.candidate.title,
+        item.candidate.summary,
+    )
+    if summary_issue:
+        raise ValueError(
+            f"Review item blocked by editorial sufficiency gate: {summary_issue}"
+        )
+    if package is None:
+        raise ValueError("Review item blocked: content package is missing")
+    package_errors = validate_content_package(package)
+    if package_errors:
+        raise ValueError(
+            "Review item blocked by content quality gate: "
+            + ", ".join(package_errors)
+        )
+    platform_copy = dict(package.platform_copy)
     candidate_id = item.candidate.candidate_id or _stable_id(
         item.candidate.source_id,
         item.candidate.source_url,

@@ -230,11 +230,85 @@ class LiveSourceRadarTests(unittest.TestCase):
             "Game Pass llega a más dispositivos.",
         )
 
-    def test_summary_only_boilerplate_falls_back_to_title(self):
-        self.assert_feed_summary_is_cleaned(
-            "The post Xbox amplía Game Pass appeared first on "
-            "Xbox Wire en Español .",
-            "Xbox amplía Game Pass",
+    def test_summary_only_boilerplate_is_blocked(self):
+        def parser(feed_url: str):
+            if "xbox" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[SimpleNamespace(
+                title="Xbox amplía Game Pass",
+                summary=(
+                    "The post Xbox amplía Game Pass appeared first on "
+                    "Xbox Wire en Español ."
+                ),
+                link="https://news.xbox.com/es-latam/game-pass/",
+                published_parsed=_parsed_date("2026-07-28"),
+            )])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "candidates.json"
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=output,
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+            )
+            candidates = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(candidates, [])
+        self.assertEqual(
+            report["rejection_counts"]["missing_substantive_summary"],
+            1,
+        )
+
+    def test_halo_game_pass_title_as_summary_is_blocked_and_next_survives(self):
+        title = (
+            "Próximamente en XBOX Game Pass: Halo: Campaign Evolved, "
+            "Beast of Reincarnation y más"
+        )
+
+        def parser(feed_url: str):
+            if "xbox" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[
+                SimpleNamespace(
+                    title=title,
+                    summary=title,
+                    link="https://news.xbox.com/es-latam/halo-game-pass/",
+                    published_parsed=_parsed_date("2026-07-28"),
+                ),
+                SimpleNamespace(
+                    title="Xbox detalla una actualización de accesibilidad",
+                    summary=(
+                        "La actualización añade subtítulos configurables y "
+                        "nuevos controles de contraste."
+                    ),
+                    link="https://news.xbox.com/es-latam/accessibility/",
+                    published_parsed=_parsed_date("2026-07-28"),
+                ),
+            ])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "candidates.json"
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=output,
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+            )
+            candidates = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(
+            candidates[0]["title"],
+            "Xbox detalla una actualización de accesibilidad",
+        )
+        self.assertEqual(
+            report["rejection_counts"]["summary_equivalent_to_title"],
+            1,
         )
 
     def assert_feed_summary_is_cleaned(self, summary, expected):

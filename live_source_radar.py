@@ -17,6 +17,7 @@ from media_factory.radar import (
     load_source_registry,
     normalize_story,
 )
+from media_factory.editorial_quality import substantive_summary_issue
 from media_factory.strategy import (
     classify_candidate,
     load_content_strategy,
@@ -88,7 +89,7 @@ def _clean_feed_summary(value: Any, *, title: str = "") -> str:
     )
     for pattern in boilerplate_patterns:
         summary = re.sub(pattern, "", summary, flags=re.IGNORECASE)
-    return summary.strip() or _plain_text(title)
+    return summary.strip()
 
 
 def _published_date(entry: Any) -> str:
@@ -296,6 +297,9 @@ def collect_live_candidates(
                     ),
                     title=title,
                 )
+                summary_issue = substantive_summary_issue(title, summary)
+                if summary_issue:
+                    raise LiveRadarError(summary_issue)
                 discovery_priority, discovery_reasons = _discovery_priority(
                     title,
                     summary,

@@ -15,6 +15,10 @@ class AudienceIntelligenceTests(unittest.TestCase):
     def setUp(self):
         self.candidate = Candidate(
             title="La IA transforma el trabajo creativo en Latinoamérica",
+            summary=(
+                "El análisis describe cómo equipos creativos incorporan "
+                "asistentes de IA en tareas de producción."
+            ),
             source_url="https://example.com/ai",
             territory="ai_innovation_future",
             signals={
@@ -116,6 +120,50 @@ class AudienceIntelligenceTests(unittest.TestCase):
         self.assertEqual(
             experiment["answer_options"],
             ["Sí", "No", "Depende del precio"],
+        )
+
+    def test_game_pass_list_question_uses_the_announced_games(self):
+        candidate = Candidate(
+            title=(
+                "Próximamente en XBOX Game Pass: Halo: Campaign Evolved, "
+                "Beast of Reincarnation y más"
+            ),
+            summary=(
+                "Xbox confirmó incorporaciones al catálogo y detalló sus "
+                "fechas de disponibilidad durante las próximas semanas."
+            ),
+            source_url="https://news.xbox.com/es-latam/game-pass-juegos/",
+            territory="gaming_esports",
+        )
+
+        experiment = build_audience_experiment(candidate)
+
+        self.assertEqual(
+            experiment["learning_question"],
+            "¿Cuál de los juegos anunciados te interesa más?",
+        )
+        self.assertEqual(
+            experiment["answer_options"],
+            ["Halo: Campaign Evolved", "Beast of Reincarnation"],
+        )
+
+    def test_game_pass_without_substantive_context_gets_no_generic_poll(self):
+        title = (
+            "Próximamente en XBOX Game Pass: Halo: Campaign Evolved, "
+            "Beast of Reincarnation y más"
+        )
+        experiment = build_audience_experiment(Candidate(
+            title=title,
+            summary=title,
+            source_url="https://news.xbox.com/es-latam/game-pass-juegos/",
+            territory="gaming_esports",
+        ))
+
+        self.assertEqual(experiment["learning_question"], "")
+        self.assertEqual(experiment["answer_options"], [])
+        self.assertNotIn(
+            "¿Qué cambio haría más útil Game Pass para ti?",
+            str(experiment),
         )
 
 

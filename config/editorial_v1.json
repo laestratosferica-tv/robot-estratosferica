@@ -92,7 +92,9 @@
     "unverified_rumor",
     "unlicensed_media_dependency",
     "unsupported_claim",
-    "outside_editorial_territory"
+    "outside_editorial_territory",
+    "missing_substantive_summary",
+    "summary_equivalent_to_title"
   ],
   "allowed_output_states": [
     "draft",

@@ -39,9 +39,7 @@ class PlatformCredentialDiagnosticTests(unittest.TestCase):
             requests.append(request)
             return _Response()
 
-        report = build_credential_diagnostic(
-            self.environment, opener=opener
-        )
+        report = build_credential_diagnostic(self.environment, opener=opener)
 
         self.assertTrue(report["all_required_credentials_valid"])
         self.assertEqual(len(requests), 4)
@@ -75,29 +73,68 @@ class PlatformCredentialDiagnosticTests(unittest.TestCase):
         self.assertEqual(report["platforms"]["instagram"]["status"], "missing")
         self.assertFalse(report["all_required_credentials_valid"])
 
-    def test_authentication_failure_is_redacted_and_classified(self):
+    def test_provider_failure_keeps_safe_cause_and_redacts_secrets(self):
         def opener(request, timeout):
+            body = {
+                "error": {
+                    "message": (
+                        "Invalid OAuth access token instagram-secret "
+                        "access_token=another-sensitive-value"
+                    ),
+                    "type": "OAuthException",
+                    "code": 190,
+                    "error_subcode": 463,
+                }
+            }
             raise urllib.error.HTTPError(
                 request.full_url,
                 401,
                 "unauthorized-secret-detail",
                 {},
-                io.BytesIO(b"private response"),
+                io.BytesIO(json.dumps(body).encode()),
             )
 
-        report = build_credential_diagnostic(
-            self.environment, opener=opener
-        )
+        report = build_credential_diagnostic(self.environment, opener=opener)
 
         self.assertTrue(
             all(
-                item["status"] == "invalid_or_expired"
+                item["status"] == "provider_rejected"
                 for item in report["platforms"].values()
             )
         )
+        instagram = report["platforms"]["instagram"]
+        self.assertEqual(instagram["http_status"], 401)
+        self.assertEqual(instagram["provider_error_code"], 190)
+        self.assertEqual(instagram["provider_error_subcode"], 463)
+        self.assertEqual(instagram["provider_error_type"], "OAuthException")
         rendered = json.dumps(report)
+        self.assertNotIn("instagram-secret", rendered)
+        self.assertNotIn("another-sensitive-value", rendered)
         self.assertNotIn("unauthorized-secret-detail", rendered)
-        self.assertNotIn("private response", rendered)
+
+    def test_non_json_failure_reports_http_status_only(self):
+        def opener(request, timeout):
+            raise urllib.error.HTTPError(
+                request.full_url,
+                403,
+                "forbidden",
+                {},
+                io.BytesIO(b"not-json"),
+            )
+
+        report = build_credential_diagnostic(self.environment, opener=opener)
+
+        self.assertEqual(
+            report["platforms"]["facebook"],
+            {
+                "status": "provider_rejected",
+                "configured_count": 2,
+                "required_count": 2,
+                "live_readonly_check_performed": True,
+                "secret_values_exposed": False,
+                "http_status": 403,
+            },
+        )
 
 
 if __name__ == "__main__":

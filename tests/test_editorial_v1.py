@@ -187,6 +187,37 @@ class EditorialV1Tests(unittest.TestCase):
             )
         )
 
+    def test_threads_copy_fits_long_verified_feed_summaries(self) -> None:
+        candidate = Candidate(
+            title=(
+                "Play More Ubisoft Games on PC: New Content Now Available "
+                "for Xbox on PC"
+            ),
+            summary=" ".join(
+                [
+                    "The official source explains the current catalog,",
+                    "availability, devices, conditions and regional rollout.",
+                ]
+                * 12
+            ),
+            source_url="https://news.xbox.com/en-us/example",
+            territory="gaming_esports",
+            signals={
+                key: 1 for key in self.config["editorial_score"]["weights"]
+            },
+        )
+        decision = evaluate_candidate(candidate, self.config)
+        package = build_content_package(candidate, decision, None)
+        self.assertIsNotNone(package)
+        threads_copy = package.platform_copy["threads"]
+        self.assertLessEqual(len(threads_copy), 500)
+        self.assertTrue(
+            threads_copy.endswith(
+                package.content_punch["tension_question"]
+            )
+        )
+        self.assertEqual(validate_content_package(package), [])
+
     def test_storyboard_is_safe_30_second_production_plan(self) -> None:
         candidate = Candidate(
             title="XBOX y Meta amplían una experiencia de juego",

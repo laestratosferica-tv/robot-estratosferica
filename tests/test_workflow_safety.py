@@ -101,6 +101,33 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertNotIn("PRODUCTION_ARMED", content)
         self.assertNotIn("ENABLE_", content)
 
+    def test_live_radar_is_manual_read_only_and_has_no_secrets(self):
+        content = (
+            WORKFLOWS / "live-source-radar.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("schedule:", content)
+        self.assertIn("contents: read", content)
+        self.assertIn("python live_source_radar.py", content)
+        self.assertIn("python phase1_coordinator.py", content)
+        self.assertNotIn("secrets.", content)
+        self.assertNotIn("PRODUCTION_ARMED", content)
+        self.assertNotIn("ENABLE_", content)
+
+    def test_epic_play_radar_is_manual_and_metadata_only(self):
+        content = (
+            WORKFLOWS / "epic-play-radar-readonly.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("schedule:", content)
+        self.assertIn("contents: read", content)
+        self.assertIn("python epic_play_radar.py", content)
+        self.assertIn("--live", content)
+        self.assertNotIn("PRODUCTION_ARMED", content)
+        self.assertNotIn("ENABLE_", content)
+        self.assertNotIn("media download", content.casefold())
+        self.assertNotIn("publish", content.casefold())
+
     def test_threads_diagnostic_does_not_rotate_by_default(self):
         content = (
             WORKFLOWS / "threads-auth-check.yml"

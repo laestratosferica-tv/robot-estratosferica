@@ -1,0 +1,60 @@
+name: Sprint 3 - Live Source Radar
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install feed reader
+        run: python -m pip install feedparser==6.0.11 Pillow==10.4.0
+
+      - name: Run safety tests
+        env:
+          PYTHONPATH: .
+        run: python -m unittest discover -s tests -v
+
+      - name: Collect current approved-source candidates
+        env:
+          PYTHONPATH: .
+        run: >-
+          python live_source_radar.py
+          --output artifacts/live_candidates.json
+          --report artifacts/live-radar-report.json
+
+      - name: Run the safe editorial coordinator
+        env:
+          PYTHONPATH: .
+        run: >-
+          python phase1_coordinator.py
+          --input artifacts/live_candidates.json
+          --queue-output artifacts/live-editorial-queue.json
+          --safety-output artifacts/live-operations-safety.json
+          --readiness-output artifacts/live-platform-readiness.json
+          --health-output artifacts/live-coordinator-health.json
+
+      - name: Upload live radar result
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprint3-live-radar
+          path: |
+            artifacts/live_candidates.json
+            artifacts/live-radar-report.json
+            artifacts/live-editorial-queue.json
+            artifacts/live-operations-safety.json
+            artifacts/live-platform-readiness.json
+            artifacts/live-coordinator-health.json
+          if-no-files-found: error

@@ -1,0 +1,34 @@
+{
+  "version": "1.0.0",
+  "mode": "metadata_discovery_only",
+  "twitch": {
+    "games": [
+      "EA Sports FC 26",
+      "VALORANT",
+      "League of Legends",
+      "Fortnite",
+      "Rocket League",
+      "Gran Turismo 7"
+    ],
+    "clips_per_game": 10,
+    "lookback_hours": 72
+  },
+  "youtube": {
+    "queries": [
+      "EA FC 26 gol increíble esports",
+      "VALORANT ace clutch LATAM",
+      "League of Legends pentakill esports",
+      "Gran Turismo 7 récord carrera"
+    ],
+    "max_queries_per_run": 2,
+    "estimated_search_quota_units": 200,
+    "results_per_query": 10,
+    "lookback_hours": 72
+  },
+  "rights": {
+    "default_state": "link_only_unverified",
+    "download_allowed": false,
+    "republication_allowed": false,
+    "human_approval_required": true
+  }
+}

@@ -39,7 +39,42 @@ def _sentence(text: str) -> str:
     value = text.strip()
     if not value:
         return value
-    return value if value[-1] in ".!?" else f"{value}."
+    return value if value[-1] in ".!?…" else f"{value}."
+
+
+def _trim_at_word(text: str, limit: int) -> str:
+    value = text.strip()
+    if len(value) <= limit:
+        return value
+    if limit <= 1:
+        return "…"[:limit]
+    shortened = value[: limit - 1].rstrip()
+    if " " in shortened:
+        shortened = shortened.rsplit(" ", 1)[0]
+    return f"{shortened.rstrip(' ,;:-')}…"
+
+
+def _threads_copy(
+    headline: str,
+    concrete_value: str,
+    tension_question: str,
+    limit: int = 500,
+) -> str:
+    head = _sentence(headline)
+    value = _sentence(concrete_value)
+    question = tension_question.strip()
+    rendered = f"{head} {value} {question}"
+    if len(rendered) <= limit:
+        return rendered
+
+    available_before_question = limit - len(question) - 2
+    if available_before_question < 20:
+        return _trim_at_word(rendered, limit)
+    head_limit = min(len(headline), max(80, available_before_question // 2))
+    head = _sentence(_trim_at_word(headline, head_limit))
+    value_limit = limit - len(head) - len(question) - 2
+    value = _sentence(_trim_at_word(concrete_value, value_limit))
+    return f"{head} {value} {question}"
 
 
 def build_content_package(
@@ -91,8 +126,11 @@ def build_content_package(
             "Fuente incluida en la descripción."
         ),
         "threads": (
-            f"{_sentence(headline)} {_sentence(content_punch['concrete_value'])} "
-            f"{content_punch['tension_question']}"
+            _threads_copy(
+                headline,
+                content_punch["concrete_value"],
+                content_punch["tension_question"],
+            )
         ),
     }
     return ContentPackage(

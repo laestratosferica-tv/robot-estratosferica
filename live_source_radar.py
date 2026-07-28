@@ -68,6 +68,44 @@ NEGATIVE_DISCOVERY_TERMS = {
     "launches today": -1,
 }
 
+TERRITORY_SIGNALS = {
+    "gaming_esports": {
+        "esports",
+        "game pass",
+        "gaming",
+        "juego",
+        "juegos",
+        "videojuego",
+        "xbox",
+    },
+    "sport_technology_entertainment": {
+        "deporte",
+        "estadio",
+        "futbol",
+        "fútbol",
+        "google earth",
+        "partido",
+        "sports",
+        "stadium",
+    },
+    "brands_activations": {
+        "activacion",
+        "activación",
+        "campana",
+        "campaña",
+        "marca",
+        "marketing",
+        "patrocinio",
+    },
+    "ai_innovation_future": {
+        "ai ",
+        "gemini",
+        "ia ",
+        "inteligencia artificial",
+        "machine learning",
+    },
+}
+
 
 def _entry_value(entry: Any, key: str, default: Any = "") -> Any:
     if isinstance(entry, Mapping):
@@ -132,6 +170,38 @@ def _signals_for(
         "conversation_potential": min(0.85, 0.60 + positive * 0.03),
         "commercial_potential": min(0.85, 0.55 + positive * 0.04),
     }
+
+
+def _territory_for(
+    source: Mapping[str, Any],
+    title: str,
+    summary: str,
+) -> str:
+    """Resolve the story topic instead of inheriting the publisher's default."""
+    text = f" {title} {summary} ".casefold()
+    allowed = set(source.get("territories", []))
+    ranked = [
+        (
+            sum(
+                bool(re.search(
+                    rf"(?<!\w){re.escape(term.strip())}(?!\w)",
+                    text,
+                ))
+                for term in terms
+            ),
+            territory,
+        )
+        for territory, terms in TERRITORY_SIGNALS.items()
+        if territory in allowed
+    ]
+    best_score, best_territory = max(
+        ranked,
+        default=(0, str(source["default_territory"])),
+        key=lambda item: item[0],
+    )
+    if best_score:
+        return best_territory
+    return str(source["default_territory"])
 
 
 def _candidate_id(source_id: str, source_url: str) -> str:
@@ -314,7 +384,7 @@ def collect_live_candidates(
                     "source_url": source_url,
                     "source_id": str(source["id"]),
                     "published_at": published_at,
-                    "territory": str(source["default_territory"]),
+                    "territory": _territory_for(source, title, summary),
                     "region": (
                         "latam"
                         if source.get("language") == "es-419"

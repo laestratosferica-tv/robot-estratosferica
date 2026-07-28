@@ -374,6 +374,84 @@ class LiveSourceRadarTests(unittest.TestCase):
             1,
         )
 
+    def test_real_run_30405453687_truncated_summary_is_rejected(self):
+        def parser(feed_url: str):
+            if "google" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[SimpleNamespace(
+                title=(
+                    "Experimenta el legado del Estadio Azteca "
+                    "en Google Earth"
+                ),
+                summary=(
+                    "El Estadio Azteca hizo historia durante el partido "
+                    "inaugural. Al albergar este encuentro, se c…"
+                ),
+                link=(
+                    "https://blog.google/intl/es-419/"
+                    "actualizaciones-de-producto/informacion/"
+                    "experimenta-el-legado-del-estadio-azteca/"
+                ),
+                published_parsed=_parsed_date("2026-07-28"),
+            )])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "candidates.json"
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=output,
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+            )
+            candidates = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(candidates, [])
+        self.assertEqual(
+            report["rejection_counts"]["summary_truncated"],
+            1,
+        )
+
+    def test_google_sports_technology_story_is_not_classified_as_ai(self):
+        def parser(feed_url: str):
+            if "google" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[SimpleNamespace(
+                title=(
+                    "Experimenta el legado del Estadio Azteca "
+                    "en Google Earth"
+                ),
+                summary=(
+                    "Google Earth incorpora un recorrido que documenta "
+                    "momentos históricos del estadio y del fútbol mexicano."
+                ),
+                link=(
+                    "https://blog.google/intl/es-419/"
+                    "actualizaciones-de-producto/informacion/"
+                    "experimenta-el-legado-del-estadio-azteca/"
+                ),
+                published_parsed=_parsed_date("2026-07-28"),
+            )])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "candidates.json"
+            collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=output,
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+            )
+            candidates = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(
+            candidates[0]["territory"],
+            "sport_technology_entertainment",
+        )
+
     def assert_feed_summary_is_cleaned(self, summary, expected):
         def parser(feed_url: str):
             if "xbox" not in feed_url:

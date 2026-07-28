@@ -8,7 +8,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.error import URLError
 
-from live_source_radar import collect_live_candidates, main
+from live_source_radar import (
+    LiveRadarError,
+    _ApprovedRedirectHandler,
+    collect_live_candidates,
+    main,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +25,21 @@ def _parsed_date(value: str) -> time.struct_time:
 
 
 class LiveSourceRadarTests(unittest.TestCase):
+    def test_article_redirect_to_unapproved_domain_is_blocked(self):
+        handler = _ApprovedRedirectHandler(["blog.google"])
+        with self.assertRaisesRegex(
+            LiveRadarError,
+            "article_redirect_domain_mismatch",
+        ):
+            handler.redirect_request(
+                None,
+                None,
+                302,
+                "Found",
+                {},
+                "https://example.com/unapproved/",
+            )
+
     def _collect_with(self, parser):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -451,6 +471,91 @@ class LiveSourceRadarTests(unittest.TestCase):
             candidates[0]["territory"],
             "sport_technology_entertainment",
         )
+
+    def test_truncated_feed_uses_bounded_article_evidence(self):
+        fetch_calls = []
+
+        def parser(feed_url: str):
+            if "google" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[SimpleNamespace(
+                title="Google Earth documenta el Estadio Azteca",
+                summary="El recorrido digital se c…",
+                link=(
+                    "https://blog.google/intl/es-419/"
+                    "actualizaciones-de-producto/informacion/azteca/"
+                ),
+                published_parsed=_parsed_date("2026-07-28"),
+            )])
+
+        def article_fetcher(source_url, allowed_domains):
+            fetch_calls.append((source_url, allowed_domains))
+            return (
+                "<html><head><meta name='description' content='Google Earth "
+                "incorpora un recorrido que documenta momentos históricos "
+                "del Estadio Azteca y del fútbol mexicano.'></head></html>"
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "candidates.json"
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=output,
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+                article_fetcher=article_fetcher,
+            )
+            candidates = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(fetch_calls), 1)
+        self.assertEqual(report["article_fetch_attempts"], 1)
+        self.assertEqual(report["article_fetch_successes"], 1)
+        self.assertEqual(candidates[0]["summary_origin"], "article_page")
+        self.assertEqual(
+            candidates[0]["territory"],
+            "sport_technology_entertainment",
+        )
+        self.assertFalse(report["publishing_attempted"])
+        self.assertFalse(report["external_writes_attempted"])
+        self.assertFalse(report["media_download_attempted"])
+
+    def test_article_enrichment_respects_per_source_limit(self):
+        def parser(feed_url: str):
+            if "google" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[
+                SimpleNamespace(
+                    title=f"Historia incompleta {index}",
+                    summary="Resumen incompleto…",
+                    link=f"https://blog.google/example-{index}/",
+                    published_parsed=_parsed_date("2026-07-28"),
+                )
+                for index in range(4)
+            ])
+
+        fetch_calls = []
+
+        def article_fetcher(source_url, _allowed_domains):
+            fetch_calls.append(source_url)
+            return "<html><meta name='description' content='Sin datos…'></html>"
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=root / "candidates.json",
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+                article_fetcher=article_fetcher,
+                max_article_fetches_per_source=2,
+            )
+
+        self.assertEqual(len(fetch_calls), 2)
+        self.assertEqual(report["article_fetch_attempts"], 2)
+        self.assertEqual(report["article_fetch_successes"], 0)
 
     def assert_feed_summary_is_cleaned(self, summary, expected):
         def parser(feed_url: str):

@@ -6,7 +6,10 @@ import html
 import json
 import re
 import unicodedata
+from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 from datetime import date
 from pathlib import Path
 from time import struct_time
@@ -36,6 +39,8 @@ class LiveRadarError(RuntimeError):
 
 
 NETWORK_ERRORS = (ConnectionError, HTTPError, TimeoutError, URLError)
+MAX_ARTICLE_BYTES = 512_000
+MAX_EVIDENCE_CHARS = 700
 
 
 POSITIVE_DISCOVERY_TERMS = {
@@ -113,6 +118,91 @@ def _entry_value(entry: Any, key: str, default: Any = "") -> Any:
     return getattr(entry, key, default)
 
 
+def _domain_allowed(url: str, allowed_domains: list[str]) -> bool:
+    host = (urlparse(url).hostname or "").casefold()
+    return any(
+        host == domain.casefold()
+        or host.endswith(f".{domain.casefold()}")
+        for domain in allowed_domains
+    )
+
+
+class _ArticleEvidenceParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.descriptions: list[str] = []
+        self.paragraphs: list[str] = []
+        self._paragraph_parts: list[str] | None = None
+        self._ignored_depth = 0
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        attributes = {
+            str(key).casefold(): str(value or "")
+            for key, value in attrs
+        }
+        if tag in {"script", "style", "noscript"}:
+            self._ignored_depth += 1
+        if tag == "meta":
+            marker = (
+                attributes.get("name")
+                or attributes.get("property")
+                or ""
+            ).casefold()
+            if marker in {
+                "description",
+                "og:description",
+                "twitter:description",
+            }:
+                content = _plain_text(attributes.get("content", ""))
+                if content:
+                    self.descriptions.append(content)
+        if tag == "p" and not self._ignored_depth:
+            self._paragraph_parts = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "p" and self._paragraph_parts is not None:
+            paragraph = _plain_text(" ".join(self._paragraph_parts))
+            if paragraph:
+                self.paragraphs.append(paragraph)
+            self._paragraph_parts = None
+        if tag in {"script", "style", "noscript"} and self._ignored_depth:
+            self._ignored_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self._paragraph_parts is not None and not self._ignored_depth:
+            self._paragraph_parts.append(data)
+
+
+class _ApprovedRedirectHandler(HTTPRedirectHandler):
+    def __init__(self, allowed_domains: list[str]) -> None:
+        super().__init__()
+        self.allowed_domains = allowed_domains
+
+    def redirect_request(
+        self,
+        req: Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> Request | None:
+        if not _domain_allowed(newurl, self.allowed_domains):
+            raise LiveRadarError("article_redirect_domain_mismatch")
+        return super().redirect_request(
+            req,
+            fp,
+            code,
+            msg,
+            headers,
+            newurl,
+        )
+
+
 def _plain_text(value: Any) -> str:
     without_tags = re.sub(r"<[^>]+>", " ", str(value or ""))
     return " ".join(html.unescape(without_tags).split())
@@ -128,6 +218,64 @@ def _clean_feed_summary(value: Any, *, title: str = "") -> str:
     for pattern in boilerplate_patterns:
         summary = re.sub(pattern, "", summary, flags=re.IGNORECASE)
     return summary.strip()
+
+
+def _bounded_evidence(value: str) -> str:
+    text = _plain_text(value)
+    if len(text) <= MAX_EVIDENCE_CHARS:
+        return text
+    bounded = text[:MAX_EVIDENCE_CHARS]
+    sentence_end = max(
+        bounded.rfind(". "),
+        bounded.rfind("? "),
+        bounded.rfind("! "),
+    )
+    if sentence_end < 120:
+        return ""
+    return bounded[:sentence_end + 1].strip()
+
+
+def _article_evidence(html_document: str, title: str) -> str:
+    parser = _ArticleEvidenceParser()
+    parser.feed(str(html_document or ""))
+    for description in parser.descriptions:
+        evidence = _bounded_evidence(description)
+        if not substantive_summary_issue(title, evidence):
+            return evidence
+    for paragraph in parser.paragraphs[:8]:
+        evidence = _bounded_evidence(paragraph)
+        if not substantive_summary_issue(title, evidence):
+            return evidence
+    return ""
+
+
+def _default_article_fetcher(
+    source_url: str,
+    allowed_domains: list[str],
+) -> str:
+    request = Request(
+        source_url,
+        headers={
+            "User-Agent": (
+                "La-Estratosferica-Editorial-Radar/1.0 "
+                "(read-only evidence verification)"
+            ),
+            "Accept": "text/html,application/xhtml+xml",
+        },
+    )
+    opener = build_opener(_ApprovedRedirectHandler(allowed_domains))
+    with opener.open(request, timeout=6) as response:
+        final_url = str(response.geturl())
+        if not _domain_allowed(final_url, allowed_domains):
+            raise LiveRadarError("article_redirect_domain_mismatch")
+        content_type = str(response.headers.get("Content-Type", "")).casefold()
+        if "html" not in content_type:
+            raise LiveRadarError("article_not_html")
+        payload = response.read(MAX_ARTICLE_BYTES + 1)
+        if len(payload) > MAX_ARTICLE_BYTES:
+            raise LiveRadarError("article_html_too_large")
+        charset = response.headers.get_content_charset() or "utf-8"
+        return payload.decode(charset, errors="replace")
 
 
 def _published_date(entry: Any) -> str:
@@ -289,12 +437,20 @@ def collect_live_candidates(
     today: date | None = None,
     parser: Callable[[str], Any] | None = None,
     strategy_path: str | Path = DEFAULT_STRATEGY,
+    article_fetcher: Callable[[str, list[str]], str] | None = None,
+    max_article_fetches_per_source: int = 2,
 ) -> dict[str, Any]:
-    if max_per_source < 1 or max_candidates < 1:
+    if (
+        max_per_source < 1
+        or max_candidates < 1
+        or max_article_fetches_per_source < 0
+    ):
         raise LiveRadarError("Radar limits must be positive")
 
     current_date = today or date.today()
+    enrichment_enabled = article_fetcher is not None or parser is None
     parser = parser or _default_parser
+    article_fetcher = article_fetcher or _default_article_fetcher
     registry = load_source_registry(registry_path)
     strategy = load_content_strategy(strategy_path)
     candidates: list[dict[str, Any]] = []
@@ -302,6 +458,8 @@ def collect_live_candidates(
     seen_story_keys: set[tuple[str, str, str]] = set()
     source_results: list[dict[str, Any]] = []
     rejection_counts: dict[str, int] = {}
+    article_fetch_attempts = 0
+    article_fetch_successes = 0
 
     for source in _source_feeds(registry):
         feed_url = str(source["feed_url"])
@@ -342,6 +500,7 @@ def collect_live_candidates(
             continue
         accepted_for_source = 0
         rejected_for_source = 0
+        article_fetches_for_source = 0
 
         for entry in entries[:max_per_source]:
             try:
@@ -368,6 +527,37 @@ def collect_live_candidates(
                     title=title,
                 )
                 summary_issue = substantive_summary_issue(title, summary)
+                summary_origin = "rss"
+                if (
+                    summary_issue
+                    and enrichment_enabled
+                    and article_fetches_for_source
+                    < max_article_fetches_per_source
+                ):
+                    allowed_domains = list(source.get("allowed_domains", []))
+                    if not _domain_allowed(source_url, allowed_domains):
+                        raise LiveRadarError("source_domain_mismatch")
+                    article_fetches_for_source += 1
+                    article_fetch_attempts += 1
+                    try:
+                        article_html = article_fetcher(
+                            source_url,
+                            allowed_domains,
+                        )
+                        enriched_summary = _article_evidence(
+                            article_html,
+                            title,
+                        )
+                    except Exception:
+                        enriched_summary = ""
+                    if enriched_summary:
+                        summary = enriched_summary
+                        summary_origin = "article_page"
+                        article_fetch_successes += 1
+                        summary_issue = substantive_summary_issue(
+                            title,
+                            summary,
+                        )
                 if summary_issue:
                     raise LiveRadarError(summary_issue)
                 discovery_priority, discovery_reasons = _discovery_priority(
@@ -381,6 +571,7 @@ def collect_live_candidates(
                     ),
                     "title": title,
                     "summary": summary,
+                    "summary_origin": summary_origin,
                     "source_url": source_url,
                     "source_id": str(source["id"]),
                     "published_at": published_at,
@@ -466,10 +657,13 @@ def collect_live_candidates(
             else "ok" if has_accessible_source
             else "source_failure"
         ),
-        "mode": "live_rss_read_only",
+        "mode": "live_rss_and_approved_article_read_only",
         "scan_date": current_date.isoformat(),
         "sources_scanned": len(source_results),
         "candidate_count": len(candidates),
+        "article_fetch_attempts": article_fetch_attempts,
+        "article_fetch_successes": article_fetch_successes,
+        "article_fetch_limit_per_source": max_article_fetches_per_source,
         "rejection_counts": rejection_counts,
         "sources": source_results,
         "publishing_attempted": False,

@@ -80,6 +80,64 @@ class EditorialV1Tests(unittest.TestCase):
         self.assertEqual(payload["mode"], "dry_run")
         self.assertFalse(payload["publishing_enabled"])
         self.assertFalse(payload["external_actions_enabled"])
+        self.assertEqual(payload["schema_version"], "review_queue_v1")
+        self.assertTrue(payload["human_approval_required"])
+        review = payload["items"][0]["review"]
+        self.assertEqual(review["status"], "pending_human_approval")
+        self.assertTrue(review["requires_human_approval"])
+        self.assertFalse(review["approved"])
+        self.assertFalse(review["publish_allowed"])
+        self.assertEqual(
+            review["source"]["url"],
+            "https://example.com/story",
+        )
+        self.assertTrue(review["candidate_id"])
+        self.assertTrue(review["content_fingerprint"])
+        self.assertTrue(review["anti_duplicate_id"])
+
+    def test_review_ids_are_stable_for_the_same_radar_candidate(self) -> None:
+        candidate = Candidate(
+            candidate_id="radar-candidate-1",
+            title="Historia estable",
+            source_url="https://example.com/stable",
+            source_id="source",
+            territory="gaming_esports",
+            signals={
+                key: 1 for key in self.config["editorial_score"]["weights"]
+            },
+        )
+        decision = evaluate_candidate(candidate, self.config)
+        opportunity = detect_opportunity(candidate, decision)
+        item = PipelineItem(
+            candidate=candidate,
+            decision=decision,
+            commercial_opportunity=opportunity,
+            content_package=build_content_package(
+                candidate, decision, opportunity
+            ),
+            storyboard=None,
+            measurement_plan=build_measurement_plan(decision, opportunity),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = json.loads(
+                save_queue([item], root / "first.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            second = json.loads(
+                save_queue([item], root / "second.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        self.assertEqual(
+            first["items"][0]["review"],
+            second["items"][0]["review"],
+        )
+        self.assertEqual(
+            first["items"][0]["review"]["candidate_id"],
+            "radar-candidate-1",
+        )
 
     def test_commercial_signal_remains_research_only(self) -> None:
         candidate = Candidate(

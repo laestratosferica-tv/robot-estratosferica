@@ -26,6 +26,7 @@
     "community-radar-readonly.yml": "controlled_readonly",
     "drive-sync.yml": "legacy_quarantine",
     "editorial.yml": "legacy_quarantine",
+    "editorial-radar-dry-run.yml": "controlled_readonly",
     "factory-v1-ci.yml": "ci",
     "factory-v1-dry-run.yml": "coordinator",
     "epic-play-radar-readonly.yml": "controlled_readonly",

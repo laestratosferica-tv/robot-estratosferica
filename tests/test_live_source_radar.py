@@ -2,11 +2,13 @@ import json
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.error import URLError
 
-from live_source_radar import collect_live_candidates
+from live_source_radar import collect_live_candidates, main
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +20,120 @@ def _parsed_date(value: str) -> time.struct_time:
 
 
 class LiveSourceRadarTests(unittest.TestCase):
+    def _collect_with(self, parser):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=root / "candidates.json",
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+            )
+        return report
+
+    def test_all_sources_inaccessible_is_unhealthy(self):
+        def parser(_feed_url: str):
+            raise URLError("network unavailable")
+
+        report = self._collect_with(parser)
+
+        self.assertFalse(report["healthy"])
+        self.assertEqual(report["status"], "network_failure")
+        self.assertEqual(
+            [source["status"] for source in report["sources"]],
+            ["inaccessible", "inaccessible"],
+        )
+        with patch(
+            "live_source_radar.collect_live_candidates",
+            return_value=report,
+        ), patch("sys.argv", ["live_source_radar.py"]):
+            self.assertEqual(main(), 1)
+
+    def test_accessible_empty_sources_are_healthy(self):
+        report = self._collect_with(
+            lambda _feed_url: SimpleNamespace(entries=[])
+        )
+
+        self.assertTrue(report["healthy"])
+        self.assertEqual(report["status"], "ok")
+        self.assertEqual(report["candidate_count"], 0)
+        self.assertEqual(
+            [source["status"] for source in report["sources"]],
+            ["accessible_empty", "accessible_empty"],
+        )
+
+    def test_accessible_and_failed_sources_report_partial_health(self):
+        def parser(feed_url: str):
+            if "xbox" in feed_url:
+                return SimpleNamespace(entries=[])
+            raise ValueError("malformed feed")
+
+        report = self._collect_with(parser)
+
+        self.assertTrue(report["healthy"])
+        self.assertEqual(report["status"], "partial")
+        self.assertEqual(
+            [source["status"] for source in report["sources"]],
+            ["accessible_empty", "error"],
+        )
+
+    def test_all_parse_errors_are_unhealthy_source_failure(self):
+        report = self._collect_with(
+            lambda _feed_url: SimpleNamespace(
+                entries=[],
+                bozo=True,
+                bozo_exception=ValueError("malformed XML"),
+            )
+        )
+
+        self.assertFalse(report["healthy"])
+        self.assertEqual(report["status"], "source_failure")
+        self.assertEqual(
+            [source["status"] for source in report["sources"]],
+            ["error", "error"],
+        )
+        with patch(
+            "live_source_radar.collect_live_candidates",
+            return_value=report,
+        ), patch("sys.argv", ["live_source_radar.py"]):
+            self.assertEqual(main(), 1)
+
+    def test_network_and_parse_error_without_accessible_source_is_unhealthy(self):
+        def parser(feed_url: str):
+            if "xbox" in feed_url:
+                raise URLError("network unavailable")
+            raise ValueError("malformed feed")
+
+        report = self._collect_with(parser)
+
+        self.assertFalse(report["healthy"])
+        self.assertEqual(report["status"], "source_failure")
+        self.assertNotEqual(report["status"], "partial")
+        self.assertEqual(
+            [source["status"] for source in report["sources"]],
+            ["inaccessible", "error"],
+        )
+
+    def test_partial_requires_an_accessible_source(self):
+        def no_accessible_source(feed_url: str):
+            if "xbox" in feed_url:
+                raise URLError("network unavailable")
+            raise ValueError("malformed feed")
+
+        def one_accessible_source(feed_url: str):
+            if "xbox" in feed_url:
+                return SimpleNamespace(entries=[])
+            raise ValueError("malformed feed")
+
+        failures = self._collect_with(no_accessible_source)
+        partial = self._collect_with(one_accessible_source)
+
+        self.assertNotEqual(failures["status"], "partial")
+        self.assertFalse(failures["healthy"])
+        self.assertEqual(partial["status"], "partial")
+        self.assertTrue(partial["healthy"])
+
     def _parser(self, feed_url: str):
         if "xbox" in feed_url:
             return SimpleNamespace(

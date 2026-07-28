@@ -98,6 +98,26 @@ class AudienceIntelligenceTests(unittest.TestCase):
             ["Me ahorra tiempo", "Me complica", "Todavía no la uso"],
         )
 
+    def test_game_pass_question_follows_the_selected_story(self):
+        candidate = Candidate(
+            title="Xbox Game Pass llega a Meta Horizon+",
+            summary=(
+                "La alianza incluye Game Pass en la suscripción de Meta "
+                "Horizon+ para jugar en más dispositivos."
+            ),
+            source_url="https://news.xbox.com/es-latam/game-pass-meta/",
+            territory="gaming_esports",
+        )
+        experiment = build_audience_experiment(candidate)
+        self.assertEqual(
+            experiment["learning_question"],
+            "¿Usarías más Game Pass si viniera incluido con Meta Horizon+?",
+        )
+        self.assertEqual(
+            experiment["answer_options"],
+            ["Sí", "No", "Depende del precio"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

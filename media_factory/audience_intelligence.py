@@ -159,6 +159,17 @@ CONTEXT_KEYWORDS = {
     ],
 }
 
+GAME_PASS_QUESTIONS = {
+    "meta_horizon": (
+        "¿Usarías más Game Pass si viniera incluido con Meta Horizon+?",
+        ["Sí", "No", "Depende del precio"],
+    ),
+    "general": (
+        "¿Qué cambio haría más útil Game Pass para ti?",
+        ["Mejor catálogo", "Menor precio", "Más juego en nube", "Más dispositivos"],
+    ),
+}
+
 
 def _stable_index(seed: str, size: int) -> int:
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
@@ -182,6 +193,24 @@ def _contextual_question_index(candidate: Candidate) -> int:
     )
 
 
+def _story_question(candidate: Candidate) -> tuple[str, list[str]]:
+    text = f"{candidate.title} {candidate.summary}".casefold()
+    if "game pass" in text:
+        key = (
+            "meta_horizon"
+            if "meta" in text and ("horizon+" in text or "horizon plus" in text)
+            else "general"
+        )
+        question, options = GAME_PASS_QUESTIONS[key]
+        return question, list(options)
+
+    question_index = _contextual_question_index(candidate)
+    return (
+        QUESTION_BANK[candidate.territory][question_index],
+        list(OPTION_BANK[candidate.territory][question_index]),
+    )
+
+
 def _content_goal(
     candidate: Candidate,
     opportunity: CommercialOpportunity | None,
@@ -201,10 +230,7 @@ def build_audience_experiment(
     opportunity: CommercialOpportunity | None = None,
 ) -> dict[str, Any]:
     """Prepare one measurable community experiment; never publish it."""
-    questions = QUESTION_BANK[candidate.territory]
-    question_index = _contextual_question_index(candidate)
-    question = questions[question_index]
-    answer_options = OPTION_BANK[candidate.territory][question_index]
+    question, answer_options = _story_question(candidate)
     experiment_id = hashlib.sha256(
         f"{candidate.territory}:{candidate.title}:{question}".encode("utf-8")
     ).hexdigest()[:16]

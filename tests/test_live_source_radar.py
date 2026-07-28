@@ -25,7 +25,9 @@ class LiveSourceRadarTests(unittest.TestCase):
                     SimpleNamespace(
                         title="Xbox expands play across devices",
                         summary=(
-                            "<p>An official Game Pass ecosystem update.</p>"
+                            "<p>An official Game Pass ecosystem update.</p> "
+                            "The post Xbox expands play across devices "
+                            "appeared first on Xbox Wire."
                         ),
                         link="https://news.xbox.com/es-latam/example/",
                         published_parsed=_parsed_date("2026-07-28"),
@@ -95,6 +97,47 @@ class LiveSourceRadarTests(unittest.TestCase):
             )
         )
         self.assertGreater(candidates[0]["discovery_priority"], 0)
+        xbox = next(
+            item for item in candidates
+            if item["source_id"] == "xbox_wire_es_latam"
+        )
+        self.assertEqual(
+            xbox["summary"],
+            "An official Game Pass ecosystem update.",
+        )
+
+    def test_removes_spanish_feed_boilerplate(self):
+        self.assert_feed_summary_is_cleaned(
+            "<p>Game Pass llega a más dispositivos.</p> "
+            "La entrada Game Pass llega a más dispositivos se publicó "
+            "primero en Xbox Wire en Español.",
+            "Game Pass llega a más dispositivos.",
+        )
+
+    def assert_feed_summary_is_cleaned(self, summary, expected):
+        def parser(feed_url: str):
+            if "xbox" not in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[SimpleNamespace(
+                title="Xbox amplía Game Pass",
+                summary=summary,
+                link="https://news.xbox.com/es-latam/game-pass/",
+                published_parsed=_parsed_date("2026-07-28"),
+            )])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "candidates.json"
+            collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=output,
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+            )
+            candidates = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(candidates[0]["summary"], expected)
 
     def test_substantive_platform_story_outranks_a_promotion(self):
         def parser(feed_url: str):

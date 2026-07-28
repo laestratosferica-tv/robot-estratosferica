@@ -68,6 +68,24 @@
       "commercial_potential": 10
     }
   },
+  "opportunity_selector": {
+    "version": "1.0.0",
+    "mode": "deterministic_zero_cost",
+    "minimum_score": 65,
+    "max_selected_per_run": 1,
+    "weights": {
+      "editorial_quality": 25,
+      "conversation_potential": 25,
+      "explanatory_value": 15,
+      "commercial_potential": 15,
+      "latam_relevance": 10,
+      "angle_originality": 10
+    },
+    "views_only_success_allowed": false,
+    "publishing_enabled": false,
+    "external_actions_enabled": false,
+    "human_approval_required": true
+  },
   "hard_reject": [
     "missing_source",
     "duplicate_story",

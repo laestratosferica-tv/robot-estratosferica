@@ -82,6 +82,33 @@ class MeasurementPlan:
 
 
 @dataclass(frozen=True)
+class OpportunitySelection:
+    selection_id: str
+    candidate_id: str
+    candidate_title: str
+    content_product_id: str
+    rank: int | None
+    score: float
+    status: str
+    selected: bool
+    eligible: bool
+    score_breakdown: dict[str, float]
+    rationale: list[str]
+    blocking_reasons: list[str]
+    objective: str
+    expected_interaction: str
+    primary_metric: str
+    audience_hypothesis: str
+    views_only_success_allowed: bool = False
+    requires_human_review: bool = True
+    publishing_enabled: bool = False
+    external_actions_enabled: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class ContentPackage:
     format_id: str
     state: str
@@ -142,6 +169,7 @@ class PipelineItem:
     candidate: Candidate
     decision: EditorialDecision
     measurement_plan: MeasurementPlan
+    opportunity_selection: OpportunitySelection | None = None
     commercial_opportunity: CommercialOpportunity | None = None
     content_package: ContentPackage | None = None
     storyboard: Storyboard | None = None
@@ -161,6 +189,11 @@ class PipelineItem:
                 ),
             },
             "decision": self.decision.to_dict(),
+            "opportunity_selection": (
+                self.opportunity_selection.to_dict()
+                if self.opportunity_selection
+                else None
+            ),
             "measurement_plan": self.measurement_plan.to_dict(),
             "commercial_opportunity": (
                 self.commercial_opportunity.to_dict()

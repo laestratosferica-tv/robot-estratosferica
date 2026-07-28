@@ -37,6 +37,24 @@ def _review_record(item: PipelineItem) -> dict:
             "Review item blocked by strategy gate: "
             + ", ".join(strategy_errors)
         )
+    selection = item.opportunity_selection
+    if selection is None or not selection.selected:
+        raise ValueError(
+            "Review item blocked: opportunity was not selected"
+        )
+    if not selection.eligible or selection.views_only_success_allowed:
+        raise ValueError(
+            "Review item blocked by opportunity selector gate"
+        )
+    if selection.publishing_enabled or selection.external_actions_enabled:
+        raise ValueError(
+            "Review item blocked: selector attempted an external action"
+        )
+    experiment = (
+        package.audience_experiment
+        if package
+        else {}
+    )
     payload["review"] = {
         "review_id": f"review-{candidate_id[:16]}",
         "candidate_id": candidate_id,
@@ -53,12 +71,31 @@ def _review_record(item: PipelineItem) -> dict:
         },
         "final_text_by_platform": platform_copy,
         "strategy": strategic_classification,
+        "opportunity_selection": selection.to_dict(),
+        "editorial_test": {
+            "state": "draft",
+            "objective": selection.objective,
+            "expected_interaction": selection.expected_interaction,
+            "interaction_prompt": experiment.get(
+                "learning_question", ""
+            ),
+            "answer_options": experiment.get("answer_options", []),
+            "primary_metric": selection.primary_metric,
+            "audience_hypothesis": selection.audience_hypothesis,
+            "views_only_success_allowed": False,
+            "requires_human_approval": True,
+            "publishing_enabled": False,
+            "external_actions_enabled": False,
+        },
     }
     return payload
 
 
 def save_queue(
-    items: Iterable[PipelineItem], output_path: str | Path
+    items: Iterable[PipelineItem],
+    output_path: str | Path,
+    *,
+    selection_report: dict | None = None,
 ) -> Path:
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -68,6 +105,7 @@ def save_queue(
         "publishing_enabled": False,
         "external_actions_enabled": False,
         "human_approval_required": True,
+        "opportunity_selection": selection_report or {},
         "items": [_review_record(item) for item in items],
     }
     path.write_text(

@@ -77,6 +77,13 @@ class Phase1CoordinatorTests(unittest.TestCase):
                 health["factory"]["strategy_classified_count"],
                 health["factory"]["candidate_count"],
             )
+            self.assertEqual(health["factory"]["selected_count"], 1)
+            self.assertEqual(health["factory"]["accepted_count"], 1)
+            self.assertEqual(
+                queue["opportunity_selection"]["selected_count"],
+                1,
+            )
+            self.assertEqual(len(queue["items"]), 1)
             self.assertTrue(
                 all(
                     item["review"]["strategy"]["content_product_id"]
@@ -89,6 +96,19 @@ class Phase1CoordinatorTests(unittest.TestCase):
                     for item in queue["items"]
                 )
             )
+            selected_review = queue["items"][0]["review"]
+            self.assertTrue(
+                selected_review["opportunity_selection"]["selected"]
+            )
+            editorial_test = selected_review["editorial_test"]
+            self.assertTrue(editorial_test["objective"])
+            self.assertTrue(editorial_test["expected_interaction"])
+            self.assertTrue(editorial_test["interaction_prompt"])
+            self.assertTrue(editorial_test["primary_metric"])
+            self.assertFalse(
+                editorial_test["views_only_success_allowed"]
+            )
+            self.assertFalse(editorial_test["publishing_enabled"])
             self.assertTrue(health["source_registry_enforced"])
             self.assertEqual(health["cost"]["billable_operations"], 0)
             self.assertEqual(health["cost"]["measured_cost_usd"], 0.0)

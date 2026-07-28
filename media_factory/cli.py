@@ -13,6 +13,7 @@ from .metrics import build_measurement_plan
 from .models import Candidate, PipelineItem
 from .queue import save_queue
 from .radar import load_source_registry, normalize_story
+from .selector import build_selection_report, rank_opportunities
 from .studio import FORMAT_BY_TERRITORY, build_content_package
 from .storyboard import build_storyboard
 from .strategy import (
@@ -82,17 +83,26 @@ def run_factory(
         for candidate in candidates
     ]
     decisions = [evaluate_candidate(item, config) for item in candidates]
+    selections = rank_opportunities(candidates, decisions, config)
     pipeline_items = []
-    for candidate, decision in zip(candidates, decisions):
+    for candidate, decision, selection in zip(
+        candidates,
+        decisions,
+        selections,
+    ):
         opportunity = detect_opportunity(candidate, decision)
         talent = None
-        if decision.accepted:
+        if selection.selected:
             format_id = FORMAT_BY_TERRITORY[candidate.territory]
             talent = select_talent(
                 candidate.territory, format_id, talent_catalog
             ).to_dict()
-        content_package = build_content_package(
-            candidate, decision, opportunity, talent
+        content_package = (
+            build_content_package(
+                candidate, decision, opportunity, talent
+            )
+            if selection.selected
+            else None
         )
         if content_package:
             errors = validate_content_package(content_package)
@@ -111,20 +121,41 @@ def run_factory(
             PipelineItem(
                 candidate=candidate,
                 decision=decision,
+                opportunity_selection=selection,
                 commercial_opportunity=opportunity,
                 content_package=content_package,
                 storyboard=storyboard,
                 measurement_plan=build_measurement_plan(decision, opportunity),
             )
         )
-    accepted = [item for item in pipeline_items if item.decision.accepted]
-    package_limit = int(config["safe_mode"]["max_packages_per_run"])
+    eligible = [
+        item
+        for item in pipeline_items
+        if item.opportunity_selection
+        and item.opportunity_selection.eligible
+    ]
+    selected = [
+        item
+        for item in pipeline_items
+        if item.opportunity_selection
+        and item.opportunity_selection.selected
+    ]
     rejected = [item for item in pipeline_items if not item.decision.accepted]
-    save_queue(accepted[:package_limit] + rejected, output_path)
+    save_queue(
+        selected,
+        output_path,
+        selection_report=build_selection_report(selections),
+    )
     return {
         "candidate_count": len(decisions),
         "strategy_classified_count": len(candidates),
-        "accepted_count": len(accepted[:package_limit]),
+        "editorially_accepted_count": sum(
+            item.decision.accepted for item in pipeline_items
+        ),
+        "eligible_count": len(eligible),
+        "selected_count": len(selected),
+        "accepted_count": len(selected),
+        "unselected_count": len(eligible) - len(selected),
         "rejected_count": len(rejected),
         "publication_count": 0,
     }

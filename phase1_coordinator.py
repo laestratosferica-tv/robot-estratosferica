@@ -84,6 +84,17 @@ def _validate_review_queue(path: Path) -> dict[str, Any]:
         errors.append("review queue schema must be review_queue_v1")
     if queue.get("human_approval_required") is not True:
         errors.append("review queue must require human approval")
+    selection_report = queue.get("opportunity_selection", {})
+    if selection_report.get("schema_version") != "opportunity_selection_v1":
+        errors.append("review queue must include opportunity selection v1")
+    if selection_report.get("selected_count") not in {0, 1}:
+        errors.append("selector can choose at most one opportunity")
+    if selection_report.get("views_only_success_allowed") is not False:
+        errors.append("views cannot be the only success criterion")
+    if selection_report.get("publishing_enabled") is not False:
+        errors.append("selector publishing must remain disabled")
+    if selection_report.get("external_actions_enabled") is not False:
+        errors.append("selector external actions must remain disabled")
     for item in queue.get("items", []):
         review = item.get("review", {})
         if review.get("status") != "pending_human_approval":
@@ -94,6 +105,31 @@ def _validate_review_queue(path: Path) -> dict[str, Any]:
             review.get("strategy", {})
         ):
             errors.append(f"review strategy: {strategy_error}")
+        selection = review.get("opportunity_selection", {})
+        if selection.get("selected") is not True:
+            errors.append("review item must be selected by the selector")
+        if selection.get("eligible") is not True:
+            errors.append("review item must be selector eligible")
+        editorial_test = review.get("editorial_test", {})
+        for field in (
+            "objective",
+            "expected_interaction",
+            "interaction_prompt",
+            "primary_metric",
+            "audience_hypothesis",
+        ):
+            if not editorial_test.get(field):
+                errors.append(f"editorial test missing {field}")
+        if editorial_test.get("state") != "draft":
+            errors.append("editorial test must remain draft")
+        if editorial_test.get("views_only_success_allowed") is not False:
+            errors.append("editorial test cannot use views-only success")
+        if editorial_test.get("publishing_enabled") is not False:
+            errors.append("editorial test cannot publish")
+        if editorial_test.get("external_actions_enabled") is not False:
+            errors.append("editorial test cannot perform external actions")
+    if selection_report.get("selected_count") != len(queue.get("items", [])):
+        errors.append("selection count must match review queue")
     return {
         "safe": not errors,
         "item_count": len(queue.get("items", [])),

@@ -13,6 +13,7 @@ from media_factory.metrics import build_measurement_plan
 from media_factory.models import Candidate, PipelineItem
 from media_factory.queue import save_queue
 from media_factory.radar import RadarRejected, load_source_registry, normalize_story
+from media_factory.selector import build_selection_report, rank_opportunities
 from media_factory.studio import build_content_package
 from media_factory.storyboard import build_storyboard
 from media_factory.strategy import classify_candidate, load_content_strategy
@@ -38,6 +39,15 @@ class EditorialV1Tests(unittest.TestCase):
                 self.strategy,
             ),
         )
+
+    def _selected(self, candidate: Candidate, decision):
+        selections = rank_opportunities(
+            [candidate],
+            [decision],
+            self.config,
+        )
+        self.assertTrue(selections[0].selected)
+        return selections[0], build_selection_report(selections)
 
     def test_configuration_is_safe(self) -> None:
         safe = self.config["safe_mode"]
@@ -75,13 +85,19 @@ class EditorialV1Tests(unittest.TestCase):
                 title="Historia",
                 source_url="https://example.com/story",
                 territory="ai_innovation_future",
+                signals={
+                    key: 1
+                    for key in self.config["editorial_score"]["weights"]
+                },
             )
         )
         decision = evaluate_candidate(candidate, self.config)
+        selection, selection_report = self._selected(candidate, decision)
         opportunity = detect_opportunity(candidate, decision)
         item = PipelineItem(
             candidate=candidate,
             decision=decision,
+            opportunity_selection=selection,
             commercial_opportunity=opportunity,
             content_package=build_content_package(
                 candidate, decision, opportunity
@@ -90,7 +106,11 @@ class EditorialV1Tests(unittest.TestCase):
             measurement_plan=build_measurement_plan(decision, opportunity),
         )
         with tempfile.TemporaryDirectory() as directory:
-            path = save_queue([item], Path(directory) / "queue.json")
+            path = save_queue(
+                [item],
+                Path(directory) / "queue.json",
+                selection_report=selection_report,
+            )
             payload = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(payload["mode"], "dry_run")
         self.assertFalse(payload["publishing_enabled"])
@@ -119,6 +139,15 @@ class EditorialV1Tests(unittest.TestCase):
         self.assertTrue(strategy["primary_metric"])
         self.assertTrue(strategy["commercial_path"])
         self.assertFalse(strategy["publishing_enabled"])
+        self.assertTrue(review["opportunity_selection"]["selected"])
+        editorial_test = review["editorial_test"]
+        self.assertEqual(editorial_test["state"], "draft")
+        self.assertTrue(editorial_test["objective"])
+        self.assertTrue(editorial_test["expected_interaction"])
+        self.assertTrue(editorial_test["interaction_prompt"])
+        self.assertTrue(editorial_test["primary_metric"])
+        self.assertFalse(editorial_test["views_only_success_allowed"])
+        self.assertFalse(editorial_test["publishing_enabled"])
 
     def test_review_ids_are_stable_for_the_same_radar_candidate(self) -> None:
         candidate = self._classified(
@@ -135,10 +164,12 @@ class EditorialV1Tests(unittest.TestCase):
             )
         )
         decision = evaluate_candidate(candidate, self.config)
+        selection, selection_report = self._selected(candidate, decision)
         opportunity = detect_opportunity(candidate, decision)
         item = PipelineItem(
             candidate=candidate,
             decision=decision,
+            opportunity_selection=selection,
             commercial_opportunity=opportunity,
             content_package=build_content_package(
                 candidate, decision, opportunity
@@ -149,12 +180,20 @@ class EditorialV1Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             first = json.loads(
-                save_queue([item], root / "first.json").read_text(
+                save_queue(
+                    [item],
+                    root / "first.json",
+                    selection_report=selection_report,
+                ).read_text(
                     encoding="utf-8"
                 )
             )
             second = json.loads(
-                save_queue([item], root / "second.json").read_text(
+                save_queue(
+                    [item],
+                    root / "second.json",
+                    selection_report=selection_report,
+                ).read_text(
                     encoding="utf-8"
                 )
             )

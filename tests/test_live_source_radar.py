@@ -230,6 +230,13 @@ class LiveSourceRadarTests(unittest.TestCase):
             "Game Pass llega a más dispositivos.",
         )
 
+    def test_summary_only_boilerplate_falls_back_to_title(self):
+        self.assert_feed_summary_is_cleaned(
+            "The post Xbox amplía Game Pass appeared first on "
+            "Xbox Wire en Español .",
+            "Xbox amplía Game Pass",
+        )
+
     def assert_feed_summary_is_cleaned(self, summary, expected):
         def parser(feed_url: str):
             if "xbox" not in feed_url:
@@ -254,6 +261,54 @@ class LiveSourceRadarTests(unittest.TestCase):
             candidates = json.loads(output.read_text(encoding="utf-8"))
 
         self.assertEqual(candidates[0]["summary"], expected)
+
+    def test_same_story_with_alias_urls_is_rejected_as_duplicate(self):
+        def parser(feed_url: str):
+            if "xbox" in feed_url:
+                return SimpleNamespace(entries=[])
+            return SimpleNamespace(entries=[
+                SimpleNamespace(
+                    title="Experimenta el legado del Estadio Azteca",
+                    summary="Recorrido histórico en Google Earth.",
+                    link=(
+                        "https://blog.google/intl/es-419/"
+                        "actualizaciones-de-producto/informacion/"
+                        "experimenta-el-legado-del-estadio-azteca/"
+                    ),
+                    published_parsed=_parsed_date("2026-07-28"),
+                ),
+                SimpleNamespace(
+                    title="EXPERIMENTA EL LEGADO DEL ESTADIO AZTECA",
+                    summary="La misma historia desde un alias del feed.",
+                    link=(
+                        "https://blog.google/intl/es-419/feed/"
+                        "experimenta-el-legado-del-estadio-azteca/"
+                    ),
+                    published_parsed=_parsed_date("2026-07-28"),
+                ),
+            ])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "candidates.json"
+            report = collect_live_candidates(
+                registry_path=SOURCES_PATH,
+                output_path=output,
+                report_path=root / "report.json",
+                today=date(2026, 7, 28),
+                parser=parser,
+            )
+            candidates = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(report["candidate_count"], 1)
+        self.assertEqual(report["rejection_counts"]["duplicate_story"], 1)
+        self.assertEqual(len(candidates), 1)
+        google = next(
+            source for source in report["sources"]
+            if source["source_id"] == "google_blog"
+        )
+        self.assertEqual(google["accepted"], 1)
+        self.assertEqual(google["rejected"], 1)
 
     def test_substantive_platform_story_outranks_a_promotion(self):
         def parser(feed_url: str):

@@ -1,0 +1,376 @@
+{
+  "version": "1.0.0",
+  "name": "Matriz estratégica Estratosférica 3.0",
+  "positioning": "Medio alternativo de cultura digital latinoamericana con foco en gamers.",
+  "mission": "Convertir historias, jugadas, conversaciones y transmisiones en comunidad propia, aprendizaje de audiencia y oportunidades comerciales.",
+  "operating_principles": [
+    "menos_es_mas",
+    "cada_pieza_tiene_un_objetivo",
+    "la_comunidad_es_un_activo",
+    "las_vistas_no_son_la_unica_metrica",
+    "los_derechos_se_verifican_antes_de_emitir",
+    "la_ia_propone_y_aprende_pero_no_inventa"
+  ],
+  "audience": {
+    "core": "gamers de Colombia y Latinoamérica",
+    "adjacent": [
+      "fans de esports",
+      "creadores y comunidades digitales",
+      "compradores de tecnología y periféricos",
+      "personas interesadas en moda, gastronomía y tendencias conectadas con gaming"
+    ]
+  },
+  "editorial_pillars": {
+    "gaming_esports": 55,
+    "technology_innovation": 15,
+    "culture_trends_entertainment": 10,
+    "fashion_lifestyle": 7.5,
+    "gastronomy_experiences": 7.5,
+    "events_business_broadcasting": 5
+  },
+  "crossover_rule": "Moda, gastronomía, cultura, tendencias y tecnología solo entran al flujo cuando existe una conexión demostrable con gamers, esports, creadores, eventos o cultura digital.",
+  "funnel": [
+    {
+      "id": "attract",
+      "purpose": "Atraer atención relevante",
+      "signals": [
+        "alcance_calificado",
+        "reproducciones",
+        "retencion_inicial",
+        "compartidos"
+      ]
+    },
+    {
+      "id": "activate",
+      "purpose": "Provocar participación",
+      "signals": [
+        "respuestas",
+        "votos",
+        "comentarios_utiles",
+        "republicaciones",
+        "guardados"
+      ]
+    },
+    {
+      "id": "learn",
+      "purpose": "Entender intereses y comportamiento",
+      "signals": [
+        "afinidad_por_juego",
+        "afinidad_por_formato",
+        "preguntas_recurrentes",
+        "intencion_de_compra",
+        "interes_en_eventos"
+      ]
+    },
+    {
+      "id": "own",
+      "purpose": "Construir activos propios",
+      "signals": [
+        "seguidores_relevantes",
+        "registros_con_consentimiento",
+        "participantes",
+        "formatos_reconocibles",
+        "derechos_propios"
+      ]
+    },
+    {
+      "id": "monetize",
+      "purpose": "Convertir evidencia en ingresos",
+      "signals": [
+        "leads_comerciales",
+        "clics_atribuidos",
+        "ventas_atribuidas",
+        "patrocinios",
+        "pauta",
+        "ingresos_por_transmision"
+      ]
+    }
+  ],
+  "content_products": [
+    {
+      "id": "radar_estratosferico",
+      "name": "Radar Estratosférico",
+      "purpose": "Explicar una noticia que importa antes de que se vuelva ruido.",
+      "funnel_stage": "attract",
+      "preferred_formats": [
+        "texto_pregunta",
+        "carrusel",
+        "reel_explicativo"
+      ],
+      "community_action": "opinar_o_elegir",
+      "primary_metrics": [
+        "compartidos",
+        "respuestas_calificadas"
+      ],
+      "commercial_paths": [
+        "pauta_contextual",
+        "branded_content_declarado"
+      ],
+      "rights_requirement": "fuente_verificable_y_medios_propios_o_licenciados"
+    },
+    {
+      "id": "jugada_estratosferica",
+      "name": "Jugada Estratosférica",
+      "purpose": "Atraer con una jugada épica y convertirla en conversación.",
+      "funnel_stage": "activate",
+      "preferred_formats": [
+        "clip_autorizado",
+        "short_con_analisis",
+        "enlace_o_embed_oficial"
+      ],
+      "community_action": "puntuar_predecir_o_debatir",
+      "primary_metrics": [
+        "retencion",
+        "compartidos",
+        "comentarios"
+      ],
+      "commercial_paths": [
+        "patrocinio_de_seccion",
+        "perifericos",
+        "hardware"
+      ],
+      "rights_requirement": "autorizado_embebido_o_propio"
+    },
+    {
+      "id": "comunidad_decide",
+      "name": "La Comunidad Decide",
+      "purpose": "Recoger preferencias explícitas mediante encuestas, preguntas y predicciones.",
+      "funnel_stage": "learn",
+      "preferred_formats": [
+        "encuesta",
+        "pregunta_con_opciones",
+        "prediccion",
+        "ranking"
+      ],
+      "community_action": "votar_y_explicar",
+      "primary_metrics": [
+        "tasa_de_respuesta",
+        "respuestas_utiles",
+        "afinidades_detectadas"
+      ],
+      "commercial_paths": [
+        "investigacion_de_audiencia",
+        "insight_para_marcas"
+      ],
+      "rights_requirement": "contenido_original"
+    },
+    {
+      "id": "esto_cambia_el_juego",
+      "name": "Esto Cambia el Juego",
+      "purpose": "Dar contexto, análisis y utilidad sobre gaming, tecnología o tendencias.",
+      "funnel_stage": "learn",
+      "preferred_formats": [
+        "reel_explicativo",
+        "video",
+        "carrusel",
+        "analisis"
+      ],
+      "community_action": "guardar_compartir_o_preguntar",
+      "primary_metrics": [
+        "retencion",
+        "guardados",
+        "preguntas_utiles"
+      ],
+      "commercial_paths": [
+        "patrocinio_editorial",
+        "servicios_creativos",
+        "formacion"
+      ],
+      "rights_requirement": "fuentes_verificadas_y_produccion_original"
+    },
+    {
+      "id": "cultura_en_modo_gamer",
+      "name": "Cultura en Modo Gamer",
+      "purpose": "Conectar moda, gastronomía, entretenimiento y lifestyle con la vida gamer.",
+      "funnel_stage": "attract",
+      "preferred_formats": [
+        "reel",
+        "guia",
+        "carrusel",
+        "cobertura"
+      ],
+      "community_action": "descubrir_recomendar_o_asistir",
+      "primary_metrics": [
+        "guardados",
+        "compartidos",
+        "clics_locales"
+      ],
+      "commercial_paths": [
+        "marcas_no_endemicas",
+        "activaciones",
+        "afiliados",
+        "referidos_locales"
+      ],
+      "rights_requirement": "fuente_y_medios_autorizados"
+    },
+    {
+      "id": "setup_real",
+      "name": "Setup Real",
+      "purpose": "Ayudar a decidir qué tecnología, periférico o servicio vale la pena.",
+      "funnel_stage": "monetize",
+      "preferred_formats": [
+        "comparativa",
+        "guia_de_compra",
+        "prueba",
+        "video_corto"
+      ],
+      "community_action": "comparar_preguntar_o_comprar",
+      "primary_metrics": [
+        "clics_atribuidos",
+        "guardados",
+        "intencion_de_compra"
+      ],
+      "commercial_paths": [
+        "afiliados",
+        "pauta",
+        "patrocinio",
+        "contenido_para_marcas"
+      ],
+      "rights_requirement": "transparencia_comercial_y_medios_autorizados"
+    },
+    {
+      "id": "arena_estratosferica",
+      "name": "Arena Estratosférica",
+      "purpose": "Transmitir eventos autorizados y convertir la audiencia en comunidad y patrocinio.",
+      "funnel_stage": "own",
+      "preferred_formats": [
+        "transmision_en_vivo",
+        "previa",
+        "resumen",
+        "clip_postevento"
+      ],
+      "community_action": "ver_comentar_registrarse_y_regresar",
+      "primary_metrics": [
+        "usuarios_concurrentes",
+        "minutos_vistos",
+        "chat_activo",
+        "registros",
+        "retorno"
+      ],
+      "commercial_paths": [
+        "patrocinio_de_transmision",
+        "pauta",
+        "produccion",
+        "licenciamiento"
+      ],
+      "rights_requirement": "autorizacion_gratuita_licencia_pagada_o_derechos_propios"
+    },
+    {
+      "id": "torneo_estratosferico",
+      "name": "Torneo Estratosférico",
+      "purpose": "Crear competencia, datos, contenidos y derechos propios.",
+      "funnel_stage": "own",
+      "preferred_formats": [
+        "convocatoria",
+        "bracket",
+        "transmision",
+        "ranking",
+        "historias_de_jugadores"
+      ],
+      "community_action": "inscribirse_competir_y_seguir",
+      "primary_metrics": [
+        "inscritos",
+        "participantes_activos",
+        "audiencia_recurrente",
+        "base_de_datos_con_consentimiento"
+      ],
+      "commercial_paths": [
+        "patrocinio",
+        "inscripcion",
+        "produccion",
+        "derechos_propios"
+      ],
+      "rights_requirement": "reglamento_y_derechos_propios_documentados"
+    },
+    {
+      "id": "informe_de_audiencia",
+      "name": "Informe de Audiencia",
+      "purpose": "Transformar métricas y aprendizajes en argumentos comerciales.",
+      "funnel_stage": "monetize",
+      "preferred_formats": [
+        "informe_interno",
+        "media_kit",
+        "caso_de_estudio",
+        "propuesta"
+      ],
+      "community_action": "no_aplica",
+      "primary_metrics": [
+        "oportunidades_detectadas",
+        "propuestas_aprobadas",
+        "ingresos_atribuidos"
+      ],
+      "commercial_paths": [
+        "venta_de_pauta",
+        "patrocinios",
+        "servicios",
+        "alianzas"
+      ],
+      "rights_requirement": "datos_agregados_con_privacidad"
+    }
+  ],
+  "required_decision_fields": [
+    "content_product_id",
+    "purpose",
+    "audience_hypothesis",
+    "expected_community_action",
+    "primary_metric",
+    "commercial_path",
+    "rights_state"
+  ],
+  "rights": {
+    "allowed_paths": [
+      "original_owned",
+      "authorized_free",
+      "licensed_paid",
+      "official_embed_or_link"
+    ],
+    "blocked_without_written_clearance": [
+      "download_third_party_video",
+      "reupload_third_party_clip",
+      "retransmit_unverified_event",
+      "remove_attribution"
+    ],
+    "evidence_required": true,
+    "rights_record_required_before_broadcast": true
+  },
+  "measurement": {
+    "dimensions": {
+      "reach": [
+        "qualified_reach",
+        "views"
+      ],
+      "community": [
+        "responses",
+        "votes",
+        "useful_comments",
+        "shares",
+        "saves"
+      ],
+      "retention": [
+        "completion_rate",
+        "watch_time",
+        "returning_audience"
+      ],
+      "ownership": [
+        "relevant_followers",
+        "consented_registrations",
+        "participants",
+        "owned_rights"
+      ],
+      "business": [
+        "attributed_clicks",
+        "commercial_leads",
+        "attributed_revenue",
+        "sponsorships"
+      ]
+    },
+    "views_only_success_is_forbidden": true,
+    "automatic_strategy_changes_enabled": false
+  },
+  "safety": {
+    "publishing_enabled": false,
+    "broadcasting_enabled": false,
+    "automatic_commercial_outreach_enabled": false,
+    "human_approval_required": true
+  }
+}

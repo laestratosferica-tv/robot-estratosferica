@@ -43,6 +43,8 @@ AI_WORK_TERMS = {
     "interacciones",
 }
 
+SHORT_VIDEO_CONTEXT_WORDS = 18
+
 
 def _is_high_impact(candidate: Candidate) -> bool:
     signals = candidate.signals
@@ -80,6 +82,14 @@ def _verified_numeric_value(candidate: Candidate) -> str | None:
     return " · ".join(fact.upper() for fact in facts[:2])
 
 
+def _short_video_context(text: str) -> str:
+    """Keep the factual context speakable while preserving source wording."""
+    words = text.strip().split()
+    if len(words) <= SHORT_VIDEO_CONTEXT_WORDS:
+        return text.strip()
+    return " ".join(words[:SHORT_VIDEO_CONTEXT_WORDS]).rstrip(" ,;:-") + "…"
+
+
 def build_content_punch(
     candidate: Candidate,
     audience_experiment: dict[str, Any],
@@ -95,6 +105,7 @@ def build_content_punch(
     evidence = candidate.summary.strip()
     hook = _contextual_hook(candidate, high_impact)
     concrete_value = _verified_numeric_value(candidate) or evidence
+    short_video_context = _short_video_context(concrete_value)
     expected_action = (
         f"Responder: {' / '.join(options)}"
         if options
@@ -105,6 +116,7 @@ def build_content_punch(
         "primary_audience": AUDIENCE_BY_TERRITORY[candidate.territory],
         "hook": hook,
         "concrete_value": concrete_value,
+        "short_video_context": short_video_context,
         "evidence_origin": "candidate.summary",
         "audience_promise": PROMISE_BY_TERRITORY[candidate.territory],
         "tension_question": question,
@@ -130,6 +142,7 @@ def validate_content_punch(plan: dict[str, Any]) -> list[str]:
         "primary_audience",
         "hook",
         "concrete_value",
+        "short_video_context",
         "evidence_origin",
         "audience_promise",
         "tension_question",

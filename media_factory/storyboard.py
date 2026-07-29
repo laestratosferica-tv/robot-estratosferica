@@ -40,7 +40,7 @@ def build_storyboard(
             start_second=3,
             end_second=8,
             purpose="Presentar únicamente el hecho confirmado.",
-            voiceover=package.factual_summary,
+            voiceover=str(package.content_punch["short_video_context"]),
             on_screen_text="Hecho confirmado",
             visual_direction=(
                 "Composición tipográfica original del resumen factual, sin "

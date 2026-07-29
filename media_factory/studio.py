@@ -89,6 +89,7 @@ def build_content_package(
     factual_summary = candidate.summary
     audience_experiment = build_audience_experiment(candidate, opportunity)
     content_punch = build_content_punch(candidate, audience_experiment)
+    short_video_context = content_punch["short_video_context"]
     headline = content_punch["hook"]
     editorial_line = (
         "Lectura editorial: cualquier consecuencia debe comprobarse a partir "
@@ -97,7 +98,7 @@ def build_content_package(
     closing_question = content_punch["tension_question"]
     script = (
         f"GANCHO\n{candidate.title}\n\n"
-        f"CONTEXTO\n{factual_summary}\n\n"
+        f"CONTEXTO\n{short_video_context}\n\n"
         f"LECTURA ESTRATOSFÉRICA\n{angle}\n\n"
         f"POR QUÉ IMPORTA\n{editorial_line}\n\n"
         f"CIERRE\n{closing_question}"

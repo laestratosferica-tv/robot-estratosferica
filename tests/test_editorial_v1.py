@@ -604,6 +604,41 @@ class EditorialV1Tests(unittest.TestCase):
             storyboard.duration_seconds,
         )
 
+    def test_short_video_keeps_full_record_but_uses_compact_evidence(self) -> None:
+        summary = (
+            "El primer conjunto de datos de ATLAS se basa en 15 millones "
+            "de interacciones y representa a más de 1,000 millones de "
+            "personas al mes, más de 150 países, 140 idiomas, 800 "
+            "ocupaciones y 4,000 tareas."
+        )
+        candidate = Candidate(
+            title="Google presenta AI & Economy ATLAS",
+            summary=summary,
+            source_url="https://example.com/atlas",
+            territory="ai_innovation_future",
+            signals={
+                key: 1 for key in self.config["editorial_score"]["weights"]
+            },
+        )
+        decision = evaluate_candidate(candidate, self.config)
+        package = build_content_package(candidate, decision, None)
+        storyboard = build_storyboard(candidate, package)
+
+        self.assertEqual(package.factual_summary, summary)
+        self.assertNotIn(summary, package.short_video_script)
+        compact_context = package.content_punch["short_video_context"]
+        self.assertIn(compact_context, package.short_video_script)
+        self.assertLessEqual(
+            len(package.short_video_script.split()),
+            75,
+        )
+        self.assertEqual(storyboard.scenes[1].voiceover, compact_context)
+        self.assertEqual(
+            validate_evidence_alignment(candidate, package, storyboard),
+            [],
+        )
+        self.assertEqual(validate_content_package(package), [])
+
     def test_unsafe_configuration_is_blocked(self) -> None:
         unsafe = json.loads(json.dumps(self.config))
         unsafe["safe_mode"]["publishing_enabled"] = True

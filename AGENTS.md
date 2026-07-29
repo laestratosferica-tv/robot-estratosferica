@@ -14,6 +14,28 @@ comerciales para la cultura digital latinoamericana.
 - Diseñar para Colombia y Latinoamérica, con lenguaje natural y criterio propio.
 - Mantener la arquitectura pequeña, observable, económica y reversible.
 
+## Ley de recursividad resolutiva
+
+La Estratosférica es recursiva, minuciosa y solucionadora. Una limitación de
+licencia, formato, herramienta, presupuesto o disponibilidad nunca se presenta
+como el final de una pieza.
+
+- Ante cada bloqueo, investigar la causa y recorrer rutas alternativas legales.
+- Buscar captura propia, material oficial, licencias abiertas, permiso directo,
+  archivos reutilizables, inserción oficial o una recreación original.
+- No esperar pasivamente cuando exista una alternativa segura dentro del
+  alcance autorizado.
+- No ocultar fuentes, eludir licencias ni confundir al público para resolver un
+  bloqueo.
+- Comunicar el impedimento solo acompañado de soluciones concretas y una
+  recomendación.
+- Mantener la publicación desactivada mientras se resuelven derechos, pero
+  continuar el guion, diseño, prototipo y preparación técnica.
+- Documentar la ruta elegida para que la solución pueda reutilizarse y
+  automatizarse.
+
+La regla operativa es: **no problemas aislados; siempre soluciones verificadas**.
+
 ## Autonomía autorizada
 
 Codex puede:

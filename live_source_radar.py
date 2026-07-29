@@ -20,7 +20,10 @@ from media_factory.radar import (
     load_source_registry,
     normalize_story,
 )
-from media_factory.editorial_quality import substantive_summary_issue
+from media_factory.editorial_quality import (
+    normalize_editorial_text,
+    substantive_summary_issue,
+)
 from media_factory.strategy import (
     classify_candidate,
     load_content_strategy,
@@ -250,20 +253,48 @@ def _bounded_evidence(value: str) -> str:
     return bounded[:sentence_end + 1].strip()
 
 
+def _evidence_specificity_score(evidence: str) -> tuple[int, int]:
+    """Prefer measurable findings and concrete changes over generic summaries."""
+    normalized = normalize_editorial_text(evidence)
+    tokens = set(normalized.split())
+    numeric_facts = len(re.findall(r"\d+(?:[.,]\d+)?", evidence))
+    concrete_terms = {
+        "abarca",
+        "abarcan",
+        "agrega",
+        "anade",
+        "confirma",
+        "incorpora",
+        "incluye",
+        "incluyen",
+        "mejora",
+        "permite",
+        "revela",
+        "suma",
+    }
+    concrete_score = len(tokens.intersection(concrete_terms))
+    phrase_score = 2 if "se basa en" in normalized else 0
+    return (
+        numeric_facts * 5 + concrete_score * 3 + phrase_score,
+        min(len(evidence), MAX_EVIDENCE_CHARS),
+    )
+
+
 def _article_evidence(html_document: str, title: str) -> str:
     parser = _ArticleEvidenceParser()
     parser.feed(str(html_document or ""))
     first_bounded_candidate = ""
-    for description in parser.descriptions:
-        evidence = _bounded_evidence(description)
+    valid_candidates: list[str] = []
+    for raw_candidate in [
+        *parser.descriptions,
+        *parser.paragraphs[:20],
+    ]:
+        evidence = _bounded_evidence(raw_candidate)
         first_bounded_candidate = first_bounded_candidate or evidence
         if not substantive_summary_issue(title, evidence):
-            return evidence
-    for paragraph in parser.paragraphs[:8]:
-        evidence = _bounded_evidence(paragraph)
-        first_bounded_candidate = first_bounded_candidate or evidence
-        if not substantive_summary_issue(title, evidence):
-            return evidence
+            valid_candidates.append(evidence)
+    if valid_candidates:
+        return max(valid_candidates, key=_evidence_specificity_score)
     return first_bounded_candidate
 
 

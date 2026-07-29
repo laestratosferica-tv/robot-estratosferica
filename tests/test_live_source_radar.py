@@ -11,6 +11,7 @@ from urllib.error import URLError
 from live_source_radar import (
     LiveRadarError,
     _ApprovedRedirectHandler,
+    _article_evidence,
     collect_live_candidates,
     main,
 )
@@ -25,6 +26,26 @@ def _parsed_date(value: str) -> time.struct_time:
 
 
 class LiveSourceRadarTests(unittest.TestCase):
+    def test_article_evidence_prefers_measurable_findings(self):
+        evidence = _article_evidence(
+            (
+                "<meta name='description' content='ATLAS ofrece un análisis "
+                "exhaustivo sobre cómo las personas usan la IA.'>"
+                "<p>El estudio explica el contexto general de la economía.</p>"
+                "<p>ATLAS se basa en 15 millones de interacciones y abarca "
+                "más de 150 países, 140 idiomas, 800 ocupaciones y 4.000 "
+                "tareas.</p>"
+            ),
+            "Claves para comprender la economía de la IA",
+        )
+
+        self.assertIn("15 millones", evidence)
+        self.assertIn("150 países", evidence)
+        self.assertNotEqual(
+            evidence,
+            "ATLAS ofrece un análisis exhaustivo sobre cómo las personas usan la IA.",
+        )
+
     def test_article_redirect_to_unapproved_domain_is_blocked(self):
         handler = _ApprovedRedirectHandler(["blog.google"])
         with self.assertRaisesRegex(

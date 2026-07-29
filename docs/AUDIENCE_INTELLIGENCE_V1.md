@@ -57,6 +57,18 @@ de la misma noticia conserva el experimento y permite comparar resultados.
 
 Cada informe mantiene separadas las métricas de alcance, aprendizaje y negocio.
 
+## Diagnóstico posterior a cada Reel
+
+El sistema no declara viralidad con reproducciones públicas aisladas. Primero
+comprueba si existen finalización, compartidos, guardados y comentarios. Si
+faltan, el diagnóstico queda marcado como parcial y solicita estadísticas de
+la cuenta propietaria.
+
+Con datos completos compara contra una pieza equivalente y propone una sola
+variable para la siguiente prueba: gancho, payoff u otra variable autorizada
+por el protocolo. La recomendación queda en análisis y requiere revisión
+humana; nunca cambia la estrategia ni publica automáticamente.
+
 ## Descubrimiento y hashtags
 
 Los hashtags sirven como señales de contexto y descubrimiento; no garantizan

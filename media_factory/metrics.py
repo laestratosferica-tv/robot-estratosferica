@@ -98,6 +98,82 @@ def summarize_audience_learning(records: list[dict]) -> dict:
     }
 
 
+def build_reel_learning_report(
+    snapshot: dict,
+    baseline: dict | None = None,
+) -> dict:
+    """Diagnose one Reel without claiming success from incomplete public data."""
+    metrics = calculate_performance_metrics(snapshot)
+    baseline_metrics = calculate_performance_metrics(baseline or {})
+    available = {
+        key
+        for key, value in snapshot.items()
+        if value is not None
+    }
+    required = {
+        "views",
+        "completion_rate",
+        "shares",
+        "saves",
+        "comments",
+    }
+    missing = sorted(required - available)
+    comparable = bool(baseline) and not missing
+
+    if "completion_rate" not in available:
+        diagnosis = "insufficient_retention_data"
+        next_test = {
+            "variable": "none",
+            "action": "collect_owner_insights",
+            "reason": "La reproducción pública no revela dónde abandona la audiencia.",
+        }
+    elif metrics["completion_rate"] < 0.45:
+        diagnosis = "weak_completion"
+        next_test = {
+            "variable": "hook",
+            "action": "test_clearer_first_second",
+            "reason": "La finalización baja exige aclarar antes la promesa.",
+        }
+    elif metrics["share_rate"] < 0.01 and metrics["save_rate"] < 0.01:
+        diagnosis = "watched_but_not_shared"
+        next_test = {
+            "variable": "payoff",
+            "action": "test_more_useful_or_surprising_payoff",
+            "reason": "La pieza se ve, pero todavía no genera suficiente valor social.",
+        }
+    else:
+        diagnosis = "promising_quality_signals"
+        next_test = {
+            "variable": "hook",
+            "action": "preserve_structure_test_new_hook",
+            "reason": "Se conserva la estructura y se prueba una sola entrada nueva.",
+        }
+
+    exposure_delta = None
+    if comparable and baseline_metrics["exposure"] > 0:
+        exposure_delta = round(
+            (
+                metrics["exposure"] - baseline_metrics["exposure"]
+            )
+            / baseline_metrics["exposure"],
+            4,
+        )
+
+    return {
+        "mode": "analysis_only",
+        "diagnosis": diagnosis,
+        "metrics": metrics,
+        "baseline_metrics": baseline_metrics if baseline else None,
+        "exposure_delta": exposure_delta,
+        "missing_metrics": missing,
+        "data_quality": "complete" if not missing else "partial",
+        "next_test": next_test,
+        "one_variable_only": True,
+        "automatic_strategy_changes_enabled": False,
+        "requires_human_review": True,
+    }
+
+
 def build_measurement_plan(
     decision: EditorialDecision,
     opportunity: CommercialOpportunity | None,

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>La Estratosférica Brand Lab</title>
+  <style>
+    :root {
+      --ink: #f4f7ff;
+      --muted: #a9b4c8;
+      --night: #050812;
+      --panel: rgba(12, 19, 36, .86);
+      --cyan: #41ead4;
+      --blue: #4d7cff;
+      --neon: #00bfff;
+      --line: #25344e;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 18% 8%, rgba(65,234,212,.15), transparent 28rem),
+        radial-gradient(circle at 88% 28%, rgba(77,124,255,.2), transparent 32rem),
+        radial-gradient(circle at 65% 72%, rgba(0,191,255,.08), transparent 30rem),
+        linear-gradient(180deg, #0b1020, var(--night) 48%, #050812);
+      font: 500 16px/1.55 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    body::before {
+      content: "";
+      position: fixed; inset: 0; pointer-events: none; opacity: .22;
+      background-image:
+        linear-gradient(var(--line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: linear-gradient(to bottom, black, transparent 78%);
+    }
+    a { color: inherit; }
+    .shell { width: min(1120px, calc(100% - 36px)); margin: auto; }
+    nav {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 24px 0; position: relative; z-index: 2;
+    }
+    .brand { font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    .brand span {
+      color: transparent;
+      background: linear-gradient(90deg, var(--cyan), var(--neon), var(--blue));
+      background-clip: text;
+      -webkit-background-clip: text;
+    }
+    .nav-cta, .primary {
+      text-decoration: none; border: 1px solid var(--cyan);
+      padding: 11px 17px; border-radius: 999px; font-weight: 800;
+      box-shadow: 0 0 24px rgba(65,234,212,.18);
+    }
+    .hero {
+      min-height: 72vh; display: grid; grid-template-columns: 1.2fr .8fr;
+      align-items: center; gap: 60px; padding: 56px 0 88px;
+    }
+    .eyebrow {
+      color: rgba(244,247,255,.82);
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      font-size: 12px;
+    }
+    h1 { font-size: clamp(46px, 7vw, 88px); line-height: .96; margin: 18px 0 24px; letter-spacing: -.055em; }
+    h1 em {
+      color: transparent; font-style: normal;
+      background: linear-gradient(90deg, var(--cyan), var(--neon), var(--blue));
+      background-clip: text;
+      -webkit-background-clip: text;
+    }
+    .lead { color: var(--muted); font-size: clamp(18px, 2vw, 23px); max-width: 700px; }
+    .actions { display: flex; gap: 16px; margin-top: 32px; flex-wrap: wrap; }
+    .primary {
+      background: linear-gradient(105deg, var(--cyan), var(--neon) 48%, var(--blue));
+      border-color: transparent; color: #050812;
+      box-shadow: 0 0 30px rgba(65,234,212,.2), 0 0 38px rgba(77,124,255,.16);
+    }
+    .secondary { padding: 11px 4px; color: var(--muted); }
+    .core {
+      aspect-ratio: 1; border-radius: 50%; position: relative;
+      display: grid; place-items: center;
+      border: 1px solid rgba(65,234,212,.48);
+      box-shadow: inset 0 0 70px rgba(65,234,212,.1), 0 0 80px rgba(77,124,255,.22);
+    }
+    .core::before, .core::after {
+      content: ""; position: absolute; border-radius: 50%;
+      border: 1px dashed rgba(244,247,255,.28);
+      inset: 13%; animation: spin 18s linear infinite;
+    }
+    .core::after { inset: 27%; border-color: rgba(77,124,255,.72); animation-direction: reverse; animation-duration: 12s; }
+    .core strong { text-align: center; font-size: clamp(22px, 3vw, 38px); line-height: 1.05; max-width: 60%; z-index: 1; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    section { padding: 86px 0; position: relative; }
+    h2 { font-size: clamp(34px, 5vw, 58px); line-height: 1; margin: 0 0 18px; letter-spacing: -.035em; }
+    .intro { color: var(--muted); max-width: 720px; font-size: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 38px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 22px;
+      padding: 28px; min-height: 310px; backdrop-filter: blur(14px);
+    }
+    .card:nth-child(1) .num { color: var(--cyan); }
+    .card:nth-child(2) .num { color: var(--neon); }
+    .card:nth-child(3) .num { color: var(--blue); }
+    .card .num { font: 800 12px/1 monospace; }
+    .card h3 { font-size: 27px; margin: 50px 0 12px; }
+    .card p, .card li { color: var(--muted); }
+    .card ul { padding-left: 18px; }
+    .signal {
+      display: grid; grid-template-columns: .8fr 1.2fr; gap: 44px;
+      background: linear-gradient(120deg, rgba(65,234,212,.09), rgba(0,191,255,.1), rgba(77,124,255,.13));
+      border: 1px solid var(--line); border-radius: 28px; padding: 44px;
+    }
+    .signal ol { margin: 0; padding-left: 22px; }
+    .signal li { padding: 9px 0; color: var(--muted); }
+    .proof { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px; }
+    .chip { border: 1px solid var(--line); border-radius: 999px; padding: 9px 14px; color: var(--muted); }
+    .cta {
+      text-align: center; padding: 86px 24px; border-radius: 32px;
+      border: 1px solid rgba(77,124,255,.38);
+      background:
+        radial-gradient(circle at 20% 0, rgba(65,234,212,.13), transparent 52%),
+        radial-gradient(circle at 80% 0, rgba(77,124,255,.17), transparent 58%);
+    }
+    .cta p { color: var(--muted); max-width: 620px; margin: 18px auto 32px; }
+    footer { padding: 46px 0; color: var(--muted); display: flex; justify-content: space-between; gap: 20px; }
+    @media (max-width: 800px) {
+      .hero, .signal { grid-template-columns: 1fr; }
+      .hero { padding-top: 24px; }
+      .core { max-width: 440px; width: 90%; margin: auto; }
+      .grid { grid-template-columns: 1fr; }
+      footer { flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav>
+      <div class="brand">La Estratosférica <span>Brand Lab</span></div>
+      <a class="nav-cta" href="#conversemos">Alianzas</a>
+    </nav>
+
+    <main>
+      <header class="hero">
+        <div>
+          <div class="eyebrow">Gaming · tecnología · cultura digital LATAM</div>
+          <h1>Tu marca no necesita parecer gamer. Necesita <em>entender al gamer.</em></h1>
+          <p class="lead">Convertimos señales culturales en contenido, participación y aprendizajes medibles para marcas que quieren entrar con credibilidad.</p>
+          <div class="actions">
+            <a class="primary" href="#soluciones">Explorar soluciones</a>
+            <a class="secondary" href="#metodo">Ver cómo trabajamos →</a>
+          </div>
+        </div>
+        <div class="core" aria-label="Sistema de inteligencia, contenido y comunidad">
+          <strong>SEÑAL<br>→ CONTENIDO<br>→ COMUNIDAD<br>→ RESULTADO</strong>
+        </div>
+      </header>
+
+      <section id="soluciones">
+        <div class="eyebrow">Tres formas de entrar</div>
+        <h2>No vendemos relleno.<br>Construimos una razón para participar.</h2>
+        <p class="intro">Cada solución nace de un objetivo real, habla el idioma de la comunidad y termina en evidencia que la marca puede utilizar.</p>
+        <div class="grid">
+          <article class="card">
+            <span class="num">01 / DESCUBRIR</span>
+            <h3>Brand Signal</h3>
+            <p>Encontramos el territorio gamer que sí tiene sentido para la marca.</p>
+            <ul><li>Mapa de audiencia</li><li>Concepto creativo</li><li>Prototipos</li><li>Plan de medición</li></ul>
+          </article>
+          <article class="card">
+            <span class="num">02 / ACTIVAR</span>
+            <h3>Community Quest</h3>
+            <p>Convertimos una pregunta de negocio en una misión que la comunidad quiere responder.</p>
+            <ul><li>Reto o votación</li><li>Contenido nativo</li><li>Participación</li><li>Informe de aprendizajes</li></ul>
+          </article>
+          <article class="card">
+            <span class="num">03 / ESCALAR</span>
+            <h3>Sponsored Multiverse</h3>
+            <p>Una serie con mundos, voces y formatos distintos, sin repetir la misma plantilla.</p>
+            <ul><li>4–8 piezas</li><li>Integración declarada</li><li>Variación creativa</li><li>Reporte de desempeño</li></ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="metodo">
+        <div class="signal">
+          <div>
+            <div class="eyebrow">Método Estratosférico</div>
+            <h2>Primero escuchamos. Luego construimos.</h2>
+            <p class="intro">La tecnología acelera el trabajo; el criterio editorial protege la confianza.</p>
+          </div>
+          <div>
+            <ol>
+              <li>Detectamos una señal cultural verificable.</li>
+              <li>Encontramos la tensión entre marca y comunidad.</li>
+              <li>Diseñamos un concepto que entrega valor real.</li>
+              <li>Producimos y aprobamos antes de publicar.</li>
+              <li>Medimos retención, acciones y aprendizaje.</li>
+            </ol>
+            <div class="proof">
+              <span class="chip">Retención</span><span class="chip">Compartidos</span>
+              <span class="chip">Guardados</span><span class="chip">Respuestas útiles</span>
+              <span class="chip">Resultados atribuibles</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="conversemos">
+        <div class="cta">
+          <div class="eyebrow">¿Hay una misión?</div>
+          <h2>Cuéntanos qué necesita lograr la marca.</h2>
+          <p>Respondemos con preguntas, una lectura inicial y el camino más pequeño que pueda producir evidencia real.</p>
+          <a class="primary" href="https://ig.me/m/laestratosfericatv">Conversar con Brand Lab</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>© La Estratosférica — Colombia / LATAM</span>
+      <span>Gaming · tecnología · inteligencia artificial · cultura digital</span>
+    </footer>
+  </div>
+</body>
+</html>

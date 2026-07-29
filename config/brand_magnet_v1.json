@@ -1,0 +1,92 @@
+{
+  "schema_version": "brand_magnet_v1",
+  "name": "La Estratosférica Brand Lab",
+  "positioning": "Inteligencia, contenido y experiencias para que las marcas entren a la cultura gamer latinoamericana con credibilidad y resultados medibles.",
+  "promise": "No ponemos un logo encima del gaming: encontramos una razón real para que la comunidad quiera participar.",
+  "audience": "gamers, creadores y comunidades digitales de Colombia y Latinoamérica",
+  "offers": [
+    {
+      "id": "brand_signal",
+      "name": "Brand Signal",
+      "best_for": ["exploracion", "lanzamiento", "posicionamiento"],
+      "outcome": "Una oportunidad gamer priorizada y lista para decidir.",
+      "deliverables": [
+        "mapa_de_audiencia_y_tension",
+        "territorio_creativo",
+        "concepto_de_campana",
+        "tres_piezas_prototipo",
+        "plan_de_medicion"
+      ],
+      "minimum_evidence": ["objetivo_de_marca", "publico", "territorio"]
+    },
+    {
+      "id": "community_quest",
+      "name": "Community Quest",
+      "best_for": ["participacion", "investigacion", "activacion"],
+      "outcome": "Participación y preferencias declaradas por la comunidad.",
+      "deliverables": [
+        "reto_o_pregunta_nativa",
+        "contenido_multiformato",
+        "mecanica_de_participacion",
+        "moderacion_y_clasificacion",
+        "informe_de_aprendizajes"
+      ],
+      "minimum_evidence": ["pregunta_de_negocio", "incentivo_compatible", "derechos"]
+    },
+    {
+      "id": "sponsored_multiverse",
+      "name": "Sponsored Multiverse",
+      "best_for": ["serie", "awareness", "afinidad", "lanzamiento"],
+      "outcome": "Una serie reconocible que integra la marca sin romper el mundo gamer.",
+      "deliverables": [
+        "concepto_narrativo",
+        "cuatro_a_ocho_piezas",
+        "variacion_de_voces_y_mundos",
+        "integracion_de_marca_declarada",
+        "reporte_de_retencion_y_acciones"
+      ],
+      "minimum_evidence": ["encaje_cultural", "derechos", "objetivo_medible"]
+    }
+  ],
+  "qualification": {
+    "minimum_score": 60,
+    "weights": {
+      "gamer_fit": 25,
+      "latam_relevance": 20,
+      "community_value": 20,
+      "measurable_objective": 15,
+      "rights_readiness": 10,
+      "commercial_readiness": 10
+    },
+    "blocked_categories": [
+      "apuestas_no_autorizadas",
+      "promesas_de_dinero_facil",
+      "productos_ilegales",
+      "campanas_enganosas"
+    ]
+  },
+  "inbound_questions": [
+    "¿Qué quiere lograr la marca?",
+    "¿A qué público quiere llegar?",
+    "¿Qué producto, lanzamiento o momento debemos conectar con gaming?",
+    "¿Qué acción espera de la comunidad?",
+    "¿Qué fecha, territorios y rango de inversión contempla?",
+    "¿Qué derechos, activos y restricciones existen?"
+  ],
+  "proof_required": [
+    "alcance_calificado",
+    "retencion",
+    "compartidos",
+    "guardados",
+    "respuestas_utiles",
+    "seguidores_o_registros_atribuidos"
+  ],
+  "safety": {
+    "private_concepts_are_marked_unofficial": true,
+    "sponsorship_is_always_disclosed": true,
+    "automatic_outreach_enabled": false,
+    "automatic_pricing_enabled": false,
+    "human_approval_required": true,
+    "publishing_enabled": false
+  }
+}

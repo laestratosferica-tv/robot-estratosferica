@@ -1,0 +1,18 @@
+{
+  "schema_version": "visual_editorial_decision_v1",
+  "asset": "artifacts/review/atlas-video-draft-v10.mp4",
+  "sha256": "ccdd9e68f13c3b6552d6eb10ae3eb18a55e9d0ed1b847f60b6dd50f183f2f471",
+  "decision": "approved",
+  "approved_by": "Jose Luis",
+  "approved_at": "2026-07-28",
+  "approved_elements": [
+    "robot_voice",
+    "stationary_text",
+    "gamer_aaa_backgrounds",
+    "animated_circuit_connections",
+    "animated_alert_lights",
+    "ten_second_duration"
+  ],
+  "publishing_enabled": false,
+  "notes": "Versión visual aprobada. La aprobación no habilita publicación automática."
+}

@@ -1,0 +1,56 @@
+{
+  "schema_version": "editorial_citation_v1",
+  "video": "halo-multiverse-pilot-v9-vertical-crop.mp4",
+  "publication_enabled": false,
+  "review_status": "approved_creative",
+  "media_usage": {
+    "pathway": "editorial_citation",
+    "purpose": "news_reporting",
+    "minimum_necessary": true,
+    "transformative_commentary": true,
+    "source_attribution": true,
+    "source_link_preserved": true,
+    "original_music_removed": true,
+    "uploader_identity_verified": true,
+    "human_review_required": true,
+    "max_excerpt_seconds": 2.12
+  },
+  "source": {
+    "title": "Halo: Campaign Evolved | New Missions Trailer | Operation: Meteorite",
+    "channel": "HALO",
+    "url": "https://www.youtube.com/watch?v=G4sUx2nX5EQ",
+    "official_context_url": "https://www.halowaypoint.com/en-gb/news/halo-campaign-evolved-story-reveal?pubDate=20260721"
+  },
+  "excerpts": [
+    {
+      "start_seconds": 49.0,
+      "duration_seconds": 1.02,
+      "purpose": "immediate action hook"
+    },
+    {
+      "start_seconds": 51.0,
+      "duration_seconds": 1.52,
+      "purpose": "show new mission gameplay"
+    },
+    {
+      "start_seconds": 53.0,
+      "duration_seconds": 2.12,
+      "purpose": "support prequel context"
+    },
+    {
+      "start_seconds": 56.5,
+      "duration_seconds": 2.12,
+      "purpose": "identify Master Chief and Johnson"
+    },
+    {
+      "start_seconds": 65.0,
+      "duration_seconds": 2.02,
+      "purpose": "support clandestine mission description"
+    },
+    {
+      "start_seconds": 136.5,
+      "duration_seconds": 1.4,
+      "purpose": "close with the two protagonists"
+    }
+  ]
+}

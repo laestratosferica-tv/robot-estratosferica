@@ -1,0 +1,23 @@
+{
+  "schema_version": "video_decision_v1",
+  "video": "halo-multiverse-pilot-v9-vertical-crop.mp4",
+  "creative_status": "approved",
+  "approved_by": "human_director",
+  "approved_at": "2026-07-29",
+  "layout": {
+    "format": "1080x1920",
+    "aspect_ratio": "9:16",
+    "fit": "cover_crop",
+    "deformation": false,
+    "per_scene_focus": true
+  },
+  "media_usage": {
+    "pathway": "editorial_citation",
+    "source_channel": "HALO",
+    "source_url": "https://www.youtube.com/watch?v=G4sUx2nX5EQ",
+    "original_audio_removed": true,
+    "max_excerpt_seconds": 2.12
+  },
+  "repository_storage_authorized": true,
+  "social_publication_authorized": false
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from urllib.parse import urlparse
 
 from .audience_intelligence import story_question
@@ -19,6 +20,7 @@ PLATFORM_LIMITS = {
     "youtube": 5000,
     "threads": 500,
 }
+SHORT_VIDEO_WORD_LIMIT = 75
 
 
 def validate_content_package(package: ContentPackage) -> list[str]:
@@ -44,6 +46,10 @@ def validate_content_package(package: ContentPackage) -> list[str]:
         str(package.content_punch.get("concrete_value", "")),
     ):
         errors.append("concrete_value_repeats_headline")
+    if len(re.findall(r"\b[\wáéíóúüñ]+\b", package.short_video_script)) > (
+        SHORT_VIDEO_WORD_LIMIT
+    ):
+        errors.append("short_video_script_exceeds_word_budget")
     for source in package.sources:
         parsed = urlparse(source)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -166,6 +172,11 @@ def validate_evidence_alignment(
     ).strip()
     if not _is_extract_supported(concrete_value, candidate.summary):
         errors.append("concrete_value_not_extractively_grounded")
+    short_video_context = str(
+        package.content_punch.get("short_video_context", "")
+    ).strip()
+    if not _is_extract_supported(short_video_context, candidate.summary):
+        errors.append("short_video_context_not_extractively_grounded")
 
     generated_copy = " ".join([
         package.headline,
@@ -182,6 +193,7 @@ def validate_evidence_alignment(
     allowed_voiceovers = {
         candidate.title,
         candidate.summary,
+        short_video_context,
         expected_question,
         *SAFE_EDITORIAL_TRANSITIONS,
     }

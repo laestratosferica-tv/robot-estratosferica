@@ -56,7 +56,7 @@ def validate_content_package(package: ContentPackage) -> list[str]:
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             errors.append("invalid_source_url")
     visual_text = " ".join(package.visual_brief).lower()
-    if "original" not in visual_text or "no descargar" not in visual_text:
+    if "original" not in visual_text or "cita editorial" not in visual_text:
         errors.append("missing_visual_rights_instruction")
     punch_errors = validate_content_punch(package.content_punch)
     errors.extend(punch_errors)

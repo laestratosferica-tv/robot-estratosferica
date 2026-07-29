@@ -93,7 +93,8 @@ videos ajenos sin validar derechos.
 | Solicitar clip a creador mediante convocatoria y autorización | Permitido con registro de licencia |
 | Usar tráiler o press kit con términos claros | Permitido según licencia |
 | Remix habilitado por la propia plataforma | Permitido dentro de sus reglas |
-| Descargar, recortar y republicar un video ajeno | Bloqueado sin permiso explícito |
+| Cita editorial mínima para análisis, crítica o noticia | Permitida con transformación, atribución, registro y revisión humana |
+| Descargar, recortar y republicar un video ajeno como decoración | Bloqueado |
 | Extraer “claves” filtradas, hacks o contenido engañoso | Bloqueado |
 
 ### Escalera creativa de derechos
@@ -111,8 +112,8 @@ publicable:
    como archivo o apoyo visual y sin atribuirle funciones del juego nuevo;
 7. recreación visual original, ilustración, animación, interfaz o 3D inspirados
    en el tema sin copiar activos protegidos;
-8. fragmento mínimo para crítica, análisis o noticia solo después de revisión
-   editorial y jurídica del caso concreto.
+8. cita editorial mínima para crítica, análisis o noticia, aplicando la política
+   operativa de semáforo y revisión humana previa a publicación.
 
 Ningún informe de bloqueo puede terminar únicamente con “no se puede”. Debe
 registrar las rutas evaluadas, ofrecer alternativas concretas y recomendar la
@@ -123,6 +124,9 @@ seguro o sustituto.
 El sistema puede recortar, reencuadrar, subtitular, narrar, sonorizar y adaptar
 material autorizado para convertirlo en una pieza propia. Estas
 transformaciones mejoran la creatividad, pero no sustituyen la licencia.
+Cuando el uso corresponda realmente a análisis, crítica o noticia, podrá
+evaluarse como cita editorial; la transformación cosmética por sí sola no
+activa esa ruta.
 
 Cuando el gameplay provenga de otra persona existen dos capas de derechos: el
 contenido del juego y la grabación o edición del creador. La autorización del

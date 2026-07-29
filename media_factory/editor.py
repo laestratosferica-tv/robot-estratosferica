@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .editorial_quality import substantive_summary_issue
+from .media_rights import has_usable_media_path
 from .models import Candidate, EditorialDecision
 
 
@@ -16,7 +17,7 @@ def _hard_rejections(
         reasons.append("duplicate_story")
     if not candidate.is_verified:
         reasons.append("unverified_rumor")
-    if not candidate.has_media_rights:
+    if not has_usable_media_path(candidate, config):
         reasons.append("unlicensed_media_dependency")
     if not candidate.claims_supported:
         reasons.append("unsupported_claim")

@@ -63,7 +63,10 @@ Codex debe pedir aprobación antes de:
 - El modo seguro debe ser el valor predeterminado.
 - Ningún workflow puede publicar en más de una red durante pruebas.
 - No registrar secretos, tokens, cookies ni datos sensibles en archivos o logs.
-- No descargar ni republicar material protegido sin licencia o autorización.
+- No descargar ni republicar material protegido como simple decoración.
+- La cita audiovisual editorial breve puede usarse para análisis, crítica o
+  noticia cuando sea mínima, transformada, atribuida, documentada y aprobada
+  por una persona antes de publicar.
 - Centralizar horarios y evitar workflows duplicados.
 - Verificar resultados antes de aumentar frecuencia o autonomía.
 
@@ -76,4 +79,3 @@ Un cambio está terminado cuando:
 - No activa publicaciones ni costos sin aprobación.
 - Está documentado de forma comprensible.
 - Incluye riesgos, dependencias y pasos de reversión.
-

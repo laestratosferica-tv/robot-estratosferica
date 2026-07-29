@@ -62,6 +62,26 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ConfigurationError(
             "Las vistas no pueden ser el único criterio de éxito"
         )
+    citation = config.get("editorial_citation_policy", {})
+    if citation.get("enabled") is not True:
+        raise ConfigurationError(
+            "La ruta de cita editorial debe permanecer configurada"
+        )
+    if citation.get("publishing_enabled") is not False:
+        raise ConfigurationError(
+            "La cita editorial no puede activar publicación automática"
+        )
+    if citation.get("human_review_required") is not True:
+        raise ConfigurationError(
+            "La cita editorial exige revisión humana"
+        )
+    excerpt_limit = citation.get("internal_max_excerpt_seconds")
+    if not isinstance(excerpt_limit, (int, float)) or not (
+        0 < excerpt_limit <= 3
+    ):
+        raise ConfigurationError(
+            "El límite interno de cita debe estar entre 0 y 3 segundos"
+        )
     allowed_states = set(config.get("allowed_output_states", []))
     if not allowed_states or not allowed_states <= {"draft", "needs_review"}:
         raise ConfigurationError("V1 solo admite draft y needs_review")

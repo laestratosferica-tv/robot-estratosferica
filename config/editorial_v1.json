@@ -50,6 +50,26 @@
       "angle_originality": 0.75
     }
   },
+  "editorial_citation_policy": {
+    "enabled": true,
+    "publishing_enabled": false,
+    "human_review_required": true,
+    "internal_max_excerpt_seconds": 3,
+    "allowed_purposes": [
+      "analysis",
+      "criticism",
+      "news_reporting"
+    ],
+    "required_controls": [
+      "minimum_necessary",
+      "transformative_commentary",
+      "source_attribution",
+      "source_link_preserved",
+      "original_music_removed",
+      "uploader_identity_verified"
+    ],
+    "notice": "El límite interno reduce riesgo, pero no constituye una regla legal ni garantiza ausencia de reclamaciones."
+  },
   "platform_order": [
     "instagram",
     "facebook",

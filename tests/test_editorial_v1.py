@@ -88,6 +88,102 @@ class EditorialV1Tests(unittest.TestCase):
         self.assertFalse(decision.accepted)
         self.assertIn("unverified_rumor", decision.rejection_reasons)
 
+    def test_documented_editorial_citation_reaches_human_review(self) -> None:
+        candidate = Candidate(
+            title="Análisis de una nueva mecánica de juego",
+            summary=(
+                "El video oficial muestra una mecánica que cambia la forma "
+                "de atravesar el escenario."
+            ),
+            source_url="https://www.youtube.com/watch?v=example",
+            territory="gaming_esports",
+            has_media_rights=False,
+            media_usage={
+                "pathway": "editorial_citation",
+                "purpose": "analysis",
+                "minimum_necessary": True,
+                "transformative_commentary": True,
+                "source_attribution": True,
+                "source_link_preserved": True,
+                "original_music_removed": True,
+                "uploader_identity_verified": True,
+                "human_review_required": True,
+                "max_excerpt_seconds": 3,
+            },
+            signals={
+                key: 1
+                for key in self.config["editorial_score"]["weights"]
+            },
+        )
+        decision = evaluate_candidate(candidate, self.config)
+        self.assertTrue(decision.accepted)
+        self.assertEqual(decision.state, "needs_review")
+        self.assertNotIn(
+            "unlicensed_media_dependency",
+            decision.rejection_reasons,
+        )
+
+    def test_incomplete_editorial_citation_remains_blocked(self) -> None:
+        candidate = Candidate(
+            title="Clip usado solo como fondo",
+            summary=(
+                "El fragmento presenta una partida publicada por un tercero "
+                "sin análisis editorial suficiente."
+            ),
+            source_url="https://www.youtube.com/watch?v=example",
+            territory="gaming_esports",
+            has_media_rights=False,
+            media_usage={
+                "pathway": "editorial_citation",
+                "purpose": "analysis",
+                "max_excerpt_seconds": 3,
+            },
+            signals={
+                key: 1
+                for key in self.config["editorial_score"]["weights"]
+            },
+        )
+        decision = evaluate_candidate(candidate, self.config)
+        self.assertFalse(decision.accepted)
+        self.assertIn(
+            "unlicensed_media_dependency",
+            decision.rejection_reasons,
+        )
+
+    def test_editorial_citation_over_internal_limit_is_blocked(self) -> None:
+        candidate = Candidate(
+            title="Análisis con un fragmento demasiado largo",
+            summary=(
+                "El video muestra una secuencia extensa que supera el "
+                "límite preventivo configurado."
+            ),
+            source_url="https://www.youtube.com/watch?v=example",
+            territory="gaming_esports",
+            has_media_rights=False,
+            media_usage={
+                "pathway": "editorial_citation",
+                "purpose": "news_reporting",
+                "minimum_necessary": True,
+                "transformative_commentary": True,
+                "source_attribution": True,
+                "source_link_preserved": True,
+                "original_music_removed": True,
+                "uploader_identity_verified": True,
+                "human_review_required": True,
+                "max_excerpt_seconds": 4,
+            },
+            signals={
+                key: 1
+                for key in self.config["editorial_score"]["weights"]
+            },
+        )
+        decision = evaluate_candidate(candidate, self.config)
+        self.assertFalse(decision.accepted)
+        self.assertIn(
+            "unlicensed_media_dependency",
+            decision.rejection_reasons,
+        )
+
     def test_queue_cannot_publish(self) -> None:
         candidate = self._classified(
             Candidate(

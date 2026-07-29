@@ -20,6 +20,7 @@ class Candidate:
     claims_supported: bool = True
     signals: dict[str, float] = field(default_factory=dict)
     strategic_classification: dict[str, Any] = field(default_factory=dict)
+    media_usage: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Candidate":
@@ -42,6 +43,7 @@ class Candidate:
             claims_supported=bool(data.get("claims_supported", True)),
             signals=dict(data.get("signals", {})),
             strategic_classification=dict(classification or {}),
+            media_usage=dict(data.get("media_usage", {})),
         )
 
 
@@ -188,6 +190,7 @@ class PipelineItem:
                 "strategic_classification": (
                     self.candidate.strategic_classification
                 ),
+                "media_usage": self.candidate.media_usage,
             },
             "decision": self.decision.to_dict(),
             "opportunity_selection": (

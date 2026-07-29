@@ -152,8 +152,11 @@ def build_content_package(
             "Aplicar una idea dominante por beat y movimiento con significado.",
             "Resolver la promesa del gancho; no usar curiosidad engañosa.",
             "Usar gráficos, tipografía e ilustración originales.",
-            "No descargar ni reutilizar fotos o videos de la fuente.",
-            "Mostrar la fuente como referencia textual.",
+            (
+                "Usar medios propios, autorizados o una cita editorial mínima "
+                "documentada; nunca reutilizar material ajeno como decoración."
+            ),
+            "Mostrar la fuente y conservar el enlace original.",
             "Formato maestro vertical 1080x1920, adaptable a 1:1 y 16:9.",
         ],
         sources=[candidate.source_url],

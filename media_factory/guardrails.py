@@ -12,6 +12,7 @@ from .editorial_quality import (
 )
 from .models import Candidate, ContentPackage, Storyboard
 from .content_punch import validate_content_punch
+from .retention import validate_retention_plan
 
 
 PLATFORM_LIMITS = {
@@ -61,6 +62,7 @@ def validate_content_package(package: ContentPackage) -> list[str]:
     errors.extend(punch_errors)
     if not package.content_punch.get("gate_passed"):
         errors.append("content_punch_gate_failed")
+    errors.extend(validate_retention_plan(package.retention_plan))
     for required_label in (
         "gancho dominante:",
         "valor concreto visible:",

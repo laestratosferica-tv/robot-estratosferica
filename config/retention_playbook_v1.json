@@ -1,0 +1,182 @@
+{
+  "schema_version": "retention_playbook_v1",
+  "identity": {
+    "audience": "gamers_latam_y_cultura_digital",
+    "relationship": "persona_del_mismo_mundo_no_profesor",
+    "required_feeling": [
+      "esto_habla_mi_idioma",
+      "esto_respeta_mi_inteligencia",
+      "esto_me_da_algo_que_quiero_compartir"
+    ],
+    "forbidden_feeling": [
+      "clase",
+      "tarea",
+      "presentacion_corporativa",
+      "contenido_generico_de_ia"
+    ]
+  },
+  "ethical_retention": {
+    "objective": "preferencia_recurrente_y_conexion",
+    "prohibited_objectives": [
+      "adiccion",
+      "compulsion",
+      "enganio",
+      "urgencia_falsa",
+      "curiosidad_sin_recompensa",
+      "explotacion_emocional"
+    ],
+    "rule": "Toda promesa debe resolverse y todo recurso de retencion debe aportar valor real."
+  },
+  "evidence": [
+    {
+      "id": "limited_capacity",
+      "source": "Lang (2000), Limited Capacity Model of Mediated Message Processing",
+      "url": "https://academic.oup.com/joc/article-abstract/50/1/46/4110103",
+      "operational_rule": "Una idea dominante por beat y cambios audiovisuales con significado."
+    },
+    {
+      "id": "lc4mp_review",
+      "source": "Fisher et al. (2018), systematic review of LC4MP",
+      "url": "https://academic.oup.com/anncom/article/42/4/270/7905951",
+      "operational_rule": "Usar cortes, sonido y movimiento para orientar atencion sin sobrecargar."
+    },
+    {
+      "id": "cognitive_load",
+      "source": "Sweller (1988), Cognitive Load During Problem Solving",
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/0364021388900237",
+      "operational_rule": "Reducir ruido, ordenar la informacion y hacer visible la jerarquia."
+    },
+    {
+      "id": "game_motivation",
+      "source": "Przybylski, Rigby and Ryan (2010), A Motivational Model of Video Game Engagement",
+      "url": "https://selfdeterminationtheory.org/SDT/documents/2010_PrzybylskiRigbyRyan_ROGP.pdf",
+      "operational_rule": "Conectar con competencia, autonomia y pertenencia sin fingir lenguaje gamer."
+    }
+  ],
+  "universal_rules": [
+    "gancho_inmediato_y_especifico",
+    "prueba_o_valor_temprano",
+    "una_idea_dominante_por_beat",
+    "progresion_visible",
+    "tension_resuelta",
+    "emocion_congruente_con_el_hecho",
+    "lenguaje_nativo_no_escolar",
+    "cierre_que_da_agencia_a_la_comunidad",
+    "fuentes_y_derechos_verificados",
+    "una_variable_de_prueba_por_version"
+  ],
+  "formats": {
+    "short_video": {
+      "target_duration_seconds": [8, 15],
+      "hook_deadline_seconds": 1,
+      "value_deadline_seconds": 3,
+      "max_core_ideas": 1,
+      "visual_language": [
+        "hud_gamer",
+        "movimiento_continuo",
+        "contraste_alto",
+        "subtitulos_cineticos",
+        "fondo_animado_o_video_con_derechos"
+      ],
+      "retention_sequence": [
+        "interrupcion_relevante",
+        "hecho_o_prueba",
+        "escalada",
+        "recompensa",
+        "pregunta_con_agencia"
+      ],
+      "metrics": [
+        "retencion_1s",
+        "retencion_3s",
+        "finalizacion",
+        "repeticion",
+        "compartidos",
+        "guardados",
+        "comentarios",
+        "feedback_negativo"
+      ]
+    },
+    "photo": {
+      "max_core_ideas": 1,
+      "headline_max_words": 8,
+      "visual_language": [
+        "un_foco_dominante",
+        "jerarquia_inmediata",
+        "codigo_visual_gamer",
+        "sin_apariencia_de_diapositiva"
+      ],
+      "retention_sequence": [
+        "reconocimiento_inmediato",
+        "dato_concreto",
+        "detalle_descubrible",
+        "accion_comunitaria"
+      ],
+      "metrics": ["tiempo_de_atencion", "guardados", "compartidos", "comentarios"]
+    },
+    "carousel": {
+      "card_range": [4, 7],
+      "max_core_ideas_per_card": 1,
+      "visual_language": [
+        "progresion_tipo_nivel",
+        "continuidad_visual",
+        "recompensa_por_deslizar",
+        "sin_parrafos_escolares"
+      ],
+      "retention_sequence": [
+        "promesa_en_portada",
+        "progresion",
+        "prueba",
+        "recompensa",
+        "decision_o_debate"
+      ],
+      "metrics": ["avance_por_tarjeta", "finalizacion", "guardados", "compartidos"]
+    },
+    "long_video": {
+      "hook_deadline_seconds": 5,
+      "visual_language": [
+        "cold_open",
+        "progresion_por_capitulos",
+        "cambios_con_significado",
+        "demostracion_antes_que_explicacion"
+      ],
+      "retention_sequence": [
+        "resultado_o_conflicto",
+        "promesa",
+        "prueba",
+        "rehooks",
+        "payoff"
+      ],
+      "metrics": ["retencion_30s", "curva_de_abandono", "duracion_media", "comentarios"]
+    },
+    "text_post": {
+      "value_deadline_lines": 2,
+      "visual_language": [
+        "primera_linea_con_tension",
+        "bloques_escaneables",
+        "dato_antes_de_opinion",
+        "voz_de_comunidad"
+      ],
+      "retention_sequence": [
+        "tension",
+        "dato",
+        "lectura",
+        "pregunta"
+      ],
+      "metrics": ["expansiones", "guardados", "compartidos", "respuestas"]
+    }
+  },
+  "experiment_protocol": {
+    "baseline_required": true,
+    "one_variable_per_version": true,
+    "variables": [
+      "gancho",
+      "duracion",
+      "ritmo",
+      "voz",
+      "fondo",
+      "payoff",
+      "cierre"
+    ],
+    "decision_rule": "No declarar un patron ganador sin compararlo con la linea base y revisar feedback negativo."
+  }
+}

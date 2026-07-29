@@ -6,7 +6,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,36 +61,6 @@ def validate_video() -> None:
     actual_sha = hashlib.sha256(VIDEO.read_bytes()).hexdigest()
     if actual_sha != EXPECTED_SHA256:
         raise RuntimeError("El video no coincide con el archivo aprobado")
-
-    probe = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "stream=width,height:format=duration",
-            "-of",
-            "json",
-            str(VIDEO),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    metadata = json.loads(probe.stdout)
-    video_stream = next(
-        (
-            stream
-            for stream in metadata.get("streams", [])
-            if stream.get("width") and stream.get("height")
-        ),
-        {},
-    )
-    duration = float(metadata.get("format", {}).get("duration", 0))
-    if (video_stream.get("width"), video_stream.get("height")) != (1080, 1920):
-        raise RuntimeError("El video aprobado perdió su formato 1080x1920")
-    if not 9.5 <= duration <= 9.7:
-        raise RuntimeError("La duración ya no coincide con el candidato aprobado")
 
 
 def graph_post(

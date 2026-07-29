@@ -1,0 +1,21 @@
+{
+  "schema_version": "editorial_decisions_v1",
+  "publishing_enabled": false,
+  "external_actions_enabled": false,
+  "decisions": [
+    {
+      "decision_id": "review-06ac9d2b86444a9b:2026-07-29T00:52:48.185994+00:00",
+      "review_id": "review-06ac9d2b86444a9b",
+      "candidate_id": "06ac9d2b86444a9b9e8baf7b51ac59ba45a81ba593fbba9752d0f1d90b7fc997",
+      "content_fingerprint": "17ea62ea4d77a6c1538e45f4aa4768a82cf3b96ac43136e9830523090e409346",
+      "decision": "approved_editorially",
+      "reason": "Aprobación editorial confirmada por José Luis en Codex.",
+      "reviewer": "José Luis",
+      "decided_at": "2026-07-29T00:52:48.185994+00:00",
+      "editorial_approval_only": true,
+      "publish_allowed": false,
+      "publishing_enabled": false,
+      "external_actions_enabled": false
+    }
+  ]
+}

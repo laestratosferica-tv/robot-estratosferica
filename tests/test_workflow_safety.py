@@ -101,6 +101,20 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertNotIn("PRODUCTION_ARMED", content)
         self.assertNotIn("ENABLE_", content)
 
+    def test_instagram_insights_is_manual_and_read_only(self):
+        content = (
+            WORKFLOWS / "instagram-reel-insights-readonly.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("schedule:", content)
+        self.assertIn("contents: read", content)
+        self.assertIn(
+            "python tools/collect_instagram_reel_insights.py",
+            content,
+        )
+        self.assertNotIn("PRODUCTION_ARMED", content)
+        self.assertNotIn("media_publish", content)
+
     def test_live_radar_is_manual_read_only_and_has_no_secrets(self):
         content = (
             WORKFLOWS / "live-source-radar.yml"

@@ -61,6 +61,7 @@ def create_overlay(
     headline: str,
     accent: str,
     full_bleed: bool = False,
+    public_candidate: bool = False,
 ) -> None:
     image = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
@@ -82,7 +83,11 @@ def create_overlay(
     )
     draw.text(
         (82, 102),
-        "RADAR // CITA EDITORIAL",
+        (
+            "OPERACIÓN: METEORITE"
+            if public_candidate
+            else "RADAR // CITA EDITORIAL"
+        ),
         font=label_font,
         fill=(246, 249, 250, 255),
     )
@@ -133,7 +138,11 @@ def create_overlay(
     )
     draw.text(
         (72, 1795),
-        "BORRADOR INTERNO · PUBLICACIÓN NO HABILITADA",
+        (
+            "LA ESTRATOSFÉRICA · RADAR GAMER"
+            if public_candidate
+            else "BORRADOR INTERNO · PUBLICACIÓN NO HABILITADA"
+        ),
         font=warning_font,
         fill=accent_color,
     )
@@ -150,6 +159,7 @@ def render(
     output: Path,
     overlay_directory: Path,
     full_bleed: bool = False,
+    public_candidate: bool = False,
 ) -> None:
     overlay_directory.mkdir(parents=True, exist_ok=True)
     overlays: list[Path] = []
@@ -160,6 +170,7 @@ def render(
             segment.headline,
             segment.accent,
             full_bleed=full_bleed,
+            public_candidate=public_candidate,
         )
         overlays.append(overlay)
 
@@ -323,6 +334,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--overlay-directory", required=True, type=Path)
     parser.add_argument("--full-bleed", action="store_true")
+    parser.add_argument("--public-candidate", action="store_true")
     return parser.parse_args()
 
 
@@ -334,6 +346,7 @@ def main() -> None:
         output=args.output,
         overlay_directory=args.overlay_directory,
         full_bleed=args.full_bleed,
+        public_candidate=args.public_candidate,
     )
 
 

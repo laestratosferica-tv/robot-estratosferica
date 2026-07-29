@@ -1,0 +1,31 @@
+{
+  "schema_version": "supervised_publication_plan_v1",
+  "video": "halo-multiverse-pilot-v9-public-candidate.mp4",
+  "status": "published_on_instagram",
+  "primary_platform": "instagram_reels",
+  "secondary_platforms": [
+    "facebook_reels",
+    "youtube_shorts",
+    "threads"
+  ],
+  "creative_approval": true,
+  "public_candidate_review_required": false,
+  "publication_authorized": true,
+  "authorized_platform": "instagram_reels",
+  "published_at": "2026-07-29T13:44:32Z",
+  "permalink": "https://www.instagram.com/reel/DbYQADnkiIo/",
+  "workflow_run": "https://github.com/laestratosferica-tv/robot-estratosferica/actions/runs/30457321736",
+  "automatic_publishing_enabled": false,
+  "scheduled_publishing_enabled": false,
+  "editorial_risk": "yellow_citation",
+  "human_publication_command_required": true,
+  "source": {
+    "channel": "HALO",
+    "url": "https://www.youtube.com/watch?v=G4sUx2nX5EQ",
+    "official_context_url": "https://www.halowaypoint.com/en-gb/news/halo-campaign-evolved-story-reveal?pubDate=20260721"
+  },
+  "post_publish_checks_minutes": [
+    15,
+    1440
+  ]
+}

@@ -9,6 +9,7 @@ from .models import (
 from .audience_intelligence import build_audience_experiment
 from .content_punch import build_content_punch
 from .editorial_quality import substantive_summary_issue
+from .retention import build_retention_plan
 
 
 FORMAT_BY_TERRITORY = {
@@ -89,6 +90,7 @@ def build_content_package(
     factual_summary = candidate.summary
     audience_experiment = build_audience_experiment(candidate, opportunity)
     content_punch = build_content_punch(candidate, audience_experiment)
+    retention_plan = build_retention_plan(candidate, "short_video")
     short_video_context = content_punch["short_video_context"]
     headline = content_punch["hook"]
     editorial_line = (
@@ -146,6 +148,9 @@ def build_content_package(
             ),
             f"Acción esperada: {content_punch['expected_action']}",
             f"Energía visual: {content_punch['visual_energy']}",
+            "Lenguaje visual nativo: HUD, ritmo y progresión; nunca clase.",
+            "Aplicar una idea dominante por beat y movimiento con significado.",
+            "Resolver la promesa del gancho; no usar curiosidad engañosa.",
             "Usar gráficos, tipografía e ilustración originales.",
             "No descargar ni reutilizar fotos o videos de la fuente.",
             "Mostrar la fuente como referencia textual.",
@@ -155,4 +160,5 @@ def build_content_package(
         talent=talent or {},
         audience_experiment=audience_experiment,
         content_punch=content_punch,
+        retention_plan=retention_plan,
     )

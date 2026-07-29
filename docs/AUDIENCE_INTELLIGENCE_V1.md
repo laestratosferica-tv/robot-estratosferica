@@ -69,6 +69,13 @@ variable para la siguiente prueba: gancho, payoff u otra variable autorizada
 por el protocolo. La recomendación queda en análisis y requiere revisión
 humana; nunca cambia la estrategia ni publica automáticamente.
 
+La recolección privada se ejecuta mediante
+`Instagram Reel Insights - Read Only`. Recibe el enlace exacto, utiliza las
+credenciales protegidas de GitHub y entrega un artefacto sin secretos. Cada
+métrica se consulta de manera independiente: si Instagram no admite una
+señal para esa cuenta o formato, se registra como no disponible sin perder
+las demás.
+
 ## Descubrimiento y hashtags
 
 Los hashtags sirven como señales de contexto y descubrimiento; no garantizan

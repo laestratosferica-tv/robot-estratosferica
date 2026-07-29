@@ -5,6 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from .models import Candidate
+from .creative_variation import (
+    select_creative_profile,
+    validate_creative_profile,
+)
 
 
 DEFAULT_PLAYBOOK_PATH = (
@@ -88,6 +92,7 @@ def build_retention_plan(
     if errors:
         raise ValueError(f"invalid retention playbook: {', '.join(errors)}")
     rules = selected["formats"][format_id]
+    creative_profile = select_creative_profile(candidate)
     return {
         "schema_version": selected["schema_version"],
         "format": format_id,
@@ -102,6 +107,7 @@ def build_retention_plan(
         "format_rules": rules,
         "evidence_ids": [item["id"] for item in selected["evidence"]],
         "experiment_protocol": selected["experiment_protocol"],
+        "creative_profile": creative_profile,
         "gate_passed": True,
     }
 
@@ -126,6 +132,9 @@ def validate_retention_plan(plan: dict[str, Any]) -> list[str]:
         "one_variable_per_version"
     ):
         errors.append("invalid_retention_experiment")
+    errors.extend(
+        validate_creative_profile(plan.get("creative_profile", {}))
+    )
     if not plan.get("gate_passed"):
         errors.append("retention_gate_failed")
     return sorted(set(errors))

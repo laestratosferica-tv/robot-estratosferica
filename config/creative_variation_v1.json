@@ -1,0 +1,107 @@
+{
+  "schema_version": "creative_variation_v1",
+  "principle": "identidad_consistente_ejecucion_siempre_variable",
+  "voice_cast": [
+    {
+      "id": "robot_scout",
+      "presentation": "neutral_robot",
+      "energy": "preciso_alerta",
+      "best_for": ["ai_innovation_future", "gaming_esports"],
+      "usage": "apertura_del_sistema_y_alertas_especiales"
+    },
+    {
+      "id": "male_challenger",
+      "presentation": "masculine",
+      "energy": "competitivo_cercano",
+      "best_for": ["gaming_esports", "sport_technology_entertainment"],
+      "usage": "retos_competencia_y_analisis"
+    },
+    {
+      "id": "female_strategist",
+      "presentation": "feminine",
+      "energy": "segura_agil",
+      "best_for": ["ai_innovation_future", "brands_activations"],
+      "usage": "estrategia_descubrimientos_y_contexto"
+    }
+  ],
+  "worlds": [
+    {
+      "id": "cyber_arena",
+      "territories": ["gaming_esports", "ai_innovation_future"],
+      "visual_grammar": ["arena_aaa", "hud_competitivo", "luces_de_estado"]
+    },
+    {
+      "id": "fantasy_raid",
+      "territories": ["gaming_esports", "brands_activations"],
+      "visual_grammar": ["mapa_de_mision", "energia_magica", "progresion_de_raid"]
+    },
+    {
+      "id": "racing_grid",
+      "territories": ["sport_technology_entertainment", "gaming_esports"],
+      "visual_grammar": ["velocidad", "telemetria", "cuenta_regresiva"]
+    },
+    {
+      "id": "tactical_command",
+      "territories": ["gaming_esports", "ai_innovation_future"],
+      "visual_grammar": ["mapa_tactico", "objetivos", "alertas_controladas"]
+    },
+    {
+      "id": "retro_arcade",
+      "territories": ["gaming_esports", "brands_activations"],
+      "visual_grammar": ["pixel_art_premium", "combo", "score_sin_marcas"]
+    },
+    {
+      "id": "space_exploration",
+      "territories": ["ai_innovation_future", "sport_technology_entertainment"],
+      "visual_grammar": ["multimundo", "portales", "descubrimiento"]
+    },
+    {
+      "id": "survival_signal",
+      "territories": ["gaming_esports", "ai_innovation_future"],
+      "visual_grammar": ["radar", "recursos", "tension_ambiental"]
+    }
+  ],
+  "hook_patterns": [
+    "dato_imposible_de_ignorar",
+    "regla_que_cambio",
+    "desafio_directo",
+    "antes_vs_ahora",
+    "decision_con_consecuencia",
+    "revelacion_verificada"
+  ],
+  "motion_systems": [
+    "circuitos_y_pulsos",
+    "mapa_y_objetivos",
+    "velocidad_y_telemetria",
+    "portal_y_profundidad",
+    "combo_y_recompensa",
+    "radar_y_alerta",
+    "parallax_cinematografico"
+  ],
+  "text_behaviors": [
+    "fijo_con_entrada_por_frase",
+    "escritura_sincronizada",
+    "palabra_clave_por_golpe",
+    "contador_con_recompensa",
+    "pregunta_final_estatica"
+  ],
+  "rotation_rules": {
+    "first_voice": "robot_scout",
+    "max_consecutive_same_voice": 1,
+    "max_consecutive_same_world": 1,
+    "max_consecutive_same_hook": 1,
+    "max_consecutive_same_motion": 1,
+    "robot_share_after_opening": 0.34,
+    "avoid_full_profile_repeat_within": 12,
+    "content_relevance_over_randomness": true
+  },
+  "invariants": [
+    "fuente_verificada",
+    "texto_legible",
+    "promesa_resuelta",
+    "centro_sin_ruido",
+    "voz_natural_para_su_personaje",
+    "no_imitar_personas_reales",
+    "revision_humana_antes_de_publicar"
+  ]
+}

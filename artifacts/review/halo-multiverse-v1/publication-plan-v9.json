@@ -1,7 +1,7 @@
 {
   "schema_version": "supervised_publication_plan_v1",
   "video": "halo-multiverse-pilot-v9-public-candidate.mp4",
-  "status": "approved_for_supervised_instagram_publication",
+  "status": "published_on_instagram",
   "primary_platform": "instagram_reels",
   "secondary_platforms": [
     "facebook_reels",
@@ -12,6 +12,9 @@
   "public_candidate_review_required": false,
   "publication_authorized": true,
   "authorized_platform": "instagram_reels",
+  "published_at": "2026-07-29T13:44:32Z",
+  "permalink": "https://www.instagram.com/reel/DbYQADnkiIo/",
+  "workflow_run": "https://github.com/laestratosferica-tv/robot-estratosferica/actions/runs/30457321736",
   "automatic_publishing_enabled": false,
   "scheduled_publishing_enabled": false,
   "editorial_risk": "yellow_citation",

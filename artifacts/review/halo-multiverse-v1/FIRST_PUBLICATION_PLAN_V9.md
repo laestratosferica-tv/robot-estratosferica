@@ -1,6 +1,12 @@
 # Primera publicación supervisada · Halo v9
 
-Estado: **preparada, no publicada**
+Estado: **publicada en Instagram**
+
+Resultado:
+https://www.instagram.com/reel/DbYQADnkiIo/
+
+Publicación supervisada completada el 29 de julio de 2026. Las compuertas
+generales volvieron a quedar apagadas después de iniciar la ejecución única.
 
 ## Ruta recomendada
 

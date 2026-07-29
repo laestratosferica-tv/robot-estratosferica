@@ -96,6 +96,43 @@ videos ajenos sin validar derechos.
 | Descargar, recortar y republicar un video ajeno | Bloqueado sin permiso explícito |
 | Extraer “claves” filtradas, hacks o contenido engañoso | Bloqueado |
 
+### Escalera creativa de derechos
+
+La falta del recurso ideal no detiene automáticamente una historia. El sistema
+debe recorrer estas alternativas, en orden, hasta encontrar una solución
+publicable:
+
+1. captura propia del juego bajo las reglas vigentes del editor;
+2. tráiler, press kit o banco oficial con permiso aplicable;
+3. material Creative Commons o de stock compatible con uso comercial;
+4. permiso escrito del creador del gameplay, guardando alcance y atribución;
+5. herramienta de remix o inserción ofrecida por la propia plataforma;
+6. gameplay de una entrega anterior del mismo universo, claramente presentado
+   como archivo o apoyo visual y sin atribuirle funciones del juego nuevo;
+7. recreación visual original, ilustración, animación, interfaz o 3D inspirados
+   en el tema sin copiar activos protegidos;
+8. fragmento mínimo para crítica, análisis o noticia solo después de revisión
+   editorial y jurídica del caso concreto.
+
+Ningún informe de bloqueo puede terminar únicamente con “no se puede”. Debe
+registrar las rutas evaluadas, ofrecer alternativas concretas y recomendar la
+mejor solución. Mientras se confirma una licencia, la publicación permanece
+desactivada, pero el trabajo editorial y el prototipo continúan con material
+seguro o sustituto.
+
+El sistema puede recortar, reencuadrar, subtitular, narrar, sonorizar y adaptar
+material autorizado para convertirlo en una pieza propia. Estas
+transformaciones mejoran la creatividad, pero no sustituyen la licencia.
+
+Cuando el gameplay provenga de otra persona existen dos capas de derechos: el
+contenido del juego y la grabación o edición del creador. La autorización del
+editor no elimina la necesidad de permiso del creador, salvo que la licencia
+del video permita expresamente la reutilización.
+
+Nunca se ocultará el origen para que “no se note”. La edición puede integrar
+visualmente material de distintas fuentes, pero debe evitar afirmar o insinuar
+que imágenes de una versión anterior pertenecen a la versión nueva.
+
 El primer producto recuperable es un **Radar de Jugadas**: descubre el clip,
 calcula relevancia, conserva creador/juego/URL/vistas y prepara una ficha para
 revisión. La publicación automática del archivo de video queda separada y

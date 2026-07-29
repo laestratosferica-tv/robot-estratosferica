@@ -1,0 +1,84 @@
+{
+  "schema_version": "real_footage_clip_plan_v1",
+  "status": "internal_prototype_rendered_cc_source_review_pending",
+  "publication_enabled": false,
+  "source": {
+    "title": "Halo: Campaign Evolved | New Missions Trailer | Operation: Meteorite",
+    "url": "https://youtu.be/G4sUx2nX5EQ",
+    "official_channel": "HALO",
+    "verified_duration_seconds": 149,
+    "usage": "reference_and_internal_prototype_only_until_rights_are_confirmed"
+  },
+  "support_footage": {
+    "title": "Xbox Master Class de Halo Infinite - Parte 1: Tips de principiante",
+    "author": "Xbox México",
+    "url": "https://commons.wikimedia.org/wiki/File:Xbox_Master_Class_de_Halo_Infinite_-_Parte_1-_Tips_de_principiante.webm",
+    "license": "CC BY 3.0",
+    "license_url": "https://creativecommons.org/licenses/by/3.0",
+    "license_review": "pending_on_wikimedia",
+    "usage": "internal_prototype_support_visuals_only",
+    "disclosure": "IMÁGENES DE APOYO · HALO INFINITE"
+  },
+  "output": {
+    "duration_seconds": 9.6,
+    "format": "vertical_9_16",
+    "movement": "continuous_gameplay_motion",
+    "text_behavior": "short_blocks_not_full_voice_transcription",
+    "voice": "clear_natural_male_spanish_for_this_piece"
+  },
+  "assets": {
+    "narration": "narration-v6-real-footage.aiff",
+    "narration_duration_seconds": 9.38,
+    "authorized_video_source": "temporary_local_copy_from_wikimedia",
+    "rendered_video": "halo-multiverse-pilot-v6-cc-gameplay.mp4"
+  },
+  "timeline": [
+    {
+      "start": 0.0,
+      "end": 0.9,
+      "visual": "halo_infinite_support_gameplay_combat_opening",
+      "voice": "Halo acaba de cambiar.",
+      "text": "HALO CAMBIÓ"
+    },
+    {
+      "start": 0.9,
+      "end": 2.3,
+      "visual": "halo_infinite_support_gameplay_close_combat",
+      "voice": "Tres misiones nuevas.",
+      "text": "3 MISIONES NUEVAS"
+    },
+    {
+      "start": 2.3,
+      "end": 4.3,
+      "visual": "halo_infinite_support_gameplay_forward_motion",
+      "voice": "Antes de la historia original.",
+      "text": "ANTES DEL INICIO"
+    },
+    {
+      "start": 4.3,
+      "end": 6.3,
+      "visual": "halo_infinite_support_gameplay_energy_weapon",
+      "voice": "Jefe Maestro y Johnson…",
+      "text": "OPERACIÓN METEORITO"
+    },
+    {
+      "start": 6.3,
+      "end": 8.2,
+      "visual": "halo_infinite_support_gameplay_sustained_fire",
+      "voice": "…tras las líneas enemigas.",
+      "text": "MISIÓN CLANDESTINA"
+    },
+    {
+      "start": 8.2,
+      "end": 9.6,
+      "visual": "halo_infinite_support_gameplay_closing_combat",
+      "voice": "¿Entras?",
+      "text": "¿ENTRAS?"
+    }
+  ],
+  "approval_required_before": [
+    "publishing",
+    "license_confirmation",
+    "editorial_and_creative_approval"
+  ]
+}

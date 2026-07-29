@@ -57,6 +57,26 @@ de la misma noticia conserva el experimento y permite comparar resultados.
 
 Cada informe mantiene separadas las métricas de alcance, aprendizaje y negocio.
 
+## Descubrimiento y hashtags
+
+Los hashtags sirven como señales de contexto y descubrimiento; no garantizan
+alcance ni viralidad. La prioridad sigue siendo el gancho inicial, la
+finalización, la repetición, los compartidos y los guardados.
+
+Cada publicación usa entre cuatro y seis etiquetas:
+
+1. juego o franquicia;
+2. producto, evento o tema exacto cuando esté confirmado;
+3. intención editorial, por ejemplo noticias o competición;
+4. audiencia gaming latinoamericana;
+5. marca `#LaEstratosferica`.
+
+Se excluyen etiquetas de relleno como `#FYP`, `#Viral`, `#ParaTi`,
+`#ExplorePage` y `#ReelsGaming`. El sistema no inventa tendencias. Las
+variantes se comparan en grupos de al menos cinco piezas equivalentes usando
+alcance a no seguidores, retención, compartidos, guardados y seguidores
+obtenidos; los Me gusta no deciden solos.
+
 ## Seguridad
 
 - Todo inicia en `draft`.
@@ -64,4 +84,3 @@ Cada informe mantiene separadas las métricas de alcance, aprendizaje y negocio.
 - Las respuestas y propuestas comerciales requieren aprobación.
 - Las encuestas nativas se publican manualmente cuando la API no las soporta.
 - Ninguna señal aislada decide el público objetivo; se revisan varias pruebas.
-

@@ -805,7 +805,7 @@ Objetivo: retención + comentarios.
 - 1 HOOK fuerte (1 línea)
 - 2-3 líneas: contexto + postura
 - 1 pregunta final
-- 5-10 hashtags al final
+- No escribas hashtags; el sistema agrega 4-6 etiquetas precisas y verificables
 - Incluye Fuente: {link}
 - Máximo 120 palabras
 Título: {title}
@@ -855,12 +855,20 @@ def build_threads_text(item: Dict[str, Any], mode: str = "new") -> str:
 
 
 def build_instagram_caption(item: Dict[str, Any], link: str) -> str:
+    from media_factory.hashtag_strategy import replace_hashtags, select_hashtags
+
     title = item.get("title", "")
     prompt = IG_PROMPT_SHARP.format(title=title, link=link)
     text = openai_text(prompt).strip()
     if "Fuente:" not in text:
         text = f"{text}\n\nFuente: {link}"
-    return text.strip()
+    hashtags = select_hashtags(
+        game=str(item.get("game_name") or item.get("game") or ""),
+        title=title,
+        topic=str(item.get("campaign") or item.get("topic") or ""),
+        intent=str(item.get("intent") or "news"),
+    )
+    return replace_hashtags(text, hashtags)
 
 
 def build_video_hook(title: str) -> str:

@@ -2011,8 +2011,9 @@ def score_caption_candidate(text, ctx):
 
 
 def build_hashtags_for_game(game_name):
-    tags = GAME_HASHTAGS.get(game_name, GAME_HASHTAGS["Esports"])[:4]
-    return " ".join(tags)
+    from media_factory.hashtag_strategy import select_hashtags
+
+    return " ".join(select_hashtags(game=game_name, intent="esports"))
 
 
 def select_best_caption(ctx):

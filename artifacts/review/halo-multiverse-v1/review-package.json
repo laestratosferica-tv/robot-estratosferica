@@ -1,0 +1,53 @@
+{
+  "schema_version": "multiverse_review_v1",
+  "status": "approved_internal_repository_authorized",
+  "publication_enabled": false,
+  "story": {
+    "title": "Halo: Campaign Evolved llega hoy",
+    "source": "Xbox Wire en Español",
+    "source_url": "https://news.xbox.com/es-latam/2026/07/24/la-proxima-semana-en-xbox-nuevos-juegos-del-27-al-31-de-julio/",
+    "source_date": "2026-07-24",
+    "verified_facts": [
+      "Lanzamiento anunciado para el 28 de julio de 2026",
+      "Disponible en Game Pass y Xbox Play Anywhere",
+      "Campaña original modernizada",
+      "Incluye tres nuevas misiones precuela"
+    ]
+  },
+  "creative_profile": {
+    "voice_id": "male_latam",
+    "voice_presentation": "masculine",
+    "world_id": "space_exploration",
+    "hook_pattern": "alerta_mas_recompensa",
+    "motion_system": "gameplay_real_continuo_con_seis_cortes_de_combate",
+    "text_behavior": "bloques_estables_sin_competir_con_el_fondo"
+  },
+  "retention": {
+    "duration_seconds": 9.6,
+    "hook_window_seconds": 1.0,
+    "promise_resolved": true,
+    "closing_question": "¿Volverías a jugarla?"
+  },
+  "assets": {
+    "video": "halo-multiverse-pilot-v6-cc-gameplay.mp4",
+    "backgrounds": [
+      "gameplay_halo_infinite_cc_by_3_0"
+    ],
+    "narration": "narration-v6-real-footage.aiff"
+  },
+  "safety": {
+    "original_background": false,
+    "official_game_art_used": true,
+    "source_license": "CC BY 3.0",
+    "source_license_review_status": "pending_administrative_review",
+    "real_person_voice_imitation": false,
+    "human_approval_required": true
+  },
+  "approval": {
+    "creative_status": "approved",
+    "approved_by": "human_director",
+    "approved_at": "2026-07-29",
+    "repository_storage_authorized": true,
+    "social_publication_authorized": false
+  }
+}

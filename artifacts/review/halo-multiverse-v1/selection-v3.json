@@ -1,0 +1,11 @@
+{
+  "schema_version": "video_selection_v1",
+  "selected_version": "halo-multiverse-pilot-v6-cc-gameplay.mp4",
+  "selected_by": "human_director",
+  "selection_status": "approved_internal",
+  "feedback": "Versión aprobada por su gameplay real, movimiento continuo, claridad de voz y duración corta.",
+  "approved_at": "2026-07-29",
+  "repository_storage_authorized": true,
+  "publication_authorized": false,
+  "other_versions": "preserved_as_internal_experiments"
+}

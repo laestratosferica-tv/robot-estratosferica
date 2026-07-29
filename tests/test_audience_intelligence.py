@@ -5,6 +5,7 @@ from media_factory.audience_intelligence import (
     build_audience_experiment,
 )
 from media_factory.metrics import (
+    build_reel_learning_report,
     calculate_performance_metrics,
     summarize_audience_learning,
 )
@@ -80,6 +81,49 @@ class AudienceIntelligenceTests(unittest.TestCase):
         self.assertEqual(report["mode"], "analysis_only")
         self.assertFalse(report["automatic_strategy_changes_enabled"])
         self.assertTrue(report["requires_human_review"])
+
+    def test_public_views_do_not_trigger_a_false_viral_conclusion(self):
+        report = build_reel_learning_report({"views": 150})
+        self.assertEqual(report["data_quality"], "partial")
+        self.assertEqual(report["diagnosis"], "insufficient_retention_data")
+        self.assertEqual(
+            report["next_test"]["action"],
+            "collect_owner_insights",
+        )
+        self.assertFalse(report["automatic_strategy_changes_enabled"])
+
+    def test_low_completion_changes_only_the_hook(self):
+        report = build_reel_learning_report({
+            "views": 1000,
+            "completion_rate": 0.30,
+            "shares": 4,
+            "saves": 2,
+            "comments": 5,
+        })
+        self.assertEqual(report["diagnosis"], "weak_completion")
+        self.assertEqual(report["next_test"]["variable"], "hook")
+        self.assertTrue(report["one_variable_only"])
+
+    def test_complete_snapshot_can_compare_exposure_to_baseline(self):
+        report = build_reel_learning_report(
+            {
+                "views": 1200,
+                "completion_rate": 0.60,
+                "shares": 24,
+                "saves": 18,
+                "comments": 12,
+            },
+            baseline={
+                "views": 1000,
+                "completion_rate": 0.55,
+                "shares": 20,
+                "saves": 15,
+                "comments": 10,
+            },
+        )
+        self.assertEqual(report["data_quality"], "complete")
+        self.assertEqual(report["exposure_delta"], 0.2)
+        self.assertEqual(report["diagnosis"], "promising_quality_signals")
 
     def test_question_follows_the_verified_story_context(self):
         atlas = Candidate(

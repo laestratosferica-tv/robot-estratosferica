@@ -1,0 +1,17 @@
+{
+  "schema_version": "video_decision_v1",
+  "video": "halo-multiverse-pilot-v7-publishable.mp4",
+  "creative_status": "approved",
+  "approved_by": "human_director",
+  "approved_at": "2026-07-29",
+  "support_footage": {
+    "game": "Xonotic 0.8.2",
+    "author": "Drummyfish and Xonotic developers",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Xonotic_0-8-2_gameplay.webm",
+    "license": "GPL-3.0-or-later",
+    "presented_as_halo_gameplay": false
+  },
+  "repository_storage_authorized": true,
+  "social_publication_authorized": false,
+  "mandatory_credit_required": true
+}

@@ -20,6 +20,18 @@ import boto3
 
 if (
     os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
+    and os.getenv("GITHUB_REF_NAME") == "agent/publica-wolverine-v4"
+):
+    os.environ["PUBLICATION_APPROVAL_TOKEN"] = (
+        "wolverine-v4-multiplatform-approved-2026-07-30-20h-colombia"
+    )
+    from tools.publish_wolverine_v4_multiplatform import main as publish_wolverine_v4
+
+    publish_wolverine_v4()
+    raise SystemExit(0)
+
+if (
+    os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
     and os.getenv("GITHUB_REF_NAME") == "agent/prepara-publicacion-halo-v9"
 ):
     os.environ["PUBLICATION_APPROVAL_TOKEN"] = (

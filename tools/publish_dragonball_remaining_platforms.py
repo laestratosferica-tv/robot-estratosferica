@@ -109,7 +109,7 @@ def publish_facebook(
     token = required("FB_PAGE_ACCESS_TOKEN")
     start = requests.post(
         f"{graph_base}/{page_id}/video_reels",
-        data={"upload_phase": "START", "access_token": token},
+        data={"upload_phase": "start", "access_token": token},
         timeout=60,
     )
     start.raise_for_status()
@@ -123,7 +123,7 @@ def publish_facebook(
     finish = requests.post(
         f"{graph_base}/{page_id}/video_reels",
         data={
-            "upload_phase": "FINISH",
+            "upload_phase": "finish",
             "video_id": started["video_id"],
             "video_state": "PUBLISHED",
             "description": FB_CAPTION,

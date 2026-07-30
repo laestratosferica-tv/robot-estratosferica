@@ -23,11 +23,13 @@ if (
     and os.getenv("GITHUB_REF_NAME") == "agent/publica-dragonball-v1"
 ):
     os.environ["PUBLICATION_APPROVAL_TOKEN"] = (
-        "dragonball-v1-instagram-approved-2026-07-30"
+        "dragonball-v1-multiplatform-approved-2026-07-30"
     )
-    from tools.publish_dragonball_instagram_reel import main as publish_dragonball
+    from tools.publish_dragonball_remaining_platforms import (
+        main as publish_dragonball_remaining,
+    )
 
-    publish_dragonball()
+    publish_dragonball_remaining()
     raise SystemExit(0)
 
 

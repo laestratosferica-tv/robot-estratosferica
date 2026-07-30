@@ -124,6 +124,19 @@ def publish_facebook(
 
     page_id = required("FB_PAGE_ID")
     token = required("FB_PAGE_ACCESS_TOKEN")
+    accounts = requests.get(
+        f"{graph_base}/me/accounts",
+        params={"fields": "id,access_token", "access_token": token},
+        timeout=60,
+    )
+    if accounts.ok:
+        matches = [
+            item
+            for item in accounts.json().get("data", [])
+            if str(item.get("id")) == page_id
+        ]
+        if matches:
+            token = str(matches[0].get("access_token") or token)
     start = requests.post(
         f"{graph_base}/{page_id}/video_reels",
         data={"upload_phase": "start", "access_token": token},

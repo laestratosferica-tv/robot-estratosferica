@@ -4,6 +4,42 @@ on:
   workflow_dispatch:
 
 jobs:
+  wolverine_source:
+    if: github.ref_name == 'agent/publica-dragonball-v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install downloader
+        run: python -m pip install --quiet "yt-dlp[default]"
+
+      - name: Fetch official Wolverine trailer
+        env:
+          YOUTUBE_COOKIES_TXT: ${{ secrets.YOUTUBE_COOKIES_TXT }}
+        run: |
+          printf '%s' "$YOUTUBE_COOKIES_TXT" > "$RUNNER_TEMP/youtube-cookies.txt"
+          yt-dlp \
+            --cookies "$RUNNER_TEMP/youtube-cookies.txt" \
+            --format "bv*[height<=1080]+ba/b[height<=1080]" \
+            --merge-output-format mp4 \
+            --output "official-wolverine-story-trailer.%(ext)s" \
+            "https://www.youtube.com/watch?v=pj9ZIIpesfQ"
+
+      - name: Upload internal editorial source
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolverine-official-source
+          path: official-wolverine-story-trailer.mp4
+          retention-days: 1
+          if-no-files-found: error
+
   harvest:
     if: vars.LEGACY_WORKFLOWS_ARMED == 'true'
     runs-on: ubuntu-latest

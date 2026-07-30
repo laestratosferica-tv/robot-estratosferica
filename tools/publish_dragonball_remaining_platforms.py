@@ -76,6 +76,23 @@ def write_receipt(payload: dict[str, Any]) -> None:
     )
 
 
+def raise_platform_error(response: requests.Response, label: str) -> None:
+    if response.ok:
+        return
+    try:
+        error = response.json().get("error", {})
+    except (ValueError, AttributeError):
+        error = {}
+    details = {
+        "status": response.status_code,
+        "code": error.get("code"),
+        "subcode": error.get("error_subcode"),
+        "type": error.get("type"),
+        "message": error.get("message") or "respuesta no detallada",
+    }
+    raise RuntimeError(f"{label}: {json.dumps(details, ensure_ascii=False)}")
+
+
 def ledger_get(r2: Any, bucket: str, key: str) -> dict[str, Any] | None:
     try:
         response = r2.get_object(Bucket=bucket, Key=key)
@@ -112,14 +129,14 @@ def publish_facebook(
         data={"upload_phase": "start", "access_token": token},
         timeout=60,
     )
-    start.raise_for_status()
+    raise_platform_error(start, "Facebook Reels START")
     started = start.json()
     upload = requests.post(
         started["upload_url"],
         headers={"Authorization": f"OAuth {token}", "file_url": video_url},
         timeout=120,
     )
-    upload.raise_for_status()
+    raise_platform_error(upload, "Facebook Reels UPLOAD")
     finish = requests.post(
         f"{graph_base}/{page_id}/video_reels",
         data={
@@ -131,7 +148,7 @@ def publish_facebook(
         },
         timeout=60,
     )
-    finish.raise_for_status()
+    raise_platform_error(finish, "Facebook Reels FINISH")
     payload = {
         "status": "published",
         "platform": "facebook",

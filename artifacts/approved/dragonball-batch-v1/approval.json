@@ -1,0 +1,11 @@
+{
+  "content_id": "DBSZ-001",
+  "status": "approved",
+  "approved_by": "Jose Luis",
+  "approved_at": "2026-07-30",
+  "duration_seconds": 10,
+  "resolution": "1080x1920",
+  "frame_rate": 60,
+  "visual_rule": "El video llena todo el formato vertical aunque sea necesario recortar los laterales.",
+  "publication_authorized": false
+}

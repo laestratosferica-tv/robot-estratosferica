@@ -20,14 +20,14 @@ import boto3
 
 if (
     os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
-    and os.getenv("GITHUB_REF_NAME") == "agent/prepara-publicacion-halo-v9"
+    and os.getenv("GITHUB_REF_NAME") == "agent/publica-dragonball-v1"
 ):
     os.environ["PUBLICATION_APPROVAL_TOKEN"] = (
-        "halo-v9-instagram-approved-2026-07-29"
+        "dragonball-v1-instagram-approved-2026-07-30"
     )
-    from tools.publish_approved_instagram_reel import main as publish_halo_v9
+    from tools.publish_dragonball_instagram_reel import main as publish_dragonball
 
-    publish_halo_v9()
+    publish_dragonball()
     raise SystemExit(0)
 
 

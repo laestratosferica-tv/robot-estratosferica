@@ -311,15 +311,28 @@ def main() -> None:
     check = requests.head(video_url, timeout=30, allow_redirects=True)
     check.raise_for_status()
     graph_version = os.environ.get("GRAPH_VERSION", "v25.0")
-    result = {
-        "facebook": publish_facebook(
+    publishers = {
+        "facebook": lambda: publish_facebook(
             r2, bucket, video_url, f"https://graph.facebook.com/{graph_version}"
         ),
-        "youtube": publish_youtube(r2, bucket),
-        "threads": publish_threads(r2, bucket, video_url),
+        "youtube": lambda: publish_youtube(r2, bucket),
+        "threads": lambda: publish_threads(r2, bucket, video_url),
     }
+    result: dict[str, Any] = {}
+    for platform, publisher in publishers.items():
+        try:
+            result[platform] = publisher()
+        except Exception as exc:
+            result[platform] = {
+                "status": "blocked",
+                "platform": platform,
+                "reason": str(exc),
+                "verified_at": now(),
+            }
     write_receipt(result)
     print(json.dumps(result, ensure_ascii=False))
+    if any(item.get("status") != "published" for item in result.values()):
+        raise RuntimeError("Una o más plataformas quedaron bloqueadas")
 
 
 if __name__ == "__main__":

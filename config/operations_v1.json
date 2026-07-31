@@ -34,6 +34,7 @@
     "hype-packer.yml": "legacy_quarantine",
     "instagram-reel-insights-readonly.yml": "controlled_readonly",
     "media_engine.yml": "legacy_quarantine",
+    "meta-supervised-publisher.yml": "controlled_supervised_publisher",
     "platform-credential-diagnostic.yml": "controlled_diagnostic",
     "publisher.yml": "legacy_quarantine",
     "reddit-gamer-radar.yml": "legacy_quarantine",

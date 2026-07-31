@@ -101,6 +101,19 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertNotIn("PRODUCTION_ARMED", content)
         self.assertNotIn("ENABLE_", content)
 
+    def test_tiktok_diagnostic_is_manual_readonly_and_flags_stay_false(self):
+        content = (
+            WORKFLOWS / "tiktok-readiness-diagnostic.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("schedule:", content)
+        self.assertIn("contents: read", content)
+        self.assertIn('ENABLE_TIKTOK: "false"', content)
+        self.assertIn('ENABLE_TIKTOK_PUBLISH: "false"', content)
+        self.assertIn("python tiktok_readiness_diagnostic.py", content)
+        self.assertNotIn("PRODUCTION_ARMED", content)
+        self.assertNotIn("/post/publish/", content)
+
     def test_instagram_insights_is_manual_and_read_only(self):
         content = (
             WORKFLOWS / "instagram-reel-insights-readonly.yml"

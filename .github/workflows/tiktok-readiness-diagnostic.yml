@@ -1,0 +1,47 @@
+name: TikTok - Manual Read-Only Readiness Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      ENABLE_TIKTOK: "false"
+      ENABLE_TIKTOK_PUBLISH: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run mocked TikTok diagnostic tests
+        run: python -m unittest tests.test_tiktok_readiness_diagnostic -v
+
+      - name: Run read-only TikTok readiness diagnostic
+        env:
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          TIKTOK_REDIRECT_URI: ${{ vars.TIKTOK_REDIRECT_URI }}
+          TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+          TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
+          TIKTOK_OPEN_ID: ${{ secrets.TIKTOK_OPEN_ID }}
+          TIKTOK_AUTHORIZED_SCOPES: ${{ vars.TIKTOK_AUTHORIZED_SCOPES }}
+          TIKTOK_APP_REVIEW_STATUS: ${{ vars.TIKTOK_APP_REVIEW_STATUS }}
+          TIKTOK_CONTENT_POSTING_API_STATUS: ${{ vars.TIKTOK_CONTENT_POSTING_API_STATUS }}
+        run: python tiktok_readiness_diagnostic.py
+
+      - name: Upload redacted diagnostic
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiktok-readiness-diagnostic
+          path: artifacts/tiktok-readiness-diagnostic.json
+          if-no-files-found: error

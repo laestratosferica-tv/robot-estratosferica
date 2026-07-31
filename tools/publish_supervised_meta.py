@@ -216,6 +216,8 @@ def run(
     if dry_run:
         return receipt
 
+    if manifest.get("simulation_only") is True:
+        raise RuntimeError("manifest_is_simulation_only")
     if env.get("PRODUCTION_ARMED") != "true":
         raise RuntimeError("production_not_armed")
     if env.get("PUBLICATION_APPROVAL_ID") != manifest["approval_id"]:

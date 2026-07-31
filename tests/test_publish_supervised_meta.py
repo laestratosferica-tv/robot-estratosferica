@@ -82,6 +82,16 @@ class SupervisedMetaPublisherTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "approval_mismatch"):
             run(path, repository_root=self.root, environment=armed, dry_run=False)
 
+    def test_simulation_manifest_can_never_publish(self):
+        path = self.manifest(simulation_only=True)
+        armed = {
+            **self.environment,
+            "PRODUCTION_ARMED": "true",
+            "PUBLICATION_APPROVAL_ID": "approval-001",
+        }
+        with self.assertRaisesRegex(RuntimeError, "simulation_only"):
+            run(path, repository_root=self.root, environment=armed, dry_run=False)
+
 
 if __name__ == "__main__":
     unittest.main()

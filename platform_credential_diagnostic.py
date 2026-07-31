@@ -49,10 +49,17 @@ def _request_json(
 
 def _diagnose_facebook_publish_capability(
     *,
+    identifier: str,
     access_token: str,
     opener: Any,
 ) -> dict[str, Any]:
     headers = {"Authorization": f"Bearer {access_token}"}
+    subject_request = urllib.request.Request(
+        f"{GRAPH_API}/me?fields=id",
+        headers=headers,
+        method="GET",
+    )
+    subject = _request_json(subject_request, opener=opener)
     permissions_request = urllib.request.Request(
         f"{GRAPH_API}/me/permissions",
         headers=headers,
@@ -69,12 +76,14 @@ def _diagnose_facebook_publish_capability(
         }
     )
     return {
+        "token_subject_matches_page": str(subject.get("id", "")) == identifier,
         "pages_manage_posts_confirmed": "pages_manage_posts"
         in granted_permissions,
         "pages_read_engagement_confirmed": "pages_read_engagement"
         in granted_permissions,
         "reels_publish_permission_ready": "pages_manage_posts"
-        in granted_permissions,
+        in granted_permissions
+        and str(subject.get("id", "")) == identifier,
         "page_content_task_requires_business_suite_verification": True,
     }
 
@@ -238,6 +247,7 @@ def build_credential_diagnostic(
                     )
                     if platform == "facebook":
                         publish_capability = _diagnose_facebook_publish_capability(
+                            identifier=values[id_name],
                             access_token=values[token_name],
                             opener=opener,
                         )

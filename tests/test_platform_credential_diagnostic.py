@@ -53,12 +53,16 @@ class PlatformCredentialDiagnosticTests(unittest.TestCase):
                         }
                     ).encode()
                 )
+            if request.full_url.endswith("/me?fields=id"):
+                return _Response(
+                    json.dumps({"id": "facebook-id"}).encode()
+                )
             return _Response()
 
         report = build_credential_diagnostic(self.environment, opener=opener)
 
         self.assertTrue(report["all_required_credentials_valid"])
-        self.assertEqual(len(requests), 5)
+        self.assertEqual(len(requests), 6)
         for request in requests[:3]:
             self.assertNotIn("secret", request.full_url)
             self.assertTrue(
@@ -77,6 +81,7 @@ class PlatformCredentialDiagnosticTests(unittest.TestCase):
         self.assertFalse(report["external_writes_attempted"])
         self.assertEqual(report["measured_cost_usd"], 0.0)
         facebook = report["platforms"]["facebook"]["publish_capability"]
+        self.assertTrue(facebook["token_subject_matches_page"])
         self.assertTrue(facebook["pages_manage_posts_confirmed"])
         self.assertTrue(facebook["reels_publish_permission_ready"])
         self.assertTrue(

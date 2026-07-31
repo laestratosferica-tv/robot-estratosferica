@@ -10,6 +10,7 @@ jobs:
       (vars.LEGACY_WORKFLOWS_ARMED == 'true' && vars.PRODUCTION_ARMED == 'true')
       || github.ref_name == 'agent/publica-wolverine-v4'
       || github.ref_name == 'agent/publica-meta-ai-v1'
+      || github.ref_name == 'agent/publica-samsung-eyewear-v2'
     runs-on: ubuntu-latest
 
     steps:

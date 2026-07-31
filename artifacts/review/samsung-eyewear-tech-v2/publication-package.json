@@ -1,0 +1,51 @@
+{
+  "piece_id": "samsung-eyewear-tech-v2",
+  "status": "approved_ready_to_schedule",
+  "category": "tecnologia",
+  "format": "vertical_reel",
+  "duration_seconds": 13.4,
+  "resolution": "1080x1920",
+  "recommended_publication": {
+    "date": "2026-07-31",
+    "time": "12:30",
+    "timezone": "America/Bogota",
+    "hypothesis": "probar consumo de tecnología durante la pausa de almuerzo"
+  },
+  "platforms": [
+    "instagram",
+    "facebook",
+    "youtube_shorts",
+    "threads"
+  ],
+  "caption": "Samsung y Google llevan Gemini a unas gafas capaces de responder a lo que ves, traducir en tiempo real y orientarte sin sacar el celular. ¿Asistencia útil o demasiada información frente a tus ojos?",
+  "threads_text": "Gemini llegará a unas gafas de Samsung capaces de responder a lo que ves, traducir y orientarte sin sacar el celular. ¿Las usarías todos los días?",
+  "hashtags": [
+    "#Samsung",
+    "#Gemini",
+    "#AndroidXR",
+    "#GafasInteligentes",
+    "#Tecnologia"
+  ],
+  "source": {
+    "publisher": "Samsung Newsroom España",
+    "url": "https://news.samsung.com/es/samsung-lleva-el-ecosistema-galaxy-a-las-gafas-inteligentes-para-el-dia-a-dia",
+    "published": "2026-07-22"
+  },
+  "measurement_windows_hours": [
+    1,
+    6,
+    24,
+    72
+  ],
+  "primary_metrics": [
+    "retencion_3s",
+    "tiempo_medio",
+    "finalizacion",
+    "compartidos",
+    "comentarios",
+    "seguimientos"
+  ],
+  "publication_authorized": true,
+  "approved_by": "Jose Luis",
+  "approved_on": "2026-07-30"
+}

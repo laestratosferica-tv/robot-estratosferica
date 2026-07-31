@@ -86,6 +86,59 @@ if (
 
 if (
     os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
+    and os.getenv("GITHUB_REF_NAME") == "agent/publica-samsung-eyewear-v2"
+):
+    os.environ.update(
+        {
+            "APPROVED_PIECE_ID": "samsung-eyewear-tech-v2",
+            "APPROVED_VIDEO_PATH": (
+                "artifacts/approved/samsung-eyewear-tech-v2/"
+                "samsung-eyewear-tech-v2-approved.mp4"
+            ),
+            "APPROVED_VIDEO_SHA256": (
+                "48ec93d02efff3acd284cb4c6d4cbe58881cef51ba68cf305cef43df67887115"
+            ),
+            "EXPECTED_PUBLICATION_APPROVAL_TOKEN": (
+                "samsung-eyewear-tech-v2-approved-2026-07-31-1230-colombia"
+            ),
+            "PUBLICATION_APPROVAL_TOKEN": (
+                "samsung-eyewear-tech-v2-approved-2026-07-31-1230-colombia"
+            ),
+            "APPROVED_CAPTION": (
+                "Samsung y Google llevan Gemini a unas gafas capaces de responder "
+                "a lo que ves, traducir en tiempo real y orientarte sin sacar el "
+                "celular.\n\n¿Asistencia útil o demasiada información frente a "
+                "tus ojos?\n\nFuente audiovisual: Samsung Newsroom España.\n\n"
+                "#Samsung #Gemini #AndroidXR #GafasInteligentes #Tecnologia"
+            ),
+            "APPROVED_THREADS_TEXT": (
+                "Gemini llegará a unas gafas de Samsung capaces de responder a lo "
+                "que ves, traducir y orientarte sin sacar el celular.\n\n"
+                "¿Las usarías todos los días?"
+            ),
+            "APPROVED_YOUTUBE_TITLE": (
+                "Las gafas de Samsung con Gemini ven lo que tú ves #Shorts"
+            ),
+            "APPROVED_YOUTUBE_DESCRIPTION": (
+                "Samsung y Google llevan Gemini a unas gafas capaces de responder "
+                "a lo que ves, traducir en tiempo real y orientarte.\n\n"
+                "Fuente audiovisual: Samsung Newsroom España.\n\n"
+                "#Samsung #Gemini #AndroidXR #GafasInteligentes #Tecnologia "
+                "#Shorts"
+            ),
+            "APPROVED_YOUTUBE_CATEGORY_ID": "28",
+            "APPROVED_YOUTUBE_TAGS": (
+                "Samsung,Gemini,Android XR,gafas inteligentes,tecnologia,shorts"
+            ),
+        }
+    )
+    from tools.publish_wolverine_v4_multiplatform import main as publish_samsung
+
+    publish_samsung()
+    raise SystemExit(0)
+
+if (
+    os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
     and os.getenv("GITHUB_REF_NAME") == "agent/prepara-publicacion-halo-v9"
 ):
     os.environ["PUBLICATION_APPROVAL_TOKEN"] = (

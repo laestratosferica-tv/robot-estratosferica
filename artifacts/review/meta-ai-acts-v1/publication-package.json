@@ -1,0 +1,59 @@
+{
+  "piece_id": "meta-ai-acts-v1",
+  "status": "approved_ready_to_schedule",
+  "category": "inteligencia_artificial",
+  "format": "vertical_reel",
+  "duration_seconds": 10.5,
+  "resolution": "1080x1920",
+  "asset": {
+    "path": "artifacts/review/meta-ai-acts-v1/meta-ai-acts-v1.mp4",
+    "sha256": "d08d6ac21b92d2a85c5d77fc3fdc115e5c21968c8e94d8dcfcd781676ca8d3a6"
+  },
+  "scheduled_publication": {
+    "date": "2026-08-01",
+    "time": "12:30",
+    "timezone": "America/Bogota",
+    "hypothesis": "probar interés en IA práctica durante la franja de almuerzo del sábado"
+  },
+  "platforms": [
+    "instagram",
+    "facebook",
+    "youtube_shorts",
+    "threads"
+  ],
+  "caption": "Meta AI ya no solo responde: ahora puede planificar, investigar, crear presentaciones y trabajar con tus aplicaciones. La pregunta es otra: ¿hasta dónde le darías acceso?\n\nFuente audiovisual: Meta Newsroom.",
+  "threads_text": "Meta AI ya no solo responde: ahora puede planificar, investigar, crear presentaciones y trabajar con tus aplicaciones. ¿Hasta dónde le darías acceso?",
+  "youtube": {
+    "title": "Meta AI ya actúa por ti: ¿hasta dónde le darías acceso?",
+    "description": "Meta AI puede planificar, investigar, crear presentaciones y trabajar con aplicaciones.\n\nFuente audiovisual: Meta Newsroom.\n\n#MetaAI #InteligenciaArtificial #Tecnologia #IA #LaEstratosferica"
+  },
+  "hashtags": [
+    "#MetaAI",
+    "#InteligenciaArtificial",
+    "#Tecnologia",
+    "#IA",
+    "#LaEstratosferica"
+  ],
+  "source": {
+    "publisher": "Meta Newsroom",
+    "url": "https://about.fb.com/news/2026/07/meta-ai-muse-spark-doesnt-just-think-it-acts/",
+    "published": "2026-07-24"
+  },
+  "measurement_windows_hours": [
+    1,
+    6,
+    24,
+    72
+  ],
+  "primary_metrics": [
+    "retencion_3s",
+    "tiempo_medio",
+    "finalizacion",
+    "compartidos",
+    "comentarios",
+    "seguimientos"
+  ],
+  "publication_authorized": true,
+  "approved_by": "Jose Luis",
+  "approved_on": "2026-07-30"
+}

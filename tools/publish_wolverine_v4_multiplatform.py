@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the explicitly approved Wolverine V4 to four platforms once."""
+"""Publish one explicitly approved vertical video to four platforms once."""
 
 from __future__ import annotations
 
@@ -16,13 +16,30 @@ import requests
 from botocore.exceptions import ClientError
 
 
-VIDEO = Path("artifacts/approved/wolverine-v4/wolverine-v4-approved.mp4")
-EXPECTED_SHA256 = "6748e3a4f042bfe1e89429794dbc45db3ea93673e03fd823ca0df7c33ee14ec8"
-APPROVAL_TOKEN = "wolverine-v4-multiplatform-approved-2026-07-30-20h-colombia"
-R2_VIDEO_KEY = f"approved/multiplatform/wolverine-v4-{EXPECTED_SHA256[:16]}.mp4"
-RECEIPT = Path("artifacts/wolverine-v4-multiplatform-publication-result.json")
+PIECE_ID = os.environ.get("APPROVED_PIECE_ID", "wolverine-v4").strip()
+VIDEO = Path(
+    os.environ.get(
+        "APPROVED_VIDEO_PATH",
+        "artifacts/approved/wolverine-v4/wolverine-v4-approved.mp4",
+    )
+)
+EXPECTED_SHA256 = os.environ.get(
+    "APPROVED_VIDEO_SHA256",
+    "6748e3a4f042bfe1e89429794dbc45db3ea93673e03fd823ca0df7c33ee14ec8",
+).strip()
+APPROVAL_TOKEN = os.environ.get(
+    "EXPECTED_PUBLICATION_APPROVAL_TOKEN",
+    "wolverine-v4-multiplatform-approved-2026-07-30-20h-colombia",
+).strip()
+R2_VIDEO_KEY = f"approved/multiplatform/{PIECE_ID}-{EXPECTED_SHA256[:16]}.mp4"
+RECEIPT = Path(
+    os.environ.get(
+        "PUBLICATION_RECEIPT_PATH",
+        f"artifacts/{PIECE_ID}-multiplatform-publication-result.json",
+    )
+)
 
-CAPTION = """Marvel’s Wolverine mostró su historia: Jean Grey, Deathstrike y La Mano entran en guerra.
+DEFAULT_CAPTION = """Marvel’s Wolverine mostró su historia: Jean Grey, Deathstrike y La Mano entran en guerra.
 
 ¿Superará a Marvel’s Spider-Man?
 
@@ -31,9 +48,13 @@ Llega el 15 de septiembre de 2026 a PS5.
 Fuente audiovisual: PlayStation / Insomniac Games.
 
 #MarvelsWolverine #Wolverine #PlayStation5 #PS5 #GamingLatam"""
+CAPTION = os.environ.get("APPROVED_CAPTION", DEFAULT_CAPTION)
 
-YT_TITLE = "Wolverine mostró su HISTORIA ¿superará a Spider-Man? #Shorts"
-YT_DESCRIPTION = """Jean Grey, Deathstrike y La Mano entran en guerra en Marvel’s Wolverine.
+YT_TITLE = os.environ.get(
+    "APPROVED_YOUTUBE_TITLE",
+    "Wolverine mostró su HISTORIA ¿superará a Spider-Man? #Shorts",
+)
+DEFAULT_YT_DESCRIPTION = """Jean Grey, Deathstrike y La Mano entran en guerra en Marvel’s Wolverine.
 
 Lanzamiento: 15 de septiembre de 2026 en PS5.
 
@@ -42,12 +63,14 @@ Fuente editorial:
 https://blog.playstation.com/2026/07/23/marvels-wolverine-story-trailer-new-art-composer-details-and-more/
 
 #MarvelsWolverine #Wolverine #PS5 #Shorts #GamingLatam"""
+YT_DESCRIPTION = os.environ.get("APPROVED_YOUTUBE_DESCRIPTION", DEFAULT_YT_DESCRIPTION)
 
-THREADS_TEXT = """Wolverine ya mostró su historia: Jean Grey, Deathstrike y La Mano entran en guerra.
+DEFAULT_THREADS_TEXT = """Wolverine ya mostró su historia: Jean Grey, Deathstrike y La Mano entran en guerra.
 
 ¿Superará a Spider-Man?
 
 Fuente audiovisual: PlayStation / Insomniac Games."""
+THREADS_TEXT = os.environ.get("APPROVED_THREADS_TEXT", DEFAULT_THREADS_TEXT)
 
 
 def required(name: str) -> str:
@@ -172,7 +195,7 @@ def publish_instagram(
     video_url: str,
     graph_base: str,
 ) -> dict[str, Any]:
-    key = "publication-ledger/instagram/wolverine-v4.json"
+    key = f"publication-ledger/instagram/{PIECE_ID}.json"
     existing = ledger_get(r2, bucket, key)
     if existing and existing.get("status") == "published":
         return existing
@@ -224,7 +247,7 @@ def publish_facebook(
     video_url: str,
     graph_base: str,
 ) -> dict[str, Any]:
-    key = "publication-ledger/facebook/wolverine-v4.json"
+    key = f"publication-ledger/facebook/{PIECE_ID}.json"
     existing = ledger_get(r2, bucket, key)
     if existing and existing.get("status") == "published":
         return existing
@@ -264,7 +287,7 @@ def publish_facebook(
 
 
 def publish_youtube(r2: Any, bucket: str) -> dict[str, Any]:
-    key = "publication-ledger/youtube/wolverine-v4.json"
+    key = f"publication-ledger/youtube/{PIECE_ID}.json"
     existing = ledger_get(r2, bucket, key)
     if existing and existing.get("status") == "published":
         return existing
@@ -287,13 +310,14 @@ def publish_youtube(r2: Any, bucket: str) -> dict[str, Any]:
             "snippet": {
                 "title": YT_TITLE,
                 "description": YT_DESCRIPTION,
-                "categoryId": "20",
+                "categoryId": os.environ.get("APPROVED_YOUTUBE_CATEGORY_ID", "20"),
                 "tags": [
-                    "Marvel's Wolverine",
-                    "Wolverine",
-                    "PS5",
-                    "gaming",
-                    "shorts",
+                    tag.strip()
+                    for tag in os.environ.get(
+                        "APPROVED_YOUTUBE_TAGS",
+                        "Marvel's Wolverine,Wolverine,PS5,gaming,shorts",
+                    ).split(",")
+                    if tag.strip()
                 ],
             },
             "status": {
@@ -327,7 +351,7 @@ def publish_threads(
     bucket: str,
     video_url: str,
 ) -> dict[str, Any]:
-    key = "publication-ledger/threads/wolverine-v4.json"
+    key = f"publication-ledger/threads/{PIECE_ID}.json"
     existing = ledger_get(r2, bucket, key)
     if existing and existing.get("status") == "published":
         return existing

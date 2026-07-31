@@ -32,6 +32,60 @@ if (
 
 if (
     os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
+    and os.getenv("GITHUB_REF_NAME") == "agent/publica-meta-ai-v1"
+):
+    os.environ.update(
+        {
+            "APPROVED_PIECE_ID": "meta-ai-acts-v1",
+            "APPROVED_VIDEO_PATH": (
+                "artifacts/approved/meta-ai-acts-v1/"
+                "meta-ai-acts-v1-approved.mp4"
+            ),
+            "APPROVED_VIDEO_SHA256": (
+                "d08d6ac21b92d2a85c5d77fc3fdc115e5c21968c8e94d8dcfcd781676ca8d3a6"
+            ),
+            "EXPECTED_PUBLICATION_APPROVAL_TOKEN": (
+                "meta-ai-acts-v1-multiplatform-approved-2026-08-01-1230-colombia"
+            ),
+            "PUBLICATION_APPROVAL_TOKEN": (
+                "meta-ai-acts-v1-multiplatform-approved-2026-08-01-1230-colombia"
+            ),
+            "APPROVED_CAPTION": (
+                "Meta AI ya no solo responde: ahora puede planificar, investigar, "
+                "crear presentaciones y trabajar con tus aplicaciones.\n\n"
+                "La pregunta es otra: ¿hasta dónde le darías acceso?\n\n"
+                "Fuente audiovisual: Meta Newsroom.\n\n"
+                "#MetaAI #InteligenciaArtificial #Tecnologia #IA "
+                "#LaEstratosferica"
+            ),
+            "APPROVED_THREADS_TEXT": (
+                "Meta AI ya no solo responde: ahora puede planificar, investigar, "
+                "crear presentaciones y trabajar con tus aplicaciones.\n\n"
+                "¿Hasta dónde le darías acceso?"
+            ),
+            "APPROVED_YOUTUBE_TITLE": (
+                "Meta AI ya actúa por ti: ¿hasta dónde le darías acceso? #Shorts"
+            ),
+            "APPROVED_YOUTUBE_DESCRIPTION": (
+                "Meta AI puede planificar, investigar, crear presentaciones y "
+                "trabajar con aplicaciones.\n\n"
+                "Fuente audiovisual: Meta Newsroom.\n\n"
+                "#MetaAI #InteligenciaArtificial #Tecnologia #IA "
+                "#LaEstratosferica #Shorts"
+            ),
+            "APPROVED_YOUTUBE_CATEGORY_ID": "28",
+            "APPROVED_YOUTUBE_TAGS": (
+                "Meta AI,inteligencia artificial,tecnologia,IA,shorts"
+            ),
+        }
+    )
+    from tools.publish_wolverine_v4_multiplatform import main as publish_meta_ai
+
+    publish_meta_ai()
+    raise SystemExit(0)
+
+if (
+    os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
     and os.getenv("GITHUB_REF_NAME") == "agent/prepara-publicacion-halo-v9"
 ):
     os.environ["PUBLICATION_APPROVAL_TOKEN"] = (

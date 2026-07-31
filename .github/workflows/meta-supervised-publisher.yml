@@ -1,0 +1,60 @@
+name: Meta Supervised Publisher
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_path:
+        description: "Ruta del manifiesto aprobado"
+        required: true
+        type: string
+      live:
+        description: "Publicar realmente (false = simulación segura)"
+        required: true
+        default: false
+        type: boolean
+      approval_id:
+        description: "Autorización exacta de la pieza (solo modo real)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meta-supervised-publisher
+  cancel-in-progress: false
+
+jobs:
+  validate_or_publish:
+    if: inputs.live == false || vars.PRODUCTION_ARMED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Validate or publish one approved Meta Reel
+        env:
+          PRODUCTION_ARMED: ${{ vars.PRODUCTION_ARMED }}
+          PUBLICATION_APPROVAL_ID: ${{ inputs.approval_id }}
+          GRAPH_VERSION: v25.0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+        run: >-
+          python tools/publish_supervised_meta.py
+          --manifest "${{ inputs.manifest_path }}"
+          ${{ inputs.live && '--live' || '' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meta-supervised-publication-result
+          path: artifacts/meta-supervised-publication.json
+          if-no-files-found: error

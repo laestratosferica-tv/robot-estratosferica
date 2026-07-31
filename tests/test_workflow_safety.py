@@ -101,6 +101,16 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertNotIn("PRODUCTION_ARMED", content)
         self.assertNotIn("ENABLE_", content)
 
+    def test_meta_supervised_publisher_defaults_to_dry_run(self):
+        content = (
+            WORKFLOWS / "meta-supervised-publisher.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("schedule:", content)
+        self.assertIn("default: false", content)
+        self.assertIn(PRODUCTION_GATE, content)
+        self.assertIn("PUBLICATION_APPROVAL_ID", content)
+
     def test_tiktok_diagnostic_is_manual_readonly_and_flags_stay_false(self):
         content = (
             WORKFLOWS / "tiktok-readiness-diagnostic.yml"

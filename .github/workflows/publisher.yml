@@ -22,6 +22,18 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Wait until approved publication time
+        if: github.ref_name == 'agent/publica-wolverine-v4'
+        shell: bash
+        run: |
+          target_epoch="$(date -u -d '2026-07-31 01:00:00 UTC' +%s)"
+          now_epoch="$(date -u +%s)"
+          wait_seconds="$((target_epoch - now_epoch))"
+          if [ "$wait_seconds" -gt 0 ]; then
+            echo "Publication is queued for 2026-07-30 20:00 America/Bogota."
+            sleep "$wait_seconds"
+          fi
+
       - name: Run publisher
         run: python -u main.py
         env:

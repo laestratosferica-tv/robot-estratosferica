@@ -40,18 +40,9 @@ class PlatformCredentialDiagnosticTests(unittest.TestCase):
         def opener(request, timeout):
             self.assertEqual(timeout, 15)
             requests.append(request)
-            if request.full_url.endswith("/me/permissions"):
+            if "/facebook-id/video_reels?" in request.full_url:
                 return _Response(
-                    json.dumps(
-                        {
-                            "data": [
-                                {
-                                    "permission": "pages_manage_posts",
-                                    "status": "granted",
-                                }
-                            ]
-                        }
-                    ).encode()
+                    json.dumps({"data": [{"id": "reel-id"}]}).encode()
                 )
             if request.full_url.endswith("/me?fields=id"):
                 return _Response(
@@ -82,7 +73,8 @@ class PlatformCredentialDiagnosticTests(unittest.TestCase):
         self.assertEqual(report["measured_cost_usd"], 0.0)
         facebook = report["platforms"]["facebook"]["publish_capability"]
         self.assertTrue(facebook["token_subject_matches_page"])
-        self.assertTrue(facebook["pages_manage_posts_confirmed"])
+        self.assertTrue(facebook["reels_collection_readable"])
+        self.assertTrue(facebook["page_token_ready_for_reels_endpoint"])
         self.assertTrue(facebook["reels_publish_permission_ready"])
         self.assertTrue(
             facebook["page_content_task_requires_business_suite_verification"]

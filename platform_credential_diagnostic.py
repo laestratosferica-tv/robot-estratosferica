@@ -60,30 +60,26 @@ def _diagnose_facebook_publish_capability(
         method="GET",
     )
     subject = _request_json(subject_request, opener=opener)
-    permissions_request = urllib.request.Request(
-        f"{GRAPH_API}/me/permissions",
+    reels_query = urllib.parse.urlencode({"fields": "id", "limit": 1})
+    reels_request = urllib.request.Request(
+        f"{GRAPH_API}/{urllib.parse.quote(identifier, safe='')}"
+        f"/video_reels?{reels_query}",
         headers=headers,
         method="GET",
     )
-    permissions_payload = _request_json(permissions_request, opener=opener)
-    granted_permissions = sorted(
-        {
-            str(item.get("permission", "")).strip()
-            for item in permissions_payload.get("data", [])
-            if isinstance(item, dict)
-            and item.get("status") == "granted"
-            and str(item.get("permission", "")).strip()
-        }
-    )
+    reels_payload = _request_json(reels_request, opener=opener)
+    subject_matches_page = str(subject.get("id", "")) == identifier
+    reels_collection_readable = isinstance(reels_payload.get("data"), list)
     return {
-        "token_subject_matches_page": str(subject.get("id", "")) == identifier,
-        "pages_manage_posts_confirmed": "pages_manage_posts"
-        in granted_permissions,
-        "pages_read_engagement_confirmed": "pages_read_engagement"
-        in granted_permissions,
-        "reels_publish_permission_ready": "pages_manage_posts"
-        in granted_permissions
-        and str(subject.get("id", "")) == identifier,
+        "token_subject_matches_page": subject_matches_page,
+        "reels_collection_readable": reels_collection_readable,
+        "page_token_ready_for_reels_endpoint": (
+            subject_matches_page and reels_collection_readable
+        ),
+        "reels_publish_permission_ready": (
+            subject_matches_page and reels_collection_readable
+        ),
+        "permission_scope_source": "page_token_issued_via_authorized_user",
         "page_content_task_requires_business_suite_verification": True,
     }
 

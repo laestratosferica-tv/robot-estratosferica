@@ -37,6 +37,65 @@ def _request(
     return "valid"
 
 
+def _request_json(
+    request: urllib.request.Request,
+    *,
+    opener: Any = urllib.request.urlopen,
+) -> dict[str, Any]:
+    with opener(request, timeout=15) as response:
+        payload = json.loads(response.read(65536).decode("utf-8"))
+    return payload if isinstance(payload, dict) else {}
+
+
+def _diagnose_facebook_publish_capability(
+    *,
+    identifier: str,
+    access_token: str,
+    opener: Any,
+) -> dict[str, Any]:
+    headers = {"Authorization": f"Bearer {access_token}"}
+    page_query = urllib.parse.urlencode({"fields": "id,tasks"})
+    page_request = urllib.request.Request(
+        f"{GRAPH_API}/{urllib.parse.quote(identifier, safe='')}?{page_query}",
+        headers=headers,
+        method="GET",
+    )
+    page = _request_json(page_request, opener=opener)
+    tasks = sorted(
+        {
+            str(task).strip()
+            for task in page.get("tasks", [])
+            if str(task).strip()
+        }
+    )
+
+    permissions_request = urllib.request.Request(
+        f"{GRAPH_API}/me/permissions",
+        headers=headers,
+        method="GET",
+    )
+    permissions_payload = _request_json(permissions_request, opener=opener)
+    granted_permissions = sorted(
+        {
+            str(item.get("permission", "")).strip()
+            for item in permissions_payload.get("data", [])
+            if isinstance(item, dict)
+            and item.get("status") == "granted"
+            and str(item.get("permission", "")).strip()
+        }
+    )
+    return {
+        "page_tasks": tasks,
+        "create_content_task_confirmed": "CREATE_CONTENT" in tasks,
+        "pages_manage_posts_confirmed": "pages_manage_posts"
+        in granted_permissions,
+        "reels_publish_permission_ready": (
+            "CREATE_CONTENT" in tasks
+            and "pages_manage_posts" in granted_permissions
+        ),
+    }
+
+
 def _diagnose_graph_platform(
     *,
     platform: str,
@@ -156,6 +215,7 @@ def build_credential_diagnostic(
         values = {name: environment.get(name, "").strip() for name in names}
         configured_count = sum(bool(value) for value in values.values())
         error_details: dict[str, Any] = {}
+        publish_capability: dict[str, Any] = {}
         if configured_count == 0:
             status = "missing"
             checked = False
@@ -193,6 +253,12 @@ def build_credential_diagnostic(
                         access_token=values[token_name],
                         opener=opener,
                     )
+                    if platform == "facebook":
+                        publish_capability = _diagnose_facebook_publish_capability(
+                            identifier=values[id_name],
+                            access_token=values[token_name],
+                            opener=opener,
+                        )
             except Exception as error:
                 status = _safe_status(error)
                 error_details = _safe_error_details(error, secrets=secrets)
@@ -203,6 +269,11 @@ def build_credential_diagnostic(
             "required_count": len(names),
             "live_readonly_check_performed": checked,
             "secret_values_exposed": False,
+            **(
+                {"publish_capability": publish_capability}
+                if platform == "facebook" and publish_capability
+                else {}
+            ),
             **error_details,
         }
 

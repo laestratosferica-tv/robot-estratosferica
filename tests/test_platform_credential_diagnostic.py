@@ -7,6 +7,9 @@ from platform_credential_diagnostic import build_credential_diagnostic
 
 
 class _Response:
+    def __init__(self, body=b"{"):
+        self.body = body
+
     def __enter__(self):
         return self
 
@@ -14,7 +17,7 @@ class _Response:
         return False
 
     def read(self, _size):
-        return b"{"
+        return self.body
 
 
 class PlatformCredentialDiagnosticTests(unittest.TestCase):
@@ -37,12 +40,31 @@ class PlatformCredentialDiagnosticTests(unittest.TestCase):
         def opener(request, timeout):
             self.assertEqual(timeout, 15)
             requests.append(request)
+            if request.full_url.endswith("/me/permissions"):
+                return _Response(
+                    json.dumps(
+                        {
+                            "data": [
+                                {
+                                    "permission": "pages_manage_posts",
+                                    "status": "granted",
+                                }
+                            ]
+                        }
+                    ).encode()
+                )
+            if "fields=id%2Ctasks" in request.full_url:
+                return _Response(
+                    json.dumps(
+                        {"id": "facebook-id", "tasks": ["CREATE_CONTENT"]}
+                    ).encode()
+                )
             return _Response()
 
         report = build_credential_diagnostic(self.environment, opener=opener)
 
         self.assertTrue(report["all_required_credentials_valid"])
-        self.assertEqual(len(requests), 4)
+        self.assertEqual(len(requests), 6)
         for request in requests[:3]:
             self.assertNotIn("secret", request.full_url)
             self.assertTrue(
@@ -60,6 +82,10 @@ class PlatformCredentialDiagnosticTests(unittest.TestCase):
         self.assertFalse(report["publishing_attempted"])
         self.assertFalse(report["external_writes_attempted"])
         self.assertEqual(report["measured_cost_usd"], 0.0)
+        facebook = report["platforms"]["facebook"]["publish_capability"]
+        self.assertTrue(facebook["create_content_task_confirmed"])
+        self.assertTrue(facebook["pages_manage_posts_confirmed"])
+        self.assertTrue(facebook["reels_publish_permission_ready"])
 
     def test_missing_and_incomplete_credentials_do_not_call_network(self):
         def opener(_request, _timeout):

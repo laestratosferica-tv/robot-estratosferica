@@ -146,11 +146,14 @@ def wait_meta_container(
 ) -> None:
     deadline = time.monotonic() + 900
     while time.monotonic() < deadline:
+        requested_fields = [status_field]
+        if status_field != "status":
+            requested_fields.append("status")
         payload = graph_get(
             base,
             creation_id,
             token,
-            fields=f"{status_field},status,error_message",
+            fields=",".join(requested_fields),
         )
         status = str(
             payload.get(status_field) or payload.get("status") or ""

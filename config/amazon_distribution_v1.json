@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "rule": "Una pieza aprobada genera una salida nativa por plataforma; nunca se reutiliza un único CTA.",
+  "platforms": {
+    "instagram_reel": {
+      "cta": "Mira la opción real en Amazon desde el enlace del perfil.",
+      "clickable_url_in_caption": false,
+      "required_companion": "instagram_story"
+    },
+    "instagram_story": {
+      "cta": "Ver opción real en Amazon",
+      "link_delivery": "link_sticker",
+      "required": true
+    },
+    "facebook": {
+      "cta": "Ver opción real en Amazon",
+      "link_delivery": "direct_url"
+    },
+    "threads": {
+      "cta": "Revisa la opción real en Amazon",
+      "link_delivery": "direct_url",
+      "copy_style": "conversacion_nativa"
+    },
+    "youtube_short": {
+      "cta": "Producto y enlace en el perfil del canal.",
+      "clickable_url_in_description": false,
+      "link_delivery": "channel_profile"
+    }
+  },
+  "required_checks": [
+    "affiliate_disclosure",
+    "real_product_match",
+    "https_destination",
+    "platform_copy_present",
+    "duplicate_guard",
+    "post_publication_permalink"
+  ],
+  "safe_default": "draft_only"
+}

@@ -1,0 +1,18 @@
+{
+  "schema": "approved_carousel_publication_v1",
+  "slug": "gaming-worlds-carousel-v3-2026-08-02",
+  "approval_id": "jose-luis-gaming-worlds-carousel-approved-2026-08-02",
+  "platforms": ["instagram", "facebook", "threads"],
+  "expected_accounts": {"instagram_username": "laestratosfericatv", "facebook_page_name": "La Estratosférica TV", "threads_username": "laestratosfericatv"},
+  "caption": "Cinco mundos. Cinco formas de desaparecer del mundo real por unas horas. 🌌 ¿A cuál entrarías primero? Fuentes editoriales: PlayStation, Xbox, Ubisoft y Bandai Namco. Arte visual original de La Estratosférica. #Gaming #Videojuegos #OpenWorld #MundoAbierto #LaEstratosferica",
+  "threads_text": "Cinco mundos gamer y una sola entrada: Ezo, los Sistemas Colonizados, Living Lands, el Japón feudal o las Tierras Intermedias. ¿Cuál eliges primero?",
+  "assets": [
+    {"order": 1, "path": "artifacts/review/gaming-worlds-carousel-v3/slides/slide-1.png", "sha256": "8e39945f97fb737e6d63dee5418b96bc5d9dd05a4b347f88e5dcda26c13da32b"},
+    {"order": 2, "path": "artifacts/review/gaming-worlds-carousel-v3/slides/slide-2.png", "sha256": "081d220259804eea9c082ebed9e1a60c935ecf9035ba50d89036bfabe1b9ef17"},
+    {"order": 3, "path": "artifacts/review/gaming-worlds-carousel-v3/slides/slide-3.png", "sha256": "c27ee9a623bc0ebd6a1b00967839c53fbfcfea44c6c1a409b0d1e3d5d0759d85"},
+    {"order": 4, "path": "artifacts/review/gaming-worlds-carousel-v3/slides/slide-4.png", "sha256": "fb7b8743f4e23772f25a34b35abdbeb731deb0225c461e60300cf5ceb2c21eff"},
+    {"order": 5, "path": "artifacts/review/gaming-worlds-carousel-v3/slides/slide-5.png", "sha256": "0cbd6212b0f517498d5c688de980a5d471fca3cbfaf7d6b57e2ab0da7e514951"},
+    {"order": 6, "path": "artifacts/review/gaming-worlds-carousel-v3/slides/slide-6.png", "sha256": "4dbaf7886caaeae82b1c6c436f5d627a257073da6cd7a9f0a7c30ca96c5701f3"},
+    {"order": 7, "path": "artifacts/review/gaming-worlds-carousel-v3/slides/slide-7.png", "sha256": "f9faa9e0f0c4de889a8c9b07fbb32079b51c2bb967d19d764ca4b9190c26c045"}
+  ]
+}

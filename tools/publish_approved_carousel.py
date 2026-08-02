@@ -101,17 +101,24 @@ def account_preflight(manifest: Mapping[str, Any], env: Mapping[str, str]) -> di
     required(env, "IG_USER_ID", "IG_ACCESS_TOKEN", "FB_PAGE_ID", "FB_PAGE_ACCESS_TOKEN", "THREADS_USER_ID", "THREADS_USER_ACCESS_TOKEN")
     graph = f"https://graph.facebook.com/{env.get('GRAPH_VERSION', 'v25.0')}"
     threads = f"https://graph.threads.net/{env.get('THREADS_GRAPH_VERSION', 'v1.0')}"
-    ig = request("GET", graph, env["IG_USER_ID"], token=env["IG_ACCESS_TOKEN"], params={"fields": "id,username"})
-    fb = request("GET", graph, env["FB_PAGE_ID"], token=env["FB_PAGE_ACCESS_TOKEN"], params={"fields": "id,name,link"})
-    th = request("GET", threads, env["THREADS_USER_ID"], token=env["THREADS_USER_ACCESS_TOKEN"], params={"fields": "id,username"})
     expected = manifest["expected_accounts"]
-    if str(ig.get("username", "")).lower() != expected["instagram_username"].lower():
-        raise RuntimeError("instagram_account_mismatch")
-    if str(th.get("username", "")).lower() != expected["threads_username"].lower():
-        raise RuntimeError("threads_account_mismatch")
-    if str(fb.get("name", "")).strip() != expected["facebook_page_name"]:
-        raise RuntimeError("facebook_account_mismatch")
-    return {"instagram": {"id": ig.get("id"), "username": ig.get("username")}, "facebook": {"id": fb.get("id"), "name": fb.get("name"), "link": fb.get("link")}, "threads": {"id": th.get("id"), "username": th.get("username")}}
+    checks = {
+        "instagram": (graph, env["IG_USER_ID"], env["IG_ACCESS_TOKEN"], {"fields": "id,username"}),
+        "facebook": (graph, env["FB_PAGE_ID"], env["FB_PAGE_ACCESS_TOKEN"], {"fields": "id,name,link"}),
+        "threads": (threads, env["THREADS_USER_ID"], env["THREADS_USER_ACCESS_TOKEN"], {"fields": "id,username"}),
+    }
+    accounts: dict[str, Any] = {}
+    for platform, (base, identifier, token, fields) in checks.items():
+        try:
+            profile = request("GET", base, identifier, token=token, params=fields)
+            actual = profile.get("name") if platform == "facebook" else profile.get("username")
+            wanted = expected["facebook_page_name"] if platform == "facebook" else expected[f"{platform}_username"]
+            if str(actual or "").strip().lower() != str(wanted).strip().lower():
+                raise RuntimeError(f"{platform}_account_mismatch")
+            accounts[platform] = {"status": "official_account_confirmed", "id": profile.get("id"), "username": profile.get("username"), "name": profile.get("name"), "link": profile.get("link")}
+        except Exception as error:
+            accounts[platform] = {"status": "blocked", "error_type": type(error).__name__, "error": str(error)[:180]}
+    return accounts
 
 
 def storage(env: Mapping[str, str]):
@@ -195,6 +202,8 @@ def run(manifest_path: Path, *, root: Path, live: bool, env: Mapping[str, str]) 
     publishers = {"instagram": lambda: publish_instagram(urls, manifest["caption"], env), "facebook": lambda: publish_facebook(urls, manifest["caption"], env), "threads": lambda: publish_threads(urls, manifest["threads_text"], env)}
     for platform in PLATFORMS:
         key = f"publication-ledger/carousel/{manifest['slug']}/{platform}.json"; existing = read_ledger(client, env, key)
+        if receipt["accounts"][platform]["status"] != "official_account_confirmed":
+            receipt["platforms"][platform] = {"status": "blocked_preflight", "reason": receipt["accounts"][platform]}; continue
         if existing:
             receipt["platforms"][platform] = {"status": "already_recorded", "record": existing}; continue
         pending = {"schema": SCHEMA, "status": "claim_created", "slug": manifest["slug"], "platform": platform, "approval_id": manifest["approval_id"], "image_count": 7, "asset_hashes": [item["sha256"] for item in manifest["assets"]], "requested_at": now()}

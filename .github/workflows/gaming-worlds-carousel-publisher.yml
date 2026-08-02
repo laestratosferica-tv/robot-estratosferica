@@ -1,0 +1,55 @@
+name: Gaming Worlds Carousel Publisher
+
+on:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: "Publicar realmente (false = compuerta solo lectura)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gaming-worlds-carousel-publisher
+  cancel-in-progress: false
+
+jobs:
+  preflight_or_publish:
+    if: inputs.live == false || vars.PRODUCTION_ARMED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install boto3==1.34.162 requests==2.32.3
+      - name: Compuerta o publicación aprobada
+        env:
+          PRODUCTION_ARMED: ${{ vars.PRODUCTION_ARMED }}
+          PUBLICATION_APPROVAL_ID: jose-luis-gaming-worlds-carousel-approved-2026-08-02
+          GRAPH_VERSION: v25.0
+          THREADS_GRAPH_VERSION: v1.0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          THREADS_USER_ACCESS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
+        run: >-
+          python tools/publish_approved_carousel.py
+          --manifest artifacts/publication-manifests/gaming-worlds-carousel-v3.json
+          ${{ inputs.live && '--live' || '' }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gaming-worlds-carousel-publication-result
+          path: artifacts/carousel-publication-result.json
+          if-no-files-found: warn

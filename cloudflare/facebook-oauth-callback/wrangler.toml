@@ -1,0 +1,7 @@
+name = "estratosferica-facebook-oauth"
+main = "src/index.js"
+compatibility_date = "2026-08-02"
+
+[[r2_buckets]]
+binding = "FB_OAUTH_HANDOFF"
+bucket_name = "estratosferica-facebook-oauth-handoff"

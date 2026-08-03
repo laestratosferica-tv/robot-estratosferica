@@ -98,6 +98,17 @@ def graph_get(base: str, path: str, *, params: dict[str, str]) -> dict[str, Any]
     return payload
 
 
+def graph_delete(base: str, path: str, *, data: dict[str, str]) -> dict[str, Any]:
+    import requests
+
+    response = requests.delete(f"{base}/{path.lstrip('/')}", data=data, timeout=60)
+    response.raise_for_status()
+    payload = response.json()
+    if "error" in payload or payload.get("success") is not True:
+        raise RuntimeError("meta_provider_rejected_delete")
+    return payload
+
+
 def upload_public_video(video: Path, manifest: Mapping[str, Any], env: Mapping[str, str]) -> str:
     import boto3
 
@@ -232,6 +243,32 @@ def run(
     else:
         media_id = publish_facebook(video_url, manifest["caption"], env, graph_base)
     receipt.update({"published": True, "media_id": media_id})
+
+    # A Facebook replacement is deliberately post-publication only: the old
+    # post remains untouched unless Graph confirms the replacement exists.
+    replacement_post_id = str(manifest.get("replace_facebook_post_id", "")).strip()
+    if replacement_post_id:
+        if platform != "facebook":
+            raise ValueError("facebook_replacement_requires_facebook_platform")
+        confirmed = graph_get(
+            graph_base,
+            media_id,
+            params={"fields": "id,permalink_url", "access_token": env["FB_PAGE_ACCESS_TOKEN"]},
+        )
+        if str(confirmed.get("id", "")) != media_id:
+            raise RuntimeError("facebook_reel_verification_failed")
+        receipt["permalink_url"] = str(confirmed.get("permalink_url", ""))
+        graph_delete(
+            graph_base,
+            replacement_post_id,
+            data={"access_token": env["FB_PAGE_ACCESS_TOKEN"]},
+        )
+        receipt.update(
+            {
+                "replaced_post_id": replacement_post_id,
+                "replaced_post_deleted": True,
+            }
+        )
     return receipt
 
 

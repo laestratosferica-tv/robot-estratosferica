@@ -1,0 +1,52 @@
+name: Facebook Page Token Rotation
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "prepare crea el enlace; rotate intercambia y guarda el token"
+        type: choice
+        required: true
+        default: prepare
+        options: [prepare, rotate]
+
+permissions:
+  contents: read
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install requests==2.32.3
+      - name: Preparar o renovar sin exponer secretos
+        env:
+          GRAPH_VERSION: v25.0
+          FB_APP_ID: ${{ secrets.FB_APP_ID }}
+          FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
+          FB_OAUTH_REDIRECT_URI: ${{ secrets.FB_OAUTH_REDIRECT_URI }}
+          FB_AUTH_CODE: ${{ secrets.FB_AUTH_CODE }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+        run: >-
+          python tools/rotate_facebook_page_token.py
+          --mode ${{ inputs.mode }}
+          --output artifacts/facebook-token-rotation.json
+          ${{ inputs.mode == 'rotate' && '--token-output /tmp/fb-page-token' || '' }}
+      - name: Guardar token nuevo como secreto de GitHub
+        if: inputs.mode == 'rotate'
+        env:
+          GH_TOKEN: ${{ secrets.REPO_SECRET_WRITE_TOKEN }}
+        run: |
+          test -n "$GH_TOKEN" || { echo "REPO_SECRET_WRITE_TOKEN is missing"; exit 1; }
+          gh secret set FB_PAGE_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY" --body "$(cat /tmp/fb-page-token)"
+          shred -u /tmp/fb-page-token
+          echo "Facebook Page Token updated without printing its value"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: facebook-token-rotation-result
+          path: artifacts/facebook-token-rotation.json
+          if-no-files-found: warn

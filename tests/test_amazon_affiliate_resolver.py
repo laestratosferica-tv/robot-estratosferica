@@ -44,6 +44,8 @@ class AmazonAffiliateResolverTests(unittest.TestCase):
             "request_id": "mini-mic-test",
             "query": "mini microphone",
             "expected_terms": ["wireless", "microphone", "usb c"],
+            "approval_verified": True,
+            "approval_record_path": "artifacts/approval-records/test.json",
         }
 
     def test_diagnostic_never_exposes_values(self):

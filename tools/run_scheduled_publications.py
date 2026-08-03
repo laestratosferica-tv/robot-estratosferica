@@ -155,11 +155,20 @@ def validate_item(item: Mapping[str, Any], repository_root: Path) -> tuple[Path,
             "availability_verified",
             "product_match_verified",
             "visual_reference_verified",
+            "approval_verified",
         }
-        if evidence.get("schema") != "amazon_affiliate_resolution_v1" or any(
+        allowed_sources = {"amazon_paapi5", "amazon_listing_plus_editorial_approval"}
+        if evidence.get("schema") != "amazon_affiliate_resolution_v1" or evidence.get(
+            "source"
+        ) not in allowed_sources or any(
             evidence.get(name) is not True for name in required
         ) or not str(evidence.get("affiliate_disclosure", "")).strip():
             raise ValueError("commercial_resolver_evidence_not_publishable")
+        approval_path = (repository_root / str(evidence.get("approval_record_path", ""))).resolve()
+        if evidence.get("source") == "amazon_listing_plus_editorial_approval" and (
+            repository_root.resolve() not in approval_path.parents or not approval_path.is_file()
+        ):
+            raise ValueError("commercial_approval_record_missing")
     return manifest_path, manifest
 
 
@@ -206,7 +215,7 @@ def execute_queue(
     environment: Mapping[str, str] | None = None,
     now: datetime | None = None,
     live: bool = False,
-    max_items: int = 3,
+    max_items: int = 10,
 ) -> dict[str, Any]:
     env = dict(os.environ if environment is None else environment)
     current_time = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
@@ -284,7 +293,7 @@ def main() -> int:
     parser.add_argument("--queue", default="config/scheduled_publications_v1.json")
     parser.add_argument("--output", default="artifacts/scheduled-publication-run.json")
     parser.add_argument("--live", action="store_true")
-    parser.add_argument("--max-items", type=int, default=3)
+    parser.add_argument("--max-items", type=int, default=10)
     args = parser.parse_args()
     root = Path.cwd().resolve()
     report = execute_queue(

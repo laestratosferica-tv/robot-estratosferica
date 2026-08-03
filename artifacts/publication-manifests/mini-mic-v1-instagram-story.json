@@ -1,0 +1,13 @@
+{
+  "schema": "supervised_native_story_v1",
+  "slug": "mini-mic-v1-instagram-story-2026-08-03",
+  "platform": "instagram",
+  "post_type": "story_video_link_sticker",
+  "video_path": "artifacts/approved/scheduled/mini-mic-v1/mini-mic-reel-v1.mp4",
+  "video_sha256": "2f3df2bfce6fa3fb4918faddb627577ec3108f2c77dfc09be2dfda5d0de20323",
+  "text": "¿Tu video se ve bien, pero se escucha lejos? Lleva la voz al frente.",
+  "sticker_text": "Ver opcion real en Amazon",
+  "destination": "https://www.amazon.com/dp/B0CMJTSVRW?tag=estrato-web-20",
+  "approval_id": "amazon-block-2026-08-02-mini-mic-instagram-story",
+  "execution": "native_supervised_not_in_automatic_queue"
+}

@@ -27,6 +27,50 @@
       "enabled": true
     },
     {
+      "content_id": "mini-mic-v1-instagram-2026-08-03",
+      "manifest_path": "artifacts/publication-manifests/mini-mic-v1-instagram.json",
+      "approval_id": "amazon-block-2026-08-02-mini-mic-instagram",
+      "publish_at": "2026-08-03T23:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {"asset_final": true},
+      "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
+    },
+    {
+      "content_id": "mini-mic-v1-facebook-2026-08-03",
+      "manifest_path": "artifacts/publication-manifests/mini-mic-v1-facebook.json",
+      "approval_id": "amazon-block-2026-08-02-mini-mic-facebook",
+      "publish_at": "2026-08-03T23:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {"asset_final": true},
+      "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
+    },
+    {
+      "content_id": "mini-mic-v1-threads-2026-08-03",
+      "manifest_path": "artifacts/publication-manifests/mini-mic-v1-threads.json",
+      "approval_id": "amazon-block-2026-08-02-mini-mic-threads",
+      "publish_at": "2026-08-03T23:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {"asset_final": true},
+      "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
+    },
+    {
+      "content_id": "mini-mic-v1-youtube-2026-08-03",
+      "manifest_path": "artifacts/publication-manifests/mini-mic-v1-youtube.json",
+      "approval_id": "amazon-block-2026-08-02-mini-mic-youtube",
+      "publish_at": "2026-08-03T23:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {"asset_final": true},
+      "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
+    },
+    {
       "content_id": "lcs-cdmx-v4-instagram-2026-08-04",
       "manifest_path": "artifacts/publication-manifests/lcs-cdmx-v4-instagram.json",
       "approval_id": "calendar-02suo0g4hq6b7mo6ho0qm1bu0l-instagram",

@@ -182,10 +182,11 @@ def resolve_product(
     routes = {name: asdict(route) for name, route in build_amazon_routes(
         affiliate_url, expected_tag=config.associate_tag, expected_host=marketplace_host
     ).items()}
+    approval_verified = request.get("approval_verified") is True
     evidence = {
         "schema": "amazon_affiliate_resolution_v1",
         "request_id": request.get("request_id"),
-        "publishable": True,
+        "publishable": approval_verified,
         "source": "amazon_paapi5",
         "marketplace": config.marketplace,
         "product": product,
@@ -195,6 +196,8 @@ def resolve_product(
         "availability_verified": True,
         "product_match_verified": True,
         "visual_reference_verified": True,
+        "approval_verified": approval_verified,
+        "approval_record_path": request.get("approval_record_path"),
         "affiliate_disclosure": AFFILIATE_DISCLOSURE,
         "routes": routes,
         "secret_values_exposed": False,

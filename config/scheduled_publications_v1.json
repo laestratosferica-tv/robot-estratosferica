@@ -3,6 +3,30 @@
   "timezone": "America/Bogota",
   "items": [
     {
+      "content_id": "celular-wearable-v1-instagram-2026-08-04",
+      "manifest_path": "artifacts/publication-manifests/celular-wearable-v1-instagram.json",
+      "approval_id": "calendar-0pl0k0la6dku3iv0l1qujqvigi-instagram",
+      "publish_at": "2026-08-04T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "celular-wearable-v1-facebook-2026-08-04",
+      "manifest_path": "artifacts/publication-manifests/celular-wearable-v1-facebook.json",
+      "approval_id": "calendar-0pl0k0la6dku3iv0l1qujqvigi-facebook",
+      "publish_at": "2026-08-04T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "celular-wearable-v1-threads-2026-08-04",
+      "manifest_path": "artifacts/publication-manifests/celular-wearable-v1-threads.json",
+      "approval_id": "calendar-0pl0k0la6dku3iv0l1qujqvigi-threads",
+      "publish_at": "2026-08-04T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
       "content_id": "lcs-cdmx-v4-instagram-2026-08-04",
       "manifest_path": "artifacts/publication-manifests/lcs-cdmx-v4-instagram.json",
       "approval_id": "calendar-02suo0g4hq6b7mo6ho0qm1bu0l-instagram",

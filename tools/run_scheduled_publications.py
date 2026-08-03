@@ -11,16 +11,30 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-if __package__:
-    from tools.publish_supervised_meta import load_manifest, run as publish_manifest
-else:
+if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from publish_supervised_meta import load_manifest, run as publish_manifest
+
+try:
+    from tools.publish_approved_carousel import run as publish_carousel
+    from tools.publish_approved_social_post import run as publish_social_post
+    from tools.publish_approved_youtube_short import run as publish_youtube
+    from tools.publish_supervised_meta import run as publish_meta_reel
+except ModuleNotFoundError:
+    from publish_approved_carousel import run as publish_carousel
+    from publish_approved_social_post import run as publish_social_post
+    from publish_approved_youtube_short import run as publish_youtube
+    from publish_supervised_meta import run as publish_meta_reel
 
 
 QUEUE_SCHEMA = "scheduled_publication_queue_v1"
 STATE_SCHEMA = "scheduled_publication_state_v1"
 DEFAULT_STATE_KEY = "publishing/state/scheduled-publications-v1.json"
+COMMERCIAL_CHECKS = {
+    "affiliate_link_verified",
+    "disclosure_approved",
+    "availability_verified",
+    "asset_final",
+}
 
 
 def parse_time(value: str) -> datetime:
@@ -50,6 +64,12 @@ def load_queue(path: Path) -> dict[str, Any]:
             raise ValueError("queue_manifest_path_missing")
         if not str(item.get("approval_id", "")).strip():
             raise ValueError("queue_approval_id_missing")
+        if item.get("commercial") is True:
+            checks = item.get("commercial_checks", {})
+            if not isinstance(checks, dict) or any(
+                checks.get(name) is not True for name in COMMERCIAL_CHECKS
+            ):
+                raise ValueError("commercial_publication_checks_incomplete")
     return queue
 
 
@@ -110,14 +130,57 @@ def due_items(
     return sorted(due, key=lambda item: (parse_time(item["publish_at"]), item["content_id"]))
 
 
-def validate_item(item: Mapping[str, Any], repository_root: Path) -> Path:
+def validate_item(item: Mapping[str, Any], repository_root: Path) -> tuple[Path, dict[str, Any]]:
     manifest_path = (repository_root / item["manifest_path"]).resolve()
     if repository_root.resolve() not in manifest_path.parents:
         raise ValueError("manifest_path_outside_repository")
-    manifest = load_manifest(manifest_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest["approval_id"] != item["approval_id"]:
         raise ValueError("queue_manifest_approval_mismatch")
-    return manifest_path
+    if manifest.get("schema") not in {
+        "supervised_meta_publication_v1",
+        "approved_carousel_publication_v1",
+        "approved_youtube_short_publication_v1",
+        "approved_social_post_v1",
+    }:
+        raise ValueError("queue_manifest_schema_unsupported")
+    return manifest_path, manifest
+
+
+def publish_item(
+    manifest_path: Path,
+    manifest: Mapping[str, Any],
+    *,
+    repository_root: Path,
+    environment: Mapping[str, str],
+    live: bool,
+) -> dict[str, Any]:
+    schema = manifest["schema"]
+    if schema == "supervised_meta_publication_v1":
+        return publish_meta_reel(
+            manifest_path,
+            repository_root=repository_root,
+            environment=environment,
+            dry_run=not live,
+        )
+    if schema == "approved_carousel_publication_v1":
+        receipt = publish_carousel(
+            manifest_path, root=repository_root, live=live, env=environment
+        )
+        if live and any(
+            result.get("status") not in {"published", "already_recorded"}
+            for result in receipt.get("platforms", {}).values()
+        ):
+            raise RuntimeError("carousel_platform_publication_incomplete")
+        receipt["published"] = live
+        return receipt
+    if schema == "approved_youtube_short_publication_v1":
+        return publish_youtube(
+            manifest_path, root=repository_root, live=live, env=environment
+        )
+    return publish_social_post(
+        manifest_path, root=repository_root, live=live, env=environment
+    )
 
 
 def execute_queue(
@@ -153,7 +216,7 @@ def execute_queue(
         "secret_values_exposed": False,
     }
     for item in selected:
-        manifest_path = validate_item(item, repository_root)
+        manifest_path, manifest = validate_item(item, repository_root)
         if live:
             state["items"][item["content_id"]] = {
                 "status": "publishing",
@@ -164,11 +227,12 @@ def execute_queue(
 
         item_env = {**env, "PUBLICATION_APPROVAL_ID": item["approval_id"]}
         try:
-            receipt = publish_manifest(
+            receipt = publish_item(
                 manifest_path,
+                manifest,
                 repository_root=repository_root,
                 environment=item_env,
-                dry_run=not live,
+                live=live,
             )
         except Exception:
             if live:
@@ -180,10 +244,12 @@ def execute_queue(
         report["results"].append(
             {
                 "content_id": item["content_id"],
-                "platform": receipt["platform"],
-                "published": receipt["published"],
-                "dry_run": receipt["dry_run"],
+                "schema": manifest["schema"],
+                "platform": receipt.get("platform", manifest.get("platform", "multi")),
+                "published": bool(receipt.get("published")),
+                "dry_run": not live,
                 "media_id": receipt.get("media_id"),
+                "platforms": receipt.get("platforms"),
             }
         )
         if live:

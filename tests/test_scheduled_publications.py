@@ -6,7 +6,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.run_scheduled_publications import due_items, execute_queue, load_queue
+from tools.run_scheduled_publications import (
+    due_items,
+    execute_queue,
+    load_queue,
+    publish_item,
+)
 
 
 class ScheduledPublicationTests(unittest.TestCase):
@@ -100,6 +105,39 @@ class ScheduledPublicationTests(unittest.TestCase):
                 environment=self.env,
                 now=datetime(2026, 8, 3, 18, 0, tzinfo=timezone.utc),
             )
+
+    def test_dispatches_carousel_youtube_and_social_schemas(self):
+        cases = (
+            ("approved_carousel_publication_v1", "publish_carousel"),
+            ("approved_youtube_short_publication_v1", "publish_youtube"),
+            ("approved_social_post_v1", "publish_social_post"),
+        )
+        for schema, publisher in cases:
+            with self.subTest(schema=schema), patch(
+                f"tools.run_scheduled_publications.{publisher}"
+            ) as mocked:
+                mocked.return_value = {"published": False, "platforms": {}}
+                publish_item(
+                    self.root / "manifest.json",
+                    {"schema": schema},
+                    repository_root=self.root,
+                    environment=self.env,
+                    live=False,
+                )
+                mocked.assert_called_once()
+
+    def test_commercial_item_requires_all_checks(self):
+        payload = json.loads(self.queue_path.read_text(encoding="utf-8"))
+        payload["items"][0]["commercial"] = True
+        payload["items"][0]["commercial_checks"] = {
+            "affiliate_link_verified": True,
+            "disclosure_approved": True,
+            "availability_verified": False,
+            "asset_final": True,
+        }
+        self.queue_path.write_text(json.dumps(payload), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "commercial_publication_checks_incomplete"):
+            load_queue(self.queue_path)
 
 
 if __name__ == "__main__":

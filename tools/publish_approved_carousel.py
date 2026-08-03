@@ -13,11 +13,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-import boto3
-import requests
-from botocore.exceptions import ClientError
-
-
 SCHEMA = "approved_carousel_publication_v1"
 PLATFORMS = ("instagram", "facebook", "threads")
 MAX_IMAGES = 10
@@ -50,6 +45,8 @@ def required(env: Mapping[str, str], *names: str) -> None:
 
 
 def request(method: str, base: str, path: str, *, token: str, data: dict[str, str] | None = None, params: dict[str, str] | None = None) -> dict[str, Any]:
+    import requests
+
     response = requests.request(
         method, f"{base.rstrip('/')}/{path.lstrip('/')}", data=data, params=params,
         headers={"Authorization": f"Bearer {token}"}, timeout=60,
@@ -77,13 +74,16 @@ def wait_ready(base: str, container: str, token: str, *, threads: bool = False) 
 
 def load_manifest(path: Path, root: Path) -> dict[str, Any]:
     manifest = json.loads(path.read_text(encoding="utf-8"))
-    if manifest.get("schema") != SCHEMA or manifest.get("platforms") != list(PLATFORMS):
+    platforms = manifest.get("platforms")
+    if manifest.get("schema") != SCHEMA or not isinstance(platforms, list):
         raise ValueError("manifest_scope_invalid")
+    if not platforms or len(platforms) != len(set(platforms)) or any(platform not in PLATFORMS for platform in platforms):
+        raise ValueError("manifest_platforms_invalid")
     if not str(manifest.get("approval_id", "")).strip() or not str(manifest.get("caption", "")).strip() or not str(manifest.get("threads_text", "")).strip():
         raise ValueError("manifest_approval_or_copy_missing")
     assets = manifest.get("assets")
-    if not isinstance(assets, list) or len(assets) != 7:
-        raise ValueError("manifest_must_contain_exactly_7_assets")
+    if not isinstance(assets, list) or not 2 <= len(assets) <= MAX_IMAGES:
+        raise ValueError("manifest_must_contain_2_to_10_assets")
     for index, asset in enumerate(assets, start=1):
         if asset.get("order") != index:
             raise ValueError("manifest_asset_order_invalid")
@@ -98,7 +98,12 @@ def load_manifest(path: Path, root: Path) -> dict[str, Any]:
 
 
 def account_preflight(manifest: Mapping[str, Any], env: Mapping[str, str]) -> dict[str, Any]:
-    required(env, "IG_USER_ID", "IG_ACCESS_TOKEN", "FB_PAGE_ID", "FB_PAGE_ACCESS_TOKEN", "THREADS_USER_ID", "THREADS_USER_ACCESS_TOKEN")
+    required_by_platform = {
+        "instagram": ("IG_USER_ID", "IG_ACCESS_TOKEN"),
+        "facebook": ("FB_PAGE_ID", "FB_PAGE_ACCESS_TOKEN"),
+        "threads": ("THREADS_USER_ID", "THREADS_USER_ACCESS_TOKEN"),
+    }
+    required(env, *(name for platform in manifest["platforms"] for name in required_by_platform[platform]))
     graph = f"https://graph.facebook.com/{env.get('GRAPH_VERSION', 'v25.0')}"
     threads = f"https://graph.threads.net/{env.get('THREADS_GRAPH_VERSION', 'v1.0')}"
     expected = manifest["expected_accounts"]
@@ -108,7 +113,8 @@ def account_preflight(manifest: Mapping[str, Any], env: Mapping[str, str]) -> di
         "threads": (threads, env["THREADS_USER_ID"], env["THREADS_USER_ACCESS_TOKEN"], {"fields": "id,username"}),
     }
     accounts: dict[str, Any] = {}
-    for platform, (base, identifier, token, fields) in checks.items():
+    for platform in manifest["platforms"]:
+        base, identifier, token, fields = checks[platform]
         try:
             profile = request("GET", base, identifier, token=token, params=fields)
             actual = profile.get("name") if platform == "facebook" else profile.get("username")
@@ -122,6 +128,8 @@ def account_preflight(manifest: Mapping[str, Any], env: Mapping[str, str]) -> di
 
 
 def storage(env: Mapping[str, str]):
+    import boto3
+
     required(env, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "R2_ENDPOINT_URL", "BUCKET_NAME", "R2_PUBLIC_BASE_URL")
     return boto3.client("s3", endpoint_url=env["R2_ENDPOINT_URL"], aws_access_key_id=env["AWS_ACCESS_KEY_ID"], aws_secret_access_key=env["AWS_SECRET_ACCESS_KEY"], region_name="auto")
 
@@ -131,8 +139,9 @@ def read_ledger(client: Any, env: Mapping[str, str], key: str) -> dict[str, Any]
         return json.loads(client.get_object(Bucket=env["BUCKET_NAME"], Key=key)["Body"].read().decode("utf-8"))
     except client.exceptions.NoSuchKey:
         return None
-    except ClientError as error:
-        if error.response.get("Error", {}).get("Code") in {"404", "NoSuchKey"}:
+    except Exception as error:
+        response = getattr(error, "response", {})
+        if response.get("Error", {}).get("Code") in {"404", "NoSuchKey"}:
             return None
         raise
 
@@ -142,6 +151,8 @@ def write_ledger(client: Any, env: Mapping[str, str], key: str, payload: Mapping
 
 
 def upload_images(client: Any, env: Mapping[str, str], manifest: Mapping[str, Any], root: Path) -> list[str]:
+    import requests
+
     urls: list[str] = []
     for asset in manifest["assets"]:
         path = root / asset["path"]
@@ -193,20 +204,21 @@ def publish_threads(urls: list[str], text: str, env: Mapping[str, str]) -> dict[
 
 def run(manifest_path: Path, *, root: Path, live: bool, env: Mapping[str, str]) -> dict[str, Any]:
     manifest = load_manifest(manifest_path, root)
-    receipt: dict[str, Any] = {"schema": SCHEMA, "slug": manifest["slug"], "approval_id": manifest["approval_id"], "image_count": 7, "image_size": "1080x1350", "copy_verified": {"caption": manifest["caption"], "threads_text": manifest["threads_text"]}, "live": live, "publishing_attempted": False, "accounts": account_preflight(manifest, env), "platforms": {}, "checked_at": now(), "secret_values_exposed": False}
+    receipt: dict[str, Any] = {"schema": SCHEMA, "slug": manifest["slug"], "approval_id": manifest["approval_id"], "image_count": len(manifest["assets"]), "image_size": "1080x1350", "copy_verified": {"caption": manifest["caption"], "threads_text": manifest["threads_text"]}, "live": live, "publishing_attempted": False, "accounts": {}, "platforms": {}, "checked_at": now(), "secret_values_exposed": False}
     if not live:
         return receipt
     if env.get("PRODUCTION_ARMED") != "true" or env.get("PUBLICATION_APPROVAL_ID") != manifest["approval_id"]:
         raise RuntimeError("production_approval_not_armed")
+    receipt["accounts"] = account_preflight(manifest, env)
     client = storage(env); urls = upload_images(client, env, manifest, root)
     publishers = {"instagram": lambda: publish_instagram(urls, manifest["caption"], env), "facebook": lambda: publish_facebook(urls, manifest["caption"], env), "threads": lambda: publish_threads(urls, manifest["threads_text"], env)}
-    for platform in PLATFORMS:
+    for platform in manifest["platforms"]:
         key = f"publication-ledger/carousel/{manifest['slug']}/{platform}.json"; existing = read_ledger(client, env, key)
         if receipt["accounts"][platform]["status"] != "official_account_confirmed":
             receipt["platforms"][platform] = {"status": "blocked_preflight", "reason": receipt["accounts"][platform]}; continue
         if existing:
             receipt["platforms"][platform] = {"status": "already_recorded", "record": existing}; continue
-        pending = {"schema": SCHEMA, "status": "claim_created", "slug": manifest["slug"], "platform": platform, "approval_id": manifest["approval_id"], "image_count": 7, "asset_hashes": [item["sha256"] for item in manifest["assets"]], "requested_at": now()}
+        pending = {"schema": SCHEMA, "status": "claim_created", "slug": manifest["slug"], "platform": platform, "approval_id": manifest["approval_id"], "image_count": len(manifest["assets"]), "asset_hashes": [item["sha256"] for item in manifest["assets"]], "requested_at": now()}
         write_ledger(client, env, key, pending); receipt["publishing_attempted"] = True
         try:
             result = publishers[platform](); final = {**pending, "status": "published", **result, "verified_at": now()}; write_ledger(client, env, key, final); receipt["platforms"][platform] = final

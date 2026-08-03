@@ -56,6 +56,21 @@ por plataforma.
 
 FFmpeg para voz, música, efectos, subtítulos, mezcla y exportación.
 
+### Adaptación de carruseles por plataforma
+
+Un mismo contenido puede tener dos experiencias distintas, sin alterar su arte
+ni su mensaje editorial:
+
+- **Instagram:** carrusel de imágenes. La llamada a la acción `Desliza` se
+  conserva únicamente aquí, porque la persona sí puede avanzar tarjeta por
+  tarjeta.
+- **Facebook Reels y YouTube Shorts:** video vertical 9:16. Se elimina
+  cualquier texto que indique `Desliza`, `swipe` o una acción equivalente; la
+  secuencia debe entenderse como reproducción continua.
+
+Antes de exportar, el control de calidad debe verificar que la CTA coincide
+con el formato final de cada plataforma.
+
 ### Renderizador expresivo
 
 Generación de imágenes, 3D o video generativo únicamente cuando el concepto lo

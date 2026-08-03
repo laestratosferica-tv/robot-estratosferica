@@ -30,9 +30,6 @@ QUEUE_SCHEMA = "scheduled_publication_queue_v1"
 STATE_SCHEMA = "scheduled_publication_state_v1"
 DEFAULT_STATE_KEY = "publishing/state/scheduled-publications-v1.json"
 COMMERCIAL_CHECKS = {
-    "affiliate_link_verified",
-    "disclosure_approved",
-    "availability_verified",
     "asset_final",
 }
 
@@ -70,6 +67,8 @@ def load_queue(path: Path) -> dict[str, Any]:
                 checks.get(name) is not True for name in COMMERCIAL_CHECKS
             ):
                 raise ValueError("commercial_publication_checks_incomplete")
+            if not str(item.get("resolver_evidence_path", "")).strip():
+                raise ValueError("commercial_resolver_evidence_missing")
     return queue
 
 
@@ -144,6 +143,23 @@ def validate_item(item: Mapping[str, Any], repository_root: Path) -> tuple[Path,
         "approved_social_post_v1",
     }:
         raise ValueError("queue_manifest_schema_unsupported")
+    if item.get("commercial") is True:
+        evidence_path = (repository_root / item["resolver_evidence_path"]).resolve()
+        if repository_root.resolve() not in evidence_path.parents:
+            raise ValueError("resolver_evidence_path_outside_repository")
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        required = {
+            "publishable",
+            "associate_tag_verified",
+            "https_verified",
+            "availability_verified",
+            "product_match_verified",
+            "visual_reference_verified",
+        }
+        if evidence.get("schema") != "amazon_affiliate_resolution_v1" or any(
+            evidence.get(name) is not True for name in required
+        ) or not str(evidence.get("affiliate_disclosure", "")).strip():
+            raise ValueError("commercial_resolver_evidence_not_publishable")
     return manifest_path, manifest
 
 

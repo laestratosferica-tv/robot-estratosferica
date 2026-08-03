@@ -1,0 +1,9 @@
+{
+  "schema": "amazon_affiliate_resolution_v1",
+  "request_id": "mini-mic-2026-08-03-2300",
+  "publishable": false,
+  "blocker": "amazon_product_api_config_missing",
+  "queue_insert_allowed": false,
+  "scheduled_time": "2026-08-03T23:00:00-05:00",
+  "secret_values_exposed": false
+}

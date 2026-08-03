@@ -1,0 +1,14 @@
+{
+  "schema": "amazon_commercial_requests_v1",
+  "timezone": "America/Bogota",
+  "items": [
+    {
+      "request_id": "mini-mic-2026-08-03-2300",
+      "query": "wireless mini microphone USB C iPhone Android creator",
+      "expected_terms": ["wireless", "microphone", "usb c"],
+      "publish_at": "2026-08-03T23:00:00-05:00",
+      "status": "blocked_pending_authorized_resolution",
+      "queue_insert_allowed": false
+    }
+  ]
+}

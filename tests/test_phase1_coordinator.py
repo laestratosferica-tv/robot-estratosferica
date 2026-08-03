@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from phase1_coordinator import (
@@ -56,6 +57,7 @@ class Phase1CoordinatorTests(unittest.TestCase):
                 readiness_output=readiness_path,
                 health_output=health_path,
                 environment={},
+                today=date(2026, 7, 25),
             )
 
             self.assertTrue(health["healthy"])

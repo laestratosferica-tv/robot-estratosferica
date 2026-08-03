@@ -71,8 +71,22 @@ def build_safety_report() -> dict[str, Any]:
         if production_gate not in content:
             errors.append(f"{filename} is missing the production gate")
 
-    if scheduled:
-        errors.append(f"scheduled workflows remain enabled: {scheduled}")
+    allowed_scheduled = sorted(
+        filename
+        for filename, role in inventory.items()
+        if role == "controlled_scheduled_publisher"
+    )
+    unexpected_scheduled = sorted(set(scheduled) - set(allowed_scheduled))
+    if unexpected_scheduled:
+        errors.append(f"unexpected scheduled workflows enabled: {unexpected_scheduled}")
+    for filename in allowed_scheduled:
+        content = (WORKFLOWS / filename).read_text(encoding="utf-8")
+        if "schedule:" not in content:
+            errors.append(f"{filename} is missing its controlled schedule")
+        if production_gate not in content:
+            errors.append(f"{filename} is missing the production gate")
+        if "vars.SCHEDULED_PUBLISHING_ARMED == 'true'" not in content:
+            errors.append(f"{filename} is missing the scheduled publishing gate")
 
     editorial = load_json(EDITORIAL_CONFIG)["safe_mode"]
     if editorial.get("dry_run") is not True:

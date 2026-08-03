@@ -41,6 +41,7 @@
     "platform-credential-diagnostic.yml": "controlled_diagnostic",
     "publisher.yml": "legacy_quarantine",
     "reddit-gamer-radar.yml": "legacy_quarantine",
+    "scheduled-meta-publisher.yml": "controlled_scheduled_publisher",
     "threads-auth-check.yml": "controlled_diagnostic",
     "tiktok-readiness-diagnostic.yml": "controlled_diagnostic",
     "twitch-harvester.yml": "legacy_quarantine",

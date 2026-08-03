@@ -71,7 +71,7 @@ class WorkflowSafetyTests(unittest.TestCase):
     def test_safety_report_is_green(self):
         report = build_safety_report()
         self.assertTrue(report["safe"], report["errors"])
-        self.assertEqual(report["scheduled_workflows"], [])
+        self.assertEqual(report["scheduled_workflows"], ["scheduled-meta-publisher.yml"])
         self.assertFalse(report["publishing_enabled"])
         self.assertFalse(report["external_writes_enabled"])
         self.assertFalse(report["paid_generation_enabled"])
@@ -110,6 +110,15 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertIn("default: false", content)
         self.assertIn(PRODUCTION_GATE, content)
         self.assertIn("PUBLICATION_APPROVAL_ID", content)
+
+    def test_scheduled_publisher_is_double_gated(self):
+        content = (
+            WORKFLOWS / "scheduled-meta-publisher.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn('cron: "*/5 * * * *"', content)
+        self.assertIn(PRODUCTION_GATE, content)
+        self.assertIn("vars.SCHEDULED_PUBLISHING_ARMED == 'true'", content)
+        self.assertIn("tools/run_scheduled_publications.py", content)
 
     def test_tiktok_diagnostic_is_manual_readonly_and_flags_stay_false(self):
         content = (

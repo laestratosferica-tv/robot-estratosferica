@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import tempfile
+from datetime import date
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -19,6 +20,7 @@ from phase1_coordinator import (
 
 DEFAULT_CONFIG = ROOT / "config" / "editorial_v1.json"
 DEFAULT_INPUT = ROOT / "fixtures" / "real_candidates_2026-07-25.json"
+DEFAULT_REFERENCE_DATE = date(2026, 7, 25)
 
 
 def _queue_digest(path: Path) -> str:
@@ -39,6 +41,7 @@ def run_acceptance(
     input_path: str | Path = DEFAULT_INPUT,
     sources_path: str | Path = DEFAULT_SOURCES,
     environment: Mapping[str, str] | None = None,
+    today: date = DEFAULT_REFERENCE_DATE,
 ) -> dict[str, Any]:
     policy = load_json(OPERATIONS_CONFIG)["phase1_acceptance"]
     required_runs = int(policy["required_consecutive_runs"])
@@ -61,6 +64,7 @@ def run_acceptance(
                 readiness_output=run_dir / "platform-readiness.json",
                 health_output=run_dir / "coordinator-health.json",
                 environment=environment,
+                today=today,
             )
             results.append(
                 {

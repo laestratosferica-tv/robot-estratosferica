@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from datetime import date
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -149,6 +150,7 @@ def run_coordinator(
     health_output: str | Path,
     sources_path: str | Path | None = None,
     environment: Mapping[str, str] | None = None,
+    today: date | None = None,
 ) -> dict[str, Any]:
     safety = build_safety_report()
     if not safety["safe"]:
@@ -163,6 +165,7 @@ def run_coordinator(
         input_path,
         queue_output,
         sources_path=sources_path,
+        today=today,
     )
     queue = _validate_review_queue(Path(queue_output))
     readiness = build_platform_readiness(environment)

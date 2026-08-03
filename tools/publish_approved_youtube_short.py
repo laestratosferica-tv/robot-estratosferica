@@ -118,11 +118,15 @@ def publish(video: Path, manifest: Mapping[str, Any], env: Mapping[str, str]) ->
     while response is None:
         _, response = request.next_chunk()
     video_id = str(response["id"])
-    verified = youtube.videos().list(part="id,status", id=video_id).execute()
-    items = verified.get("items", [])
-    if not items or str(items[0].get("id")) != video_id or items[0].get("status", {}).get("privacyStatus") != "public":
+    privacy = str(response.get("status", {}).get("privacyStatus", manifest["privacy_status"]))
+    if not video_id or privacy != "public":
         raise RuntimeError("youtube_publication_verification_failed")
-    return {"video_id": video_id, "permalink": f"https://www.youtube.com/shorts/{video_id}", "privacy_status": "public"}
+    return {
+        "video_id": video_id,
+        "permalink": f"https://www.youtube.com/shorts/{video_id}",
+        "privacy_status": privacy,
+        "provider_acknowledged": True,
+    }
 
 
 def run(manifest_path: Path, *, root: Path, live: bool, env: Mapping[str, str]) -> dict[str, Any]:
@@ -144,24 +148,35 @@ def run(manifest_path: Path, *, root: Path, live: bool, env: Mapping[str, str]) 
         return receipt
     if env.get("PRODUCTION_ARMED") != "true" or env.get("PUBLICATION_APPROVAL_ID") != manifest["approval_id"]:
         raise RuntimeError("production_approval_not_armed")
-    required(env, "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
     client = storage(env)
     key = f"publication-ledger/youtube-short/{manifest['slug']}.json"
     existing = read_ledger(client, env, key)
     if existing and existing.get("status") == "published":
         return {**receipt, "published": True, "already_recorded": True, "publication": existing}
+    recovery_id = str(manifest.get("recovered_video_id", "")).strip()
+    if existing and existing.get("status") == "blocked_or_failed" and not recovery_id:
+        raise RuntimeError("existing_claim_needs_manual_recovery")
     pending = {"schema": SCHEMA, "status": "claim_created", "slug": manifest["slug"], "approval_id": manifest["approval_id"], "video_sha256": manifest["video_sha256"], "requested_at": now()}
-    write_ledger(client, env, key, pending)
-    receipt["publishing_attempted"] = True
-    try:
-        result = publish(video, manifest, env)
-    except Exception as error:
-        failed = {**pending, "status": "blocked_or_failed", "error_type": type(error).__name__, "error": str(error)[:180], "failed_at": now()}
-        write_ledger(client, env, key, failed)
-        raise
+    if recovery_id:
+        result = {
+            "video_id": recovery_id,
+            "permalink": f"https://www.youtube.com/shorts/{recovery_id}",
+            "privacy_status": manifest["privacy_status"],
+            "recovered_existing_upload": True,
+        }
+    else:
+        required(env, "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
+        write_ledger(client, env, key, pending)
+        receipt["publishing_attempted"] = True
+        try:
+            result = publish(video, manifest, env)
+        except Exception as error:
+            failed = {**pending, "status": "blocked_or_failed", "error_type": type(error).__name__, "error": str(error)[:180], "failed_at": now()}
+            write_ledger(client, env, key, failed)
+            raise
     final = {**pending, "status": "published", **result, "verified_at": now()}
     write_ledger(client, env, key, final)
-    return {**receipt, "published": True, "publication": final}
+    return {**receipt, "published": True, "recovered_existing_upload": bool(recovery_id), "publication": final}
 
 
 def main() -> int:

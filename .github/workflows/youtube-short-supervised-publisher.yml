@@ -1,0 +1,58 @@
+name: YouTube Short Supervised Publisher
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_path:
+        description: "Ruta del manifiesto aprobado"
+        required: true
+        type: string
+      live:
+        description: "Publicar realmente (false = compuerta solo lectura)"
+        required: true
+        default: false
+        type: boolean
+      approval_id:
+        description: "Autorización exacta de la pieza (solo modo real)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: youtube-short-supervised-publisher
+  cancel-in-progress: false
+
+jobs:
+  validate_or_publish:
+    if: inputs.live == false || vars.PRODUCTION_ARMED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Validar o publicar un Short aprobado
+        env:
+          PRODUCTION_ARMED: ${{ vars.PRODUCTION_ARMED }}
+          PUBLICATION_APPROVAL_ID: ${{ inputs.approval_id }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: >-
+          python tools/publish_approved_youtube_short.py
+          --manifest "${{ inputs.manifest_path }}"
+          ${{ inputs.live && '--live' || '' }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: youtube-short-publication-result
+          path: artifacts/youtube-short-publication-result.json
+          if-no-files-found: warn

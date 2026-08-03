@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import hmac
 import json
 import os
 import stat
@@ -17,6 +19,7 @@ import requests
 
 GRAPH_BASE = "https://graph.facebook.com"
 SCOPES = ("pages_show_list", "pages_read_engagement", "pages_manage_posts")
+STATE_MESSAGE = b"laestratosferica/facebook-page-token-rotation/v1"
 
 
 def utc_now() -> str:
@@ -57,12 +60,16 @@ def graph_request(
 
 
 def authorization_url(env: Mapping[str, str]) -> str:
-    require(env, "FB_APP_ID", "FB_OAUTH_REDIRECT_URI")
+    require(env, "FB_APP_ID", "FB_APP_SECRET", "FB_OAUTH_REDIRECT_URI")
+    state = base64.urlsafe_b64encode(
+        hmac.new(env["FB_APP_SECRET"].encode("utf-8"), STATE_MESSAGE, "sha256").digest()
+    ).decode("ascii").rstrip("=")
     query = urlencode({
         "client_id": env["FB_APP_ID"],
         "redirect_uri": env["FB_OAUTH_REDIRECT_URI"],
         "response_type": "code",
         "scope": ",".join(SCOPES),
+        "state": state,
     })
     return f"https://www.facebook.com/{env.get('GRAPH_VERSION', 'v25.0')}/dialog/oauth?{query}"
 
@@ -115,11 +122,24 @@ def verify_page(token: str, env: Mapping[str, str]) -> dict[str, Any]:
 
 
 def rotate(env: Mapping[str, str]) -> tuple[str, dict[str, Any]]:
-    short = exchange_code(env)
-    long_lived = exchange_long_lived_token(short, env)
-    token, page = page_token(long_lived, env)
+    require(env, "FB_APP_SECRET", "FB_OAUTH_REDIRECT_URI")
+    callback = env["FB_OAUTH_REDIRECT_URI"].rstrip("/")
+    if not callback.endswith("/facebook/callback"):
+        raise RuntimeError("facebook_oauth_redirect_uri_must_end_in_callback")
+    handoff_url = f"{callback.removesuffix('/facebook/callback')}/facebook/handoff"
+    response = requests.get(
+        handoff_url,
+        headers={"Authorization": f"Bearer {env['FB_APP_SECRET']}"},
+        timeout=45,
+    )
+    if not response.ok:
+        raise RuntimeError("facebook_oauth_handoff_unavailable")
+    payload = response.json()
+    token = str(payload.get("token", ""))
+    if not token:
+        raise RuntimeError("facebook_oauth_handoff_missing_token")
     profile = verify_page(token, env)
-    return token, {"page": profile, "page_selected_name": page.get("name"), "rotated_at": utc_now()}
+    return token, {"page": profile, "rotated_at": utc_now()}
 
 
 def main() -> int:

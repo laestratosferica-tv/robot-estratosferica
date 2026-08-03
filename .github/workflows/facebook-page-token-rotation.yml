@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "prepare crea el enlace; rotate intercambia y guarda el token"
+        description: "prepare crea el enlace; rotate recupera y guarda la renovación autorizada"
         type: choice
         required: true
         default: prepare
@@ -28,7 +28,6 @@ jobs:
           FB_APP_ID: ${{ secrets.FB_APP_ID }}
           FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
           FB_OAUTH_REDIRECT_URI: ${{ secrets.FB_OAUTH_REDIRECT_URI }}
-          FB_AUTH_CODE: ${{ secrets.FB_AUTH_CODE }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
         run: >-
           python tools/rotate_facebook_page_token.py

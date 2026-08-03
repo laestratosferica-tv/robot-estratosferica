@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import replace
+from datetime import date
 from pathlib import Path
 
 from .commercial import detect_opportunity
@@ -55,6 +56,7 @@ def run_factory(
     sources_path: str | Path | None = None,
     talent_config_path: str | Path = "config/talent_v1.json",
     strategy_config_path: str | Path = DEFAULT_STRATEGY,
+    today: date | None = None,
 ) -> dict[str, int]:
     config = load_config(config_path)
     talent_catalog = load_talent_catalog(talent_config_path)
@@ -66,7 +68,8 @@ def run_factory(
     if sources_path:
         registry = load_source_registry(sources_path)
         candidates = [
-            normalize_story(item, registry) for item in raw_candidates[:limit]
+            normalize_story(item, registry, today=today)
+            for item in raw_candidates[:limit]
         ]
     else:
         candidates = [

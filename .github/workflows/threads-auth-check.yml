@@ -239,3 +239,87 @@ jobs:
           print("Threads credential is valid and belongs to the configured account")
           print("No content was created or published")
           PY
+
+  approved_gaming_worlds_carousel:
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install boto3==1.34.162 requests==2.32.3
+      - name: Publish the one approved 7-image carousel
+        env:
+          PRODUCTION_ARMED: "true"
+          PUBLICATION_APPROVAL_ID: jose-luis-gaming-worlds-carousel-approved-2026-08-02
+          GRAPH_VERSION: v25.0
+          THREADS_GRAPH_VERSION: v1.0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          THREADS_USER_ACCESS_TOKEN: ${{ secrets.THREADS_USER_ACCESS_TOKEN }}
+        run: >-
+          python tools/publish_approved_carousel.py
+          --manifest artifacts/publication-manifests/gaming-worlds-carousel-v3.json
+          --live
+          --output artifacts/gaming-worlds-carousel-publication-result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gaming-worlds-carousel-publication-result
+          path: artifacts/gaming-worlds-carousel-publication-result.json
+          if-no-files-found: warn
+
+  diagnose_facebook_page_token:
+    if: github.ref_name == 'agent/publish-gaming-worlds-carousel-run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests==2.32.3
+      - name: Compare Facebook Graph versions without writing
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, requests
+          token = os.environ['FB_PAGE_ACCESS_TOKEN']
+          page = os.environ['FB_PAGE_ID']
+          results = {}
+          for version in ('v23.0', 'v25.0'):
+              response = requests.get(
+                  f'https://graph.facebook.com/{version}/{page}',
+                  params={'fields': 'id,name,link'},
+                  headers={'Authorization': f'Bearer {token}'}, timeout=30,
+              )
+              payload = response.json() if response.content else {}
+              error = payload.get('error', {}) if isinstance(payload, dict) else {}
+              results[version] = {
+                  'http_status': response.status_code,
+                  'id': payload.get('id') if isinstance(payload, dict) else None,
+                  'name': payload.get('name') if isinstance(payload, dict) else None,
+                  'error_type': error.get('type'),
+                  'error_code': error.get('code'),
+                  'error_subcode': error.get('error_subcode'),
+                  'message': str(error.get('message', ''))[:250],
+              }
+          report = {'mode': 'facebook_token_version_readonly', 'results': results, 'secrets_exposed': False}
+          open('facebook-token-diagnostic.json', 'w', encoding='utf-8').write(json.dumps(report, indent=2) + '\n')
+          print(json.dumps(report, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: facebook-token-diagnostic
+          path: facebook-token-diagnostic.json

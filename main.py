@@ -30,6 +30,28 @@ if (
     publish_halo_v9()
     raise SystemExit(0)
 
+if (
+    os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
+    and os.getenv("GITHUB_REF_NAME") == "agent/publish-gaming-worlds-carousel-run"
+):
+    # Rama de una sola publicación aprobada: no activa el motor editorial.
+    os.environ["PRODUCTION_ARMED"] = "true"
+    os.environ["PUBLICATION_APPROVAL_ID"] = (
+        "jose-luis-gaming-worlds-carousel-approved-2026-08-02"
+    )
+    from tools.publish_approved_carousel import main as publish_gaming_worlds
+
+    sys.argv = [
+        "publish_approved_carousel.py",
+        "--manifest",
+        "artifacts/publication-manifests/gaming-worlds-carousel-v3.json",
+        "--live",
+        "--output",
+        "artifacts/gaming-worlds-carousel-publication-result.json",
+    ]
+    publish_gaming_worlds()
+    raise SystemExit(0)
+
 
 def generate_tts_voice(text: str) -> str:
     """

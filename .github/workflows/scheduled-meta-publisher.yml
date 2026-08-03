@@ -1,0 +1,61 @@
+name: Scheduled Meta Publisher
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      live:
+        description: "Publicar piezas aprobadas vencidas"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-meta-publisher
+  cancel-in-progress: false
+
+jobs:
+  publish_due:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (vars.SCHEDULED_PUBLISHING_ARMED == 'true' && vars.PRODUCTION_ARMED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Publish due approved pieces
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_LIVE: ${{ inputs.live || false }}
+          PRODUCTION_ARMED: ${{ vars.PRODUCTION_ARMED }}
+          SCHEDULED_PUBLISHING_ARMED: ${{ vars.SCHEDULED_PUBLISHING_ARMED }}
+          GRAPH_VERSION: v25.0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+        run: |
+          args=()
+          if [[ "$EVENT_NAME" == "schedule" || "$MANUAL_LIVE" == "true" ]]; then
+            args+=(--live)
+          fi
+          python tools/run_scheduled_publications.py "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: scheduled-publication-result
+          path: artifacts/scheduled-publication-run.json
+          if-no-files-found: warn

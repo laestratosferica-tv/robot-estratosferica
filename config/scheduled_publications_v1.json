@@ -1,5 +1,22 @@
 {
   "schema": "scheduled_publication_queue_v1",
   "timezone": "America/Bogota",
-  "items": []
+  "items": [
+    {
+      "content_id": "lcs-cdmx-v4-instagram-2026-08-04",
+      "manifest_path": "artifacts/publication-manifests/lcs-cdmx-v4-instagram.json",
+      "approval_id": "calendar-02suo0g4hq6b7mo6ho0qm1bu0l-instagram",
+      "publish_at": "2026-08-04T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "lcs-cdmx-v4-facebook-2026-08-04",
+      "manifest_path": "artifacts/publication-manifests/lcs-cdmx-v4-facebook.json",
+      "approval_id": "calendar-02suo0g4hq6b7mo6ho0qm1bu0l-facebook",
+      "publish_at": "2026-08-04T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    }
+  ]
 }

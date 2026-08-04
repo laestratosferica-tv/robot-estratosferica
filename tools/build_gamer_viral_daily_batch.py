@@ -188,7 +188,11 @@ def main() -> None:
                 "approval_id": f"autonomous-gamer-viral-experiment-2026-08-03-{slug}-{platform}",
                 "publish_at": datetime.combine(publish_day, time(2, 0), TZ).isoformat(),
                 "status": "approved",
-                "enabled": True,
+                # Esta tanda exterior/VR fue sustituida por gameplay interno tras la
+                # revisión editorial del 4 de agosto. Mantenerla desarmada evita que
+                # una regeneración accidental vuelva a programarla.
+                "enabled": False,
+                "editorial_hold": "reemplazar_por_gameplay_interno_divertido",
                 "experiment": "gamer-viral-daily-2am-v1",
                 "category": "contenido_divertido",
                 "category_label": "Contenido divertido",

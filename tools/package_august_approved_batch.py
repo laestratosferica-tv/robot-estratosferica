@@ -103,6 +103,7 @@ def main() -> None:
         or item["content_id"].startswith("august-approved-ia-gamer")
         or item["content_id"].startswith("august-approved-pantallas")
         or item["content_id"].startswith("august-approved-nostalgia")
+        or item["content_id"].startswith("august-approved-xbox-reglas")
     ]
     items: list[dict] = []
 
@@ -119,8 +120,6 @@ def main() -> None:
     reel(items, slug="august-approved-esports-lectura", source=BACKUP / "aprobadas/reel-esports-lectura-profesional-aprobado.mp4", publish_at="2026-08-17T12:30:00-05:00", approval="calendar-05pvfpc07s0ukkeh9sfi5pofhj", title="Lee la jugada como un profesional", caption="Una pelea se decide antes del primer disparo. Visión. Posición. Tiempo. ¿Qué miras primero cuando empieza la presión? Fuente audiovisual: Ron Lach / Pexels. #Esports #GamingLATAM #Competitivo #LaEstratosferica")
 
     reel(items, slug="august-approved-unity", source=BACKUP / "aprobadas/reel-unity-7-ia-creacion-aprobado.mp4", publish_at="2026-08-18T20:00:00-05:00", approval="calendar-6ceo2f1k9dm42hgsqbmnupdc4g", title="La IA cruzó esta línea en Unity 7", caption="La IA ya no solo vive dentro del juego: también entra al equipo que lo construye. Unity 7 plantea colaboración entre creadores, equipos y agentes de código. ¿Herramienta creativa o reemplazo? Fuente: Unity. #IA #GameDev #Unity7 #LaEstratosferica")
-
-    carousel(items, slug="august-approved-xbox-reglas", publish_at="2026-08-19T12:30:00-05:00", approval="calendar-7p55h1d8o4jsveg107c2skesah", sources=[BACKUP / f"aprobadas/carrusel-xbox-cambia-reglas-aprobado/slides/{name}.png" for name in ("01-portada","02-antes","03-halo","04-negocio","05-balance","06-pregunta")], caption="Xbox está cambiando las reglas. Halo en PlayStation muestra una competencia que se mueve hacia acceso, suscripciones, PC, nube y comunidad. ¿Comprarías una consola sin exclusivos? Fuentes: Xbox Wire y PlayStation Blog. #Xbox #Halo #PlayStation #LaEstratosferica", threads_text="Halo en PlayStation cambia el papel del exclusivo. Si las franquicias pueden viajar, ¿qué debería hacer diferente a cada consola?")
 
     reel(items, slug="august-approved-multiverso", source=BACKUP / "aprobadas/multiverso-estratosferica-aprobado/Multiverso-Estratosferica-aprobado.mp4", publish_at="2026-08-20T20:00:00-05:00", approval="calendar-30t3u3mr5sgf03vu954ig4s5kj", title="El multiverso de La Estratosférica", caption="La memoria nos enseñó a jugar. La competencia nos obligó a mejorar. La tecnología cambió la pantalla. La IA cambió quién puede crear. Y la comunidad decide qué mundo abrimos después. ¿Qué mundo quieres explorar ahora? #LaEstratosferica #GamingLATAM #Esports #Tecnologia #IA")
 

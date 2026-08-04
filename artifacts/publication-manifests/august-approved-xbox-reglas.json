@@ -1,15 +1,13 @@
 {
   "schema": "approved_carousel_publication_v1",
   "slug": "august-approved-xbox-reglas",
-  "approval_id": "calendar-7p55h1d8o4jsveg107c2skesah",
+  "approval_id": "calendar-7p55h1d8o4jsveg107c2skesah-carousel",
   "platforms": [
     "instagram",
-    "facebook",
     "threads"
   ],
   "expected_accounts": {
     "instagram_username": "laestratosfericatv",
-    "facebook_page_name": "La Estratosférica TV",
     "threads_username": "laestratosfericatv"
   },
   "caption": "Xbox está cambiando las reglas. Halo en PlayStation muestra una competencia que se mueve hacia acceso, suscripciones, PC, nube y comunidad. ¿Comprarías una consola sin exclusivos? Fuentes: Xbox Wire y PlayStation Blog. #Xbox #Halo #PlayStation #LaEstratosferica",

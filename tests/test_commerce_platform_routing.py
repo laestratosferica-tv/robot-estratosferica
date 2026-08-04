@@ -8,7 +8,7 @@ from commerce_platform_routing import (
 
 class CommercePlatformRoutingTests(unittest.TestCase):
     def test_amazon_routes_cover_every_target_platform(self):
-        routes = build_amazon_routes("https://www.amazon.com/dp/EXAMPLE?tag=test-20")
+        routes = build_amazon_routes("https://www.amazon.com/dp/B012345678?tag=test-20")
         self.assertEqual(
             set(routes),
             {
@@ -22,17 +22,26 @@ class CommercePlatformRoutingTests(unittest.TestCase):
         self.assertEqual(validate_amazon_distribution(routes), [])
 
     def test_instagram_reel_and_youtube_do_not_promise_clickable_caption(self):
-        routes = build_amazon_routes("https://www.amazon.com/dp/EXAMPLE?tag=test-20")
+        routes = build_amazon_routes("https://www.amazon.com/dp/B012345678?tag=test-20")
         self.assertFalse(routes["instagram_reel"].requires_clickable_link)
         self.assertFalse(routes["youtube_short"].requires_clickable_link)
         self.assertTrue(routes["instagram_story"].requires_clickable_link)
 
     def test_rejects_insecure_affiliate_link(self):
         with self.assertRaises(ValueError):
-            build_amazon_routes("http://www.amazon.com/dp/EXAMPLE")
+            build_amazon_routes("http://www.amazon.com/dp/B012345678")
+
+    def test_rejects_non_amazon_host_and_wrong_tag(self):
+        with self.assertRaises(ValueError):
+            build_amazon_routes("https://example.com/dp/B012345678?tag=test-20")
+        with self.assertRaises(ValueError):
+            build_amazon_routes(
+                "https://www.amazon.com/dp/B012345678?tag=wrong-20",
+                expected_tag="test-20",
+            )
 
     def test_incomplete_distribution_is_rejected(self):
-        routes = build_amazon_routes("https://www.amazon.com/dp/EXAMPLE?tag=test-20")
+        routes = build_amazon_routes("https://www.amazon.com/dp/B012345678?tag=test-20")
         routes.pop("threads")
         self.assertEqual(
             validate_amazon_distribution(routes),

@@ -130,13 +130,20 @@ class ScheduledPublicationTests(unittest.TestCase):
         payload = json.loads(self.queue_path.read_text(encoding="utf-8"))
         payload["items"][0]["commercial"] = True
         payload["items"][0]["commercial_checks"] = {
-            "affiliate_link_verified": True,
-            "disclosure_approved": True,
-            "availability_verified": False,
-            "asset_final": True,
+            "asset_final": False,
         }
         self.queue_path.write_text(json.dumps(payload), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "commercial_publication_checks_incomplete"):
+            load_queue(self.queue_path)
+
+    def test_commercial_item_requires_resolver_evidence_path(self):
+        payload = json.loads(self.queue_path.read_text(encoding="utf-8"))
+        payload["items"][0].update({
+            "commercial": True,
+            "commercial_checks": {"asset_final": True},
+        })
+        self.queue_path.write_text(json.dumps(payload), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "commercial_resolver_evidence_missing"):
             load_queue(self.queue_path)
 
 

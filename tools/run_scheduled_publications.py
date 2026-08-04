@@ -30,9 +30,6 @@ QUEUE_SCHEMA = "scheduled_publication_queue_v1"
 STATE_SCHEMA = "scheduled_publication_state_v1"
 DEFAULT_STATE_KEY = "publishing/state/scheduled-publications-v1.json"
 COMMERCIAL_CHECKS = {
-    "affiliate_link_verified",
-    "disclosure_approved",
-    "availability_verified",
     "asset_final",
 }
 
@@ -70,6 +67,8 @@ def load_queue(path: Path) -> dict[str, Any]:
                 checks.get(name) is not True for name in COMMERCIAL_CHECKS
             ):
                 raise ValueError("commercial_publication_checks_incomplete")
+            if not str(item.get("resolver_evidence_path", "")).strip():
+                raise ValueError("commercial_resolver_evidence_missing")
     return queue
 
 
@@ -144,6 +143,32 @@ def validate_item(item: Mapping[str, Any], repository_root: Path) -> tuple[Path,
         "approved_social_post_v1",
     }:
         raise ValueError("queue_manifest_schema_unsupported")
+    if item.get("commercial") is True:
+        evidence_path = (repository_root / item["resolver_evidence_path"]).resolve()
+        if repository_root.resolve() not in evidence_path.parents:
+            raise ValueError("resolver_evidence_path_outside_repository")
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        required = {
+            "publishable",
+            "associate_tag_verified",
+            "https_verified",
+            "availability_verified",
+            "product_match_verified",
+            "visual_reference_verified",
+            "approval_verified",
+        }
+        allowed_sources = {"amazon_paapi5", "amazon_listing_plus_editorial_approval"}
+        if evidence.get("schema") != "amazon_affiliate_resolution_v1" or evidence.get(
+            "source"
+        ) not in allowed_sources or any(
+            evidence.get(name) is not True for name in required
+        ) or not str(evidence.get("affiliate_disclosure", "")).strip():
+            raise ValueError("commercial_resolver_evidence_not_publishable")
+        approval_path = (repository_root / str(evidence.get("approval_record_path", ""))).resolve()
+        if evidence.get("source") == "amazon_listing_plus_editorial_approval" and (
+            repository_root.resolve() not in approval_path.parents or not approval_path.is_file()
+        ):
+            raise ValueError("commercial_approval_record_missing")
     return manifest_path, manifest
 
 
@@ -190,7 +215,7 @@ def execute_queue(
     environment: Mapping[str, str] | None = None,
     now: datetime | None = None,
     live: bool = False,
-    max_items: int = 3,
+    max_items: int = 10,
 ) -> dict[str, Any]:
     env = dict(os.environ if environment is None else environment)
     current_time = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
@@ -268,7 +293,7 @@ def main() -> int:
     parser.add_argument("--queue", default="config/scheduled_publications_v1.json")
     parser.add_argument("--output", default="artifacts/scheduled-publication-run.json")
     parser.add_argument("--live", action="store_true")
-    parser.add_argument("--max-items", type=int, default=3)
+    parser.add_argument("--max-items", type=int, default=10)
     args = parser.parse_args()
     root = Path.cwd().resolve()
     report = execute_queue(

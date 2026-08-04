@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict
+from urllib.parse import parse_qs, urlparse
 
 
 AFFILIATE_DISCLOSURE = "Como Afiliado de Amazon, recibimos ingresos por compras adscritas."
@@ -26,6 +27,8 @@ def build_amazon_routes(
     affiliate_url: str,
     *,
     profile_destination: str = "enlace de Amazon en el perfil",
+    expected_tag: str | None = None,
+    expected_host: str = "www.amazon.com",
 ) -> Dict[str, CommerceRoute]:
     """Devuelve la ruta de conversión adecuada para cada plataforma.
 
@@ -35,8 +38,13 @@ def build_amazon_routes(
     """
 
     url = affiliate_url.strip()
-    if not url.startswith("https://"):
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
         raise ValueError("El enlace afiliado debe usar HTTPS")
+    if parsed.hostname != expected_host:
+        raise ValueError("El enlace afiliado debe pertenecer al marketplace Amazon configurado")
+    if expected_tag and parse_qs(parsed.query).get("tag") != [expected_tag]:
+        raise ValueError("El enlace afiliado no contiene el associate tag configurado")
 
     return {
         "instagram_reel": CommerceRoute(

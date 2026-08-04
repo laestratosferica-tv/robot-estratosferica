@@ -1,0 +1,15 @@
+{
+  "schema": "commercial_approval_record_v1",
+  "approval_id": "amazon-block-2026-08-02-mini-mic",
+  "approved_by": "Jose Luis",
+  "approved_at": "2026-08-02",
+  "product": "Mini Mic Pro",
+  "asin": "B0CMJTSVRW",
+  "affiliate_url": "https://www.amazon.com/dp/B0CMJTSVRW?tag=estrato-web-20",
+  "source_evidence": {
+    "approval_block_sha256": "2a69b5bbb81d3e71d1b72dd416995e55ff785e2828403e91182a135344be4074",
+    "publication_package_sha256": "4ba5c55719c282c4ede72b2fcc769b43aec4922b6d8b63e03c26e495a3d4fdf0"
+  },
+  "video_sha256": "2f3df2bfce6fa3fb4918faddb627577ec3108f2c77dfc09be2dfda5d0de20323",
+  "do_not_request_reapproval": true
+}

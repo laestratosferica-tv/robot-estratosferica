@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PromoDetector IA — Encuentra ofertas estratosféricas</title>
+  <meta name="description" content="Radar de productos, códigos y ofertas verificadas, comparadas y calificadas por La Estratosférica.">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090313;
+      --panel: #160a29;
+      --panel-2: #21103b;
+      --violet: #7b35ff;
+      --cyan: #4cecff;
+      --pink: #ff3fcf;
+      --green: #65ffad;
+      --amber: #ffd166;
+      --text: #fbf9ff;
+      --muted: #c7bed8;
+      --line: rgba(255,255,255,.14);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 0%, rgba(123,53,255,.32), transparent 30%),
+        radial-gradient(circle at 95% 18%, rgba(76,236,255,.12), transparent 25%),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    .stars { position: fixed; inset: 0; pointer-events: none; opacity: .45; background-image: radial-gradient(circle, #fff 0 1px, transparent 1.4px); background-size: 58px 58px; mask-image: linear-gradient(to bottom, black, transparent 75%); }
+    .shell { position: relative; width: min(1180px, calc(100% - 28px)); margin: auto; padding: 22px 0 70px; }
+    .hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 28px; align-items: center; padding: 32px 0 28px; }
+    .eyebrow { color: var(--cyan); font-size: .74rem; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { max-width: 780px; margin: 10px 0 16px; font-size: clamp(3rem, 8vw, 6.4rem); line-height: .88; letter-spacing: -.07em; }
+    .hero p { max-width: 680px; margin: 0; color: var(--muted); font-size: clamp(1rem, 2vw, 1.25rem); line-height: 1.55; }
+    .hero-emblem { position: relative; display: grid; place-items: center; min-height: 320px; }
+    .hero-emblem::before { content: ""; position: absolute; width: 72%; aspect-ratio: 1; border-radius: 50%; background: rgba(123,53,255,.2); filter: blur(55px); }
+    .hero-emblem img { position: relative; width: min(100%, 430px); height: auto; border-radius: 28px; mix-blend-mode: screen; }
+    .search-panel { display: grid; grid-template-columns: minmax(220px, 560px) 160px 112px; justify-content: start; gap: 8px; width: fit-content; max-width: 100%; margin-top: 12px; padding: 8px; border: 1px solid var(--line); border-radius: 17px; background: rgba(12,5,24,.72); }
+    .verified-line { display: flex; align-items: center; gap: 9px; margin: 2px 2px 10px; color: var(--cyan); font-size: .7rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+    .verified-line::before { content: ""; width: 8px; height: 8px; background: var(--green); box-shadow: 0 0 16px rgba(101,255,173,.8); }
+    .field { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 11px; color: white; background: var(--panel); padding: 0 13px; outline: none; }
+    .field:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(76,236,255,.11); }
+    .scan { min-height: 44px; border: 0; border-radius: 11px; padding: 0 14px; color: #080311; background: var(--cyan); font-weight: 950; cursor: pointer; }
+    .scan:active { transform: translateY(1px); }
+    .categories { display: flex; gap: 9px; overflow-x: auto; padding: 18px 0 22px; scrollbar-width: none; }
+    .filter { flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px; color: var(--muted); background: transparent; cursor: pointer; }
+    .filter.active { border-color: var(--cyan); color: white; background: rgba(76,236,255,.09); }
+    .section-head { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin: 28px 0 16px; }
+    .section-head h2 { margin: 0; font-size: clamp(1.65rem, 4vw, 2.5rem); letter-spacing: -.04em; }
+    .section-head p { margin: 0; color: var(--muted); font-size: .78rem; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .card { overflow: hidden; border: 1px solid var(--line); border-radius: 24px; background: rgba(22,10,41,.88); box-shadow: 0 22px 65px rgba(0,0,0,.25); }
+    .card[hidden] { display: none; }
+    .visual { position: relative; aspect-ratio: 4/3; overflow: hidden; background: #0d0717; }
+    .visual img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+    .visual::after { content: ""; position: absolute; inset: auto 0 0; height: 45%; background: linear-gradient(transparent, rgba(22,10,41,.96)); }
+    .badge { position: absolute; z-index: 2; top: 14px; left: 14px; padding: 7px 10px; border-radius: 999px; color: #07120d; background: var(--green); font-size: .68rem; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+    .badge.watch { color: #160d00; background: var(--amber); }
+    .body { padding: 19px; }
+    .meta { color: var(--cyan); font-size: .68rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+    .card h3 { margin: 7px 0 8px; font-size: 1.4rem; line-height: 1.05; }
+    .summary { min-height: 58px; margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.45; }
+    .score-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 17px 0 12px; padding: 12px; border: 1px solid rgba(76,236,255,.2); border-radius: 15px; background: rgba(8,3,18,.62); }
+    .score-row span { color: var(--muted); font-size: .7rem; font-weight: 850; text-transform: uppercase; }
+    .score { color: var(--cyan); font-size: 1.65rem; font-weight: 1000; }
+    .score small { color: var(--muted); font-size: .68rem; }
+    .signals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .signal { padding: 8px 5px; border-radius: 10px; background: rgba(255,255,255,.055); color: var(--muted); text-align: center; font-size: .64rem; }
+    .signal strong { display: block; color: white; font-size: .72rem; }
+    .validity { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 13px; color: var(--muted); font-size: .65rem; }
+    .validity strong { color: var(--green); }
+    .arcade-help { position: relative; margin: 9px 0 0; color: #91869f; font-size: .58rem; line-height: 1.35; }
+    .actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 15px; }
+    .primary, .compare { display: grid; place-items: center; min-height: 45px; border-radius: 12px; text-decoration: none; font-size: .76rem; font-weight: 950; }
+    .primary { color: #080311; background: var(--cyan); }
+    .compare { border: 1px solid var(--line); color: white; background: transparent; padding: 0 13px; cursor: pointer; }
+    .empty { display: none; padding: 36px; border: 1px dashed var(--line); border-radius: 22px; color: var(--muted); text-align: center; }
+    .empty.visible { display: block; }
+    .game-extras { margin: 34px 0; }
+    .extras-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .extra-card { padding: 17px; border: 1px solid var(--line); border-radius: 18px; background: rgba(22,10,41,.72); }
+    .extra-card.featured { padding: 0; overflow: hidden; border-color: rgba(76,236,255,.34); }
+    .extra-card.featured .extra-content { padding: 17px; }
+    .extra-media { position: relative; aspect-ratio: 16/9; overflow: hidden; background: #080411; }
+    .extra-media img { width: 100%; height: 100%; object-fit: cover; }
+    .extra-media::after { content: "FUENTE OFICIAL NINTENDO"; position: absolute; left: 10px; bottom: 10px; padding: 6px 8px; border-radius: 7px; color: white; background: rgba(8,4,17,.82); font-size: .56rem; font-weight: 950; letter-spacing: .08em; }
+    .minecraft-media { position:relative; display:grid; place-items:center; aspect-ratio:16/9; overflow:hidden; background:linear-gradient(155deg,#74c94c 0 38%,#73533b 38% 52%,#171123 52%); }
+    .minecraft-media::before { content:""; width:92px; aspect-ratio:1; background:#66bb45; box-shadow:23px 0 #75cb50,-23px 0 #58a53b,0 23px #50402f,23px 23px #654b34,-23px 23px #3d3228; transform:rotate(45deg); }
+    .minecraft-media::after { content:"MARKETPLACE PASS"; position:absolute; left:12px; bottom:10px; padding:6px 8px; border-radius:7px; color:white; background:rgba(8,4,17,.82); font-size:.56rem; font-weight:950; letter-spacing:.08em; }
+    .fc-media { position:relative; display:grid; place-items:center; aspect-ratio:16/9; overflow:hidden; background:radial-gradient(circle at 50% 45%,rgba(76,236,255,.34),transparent 32%),linear-gradient(145deg,#151032,#06030d); }
+    .fc-media::before { content:"FC"; display:grid; place-items:center; width:108px; aspect-ratio:1; border:3px solid var(--cyan); color:white; font-size:2.5rem; font-weight:950; transform:rotate(45deg); box-shadow:0 0 34px rgba(76,236,255,.45); }
+    .fc-media::after { content:"10 % EA PLAY"; position:absolute; left:12px; bottom:10px; padding:6px 8px; border-radius:7px; color:#080311; background:var(--green); font-size:.56rem; font-weight:950; letter-spacing:.08em; }
+    .fc-media span { position:absolute; font-size:2.5rem; font-weight:950; transform:rotate(-45deg); }
+    .extra-platform { color: var(--pink); font-size: .63rem; font-weight: 950; letter-spacing: .12em; text-transform: uppercase; }
+    .extra-card h3 { margin: 6px 0 8px; font-size: 1.15rem; }
+    .extra-card p { min-height: 68px; margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
+    .extra-status { display: flex; justify-content: space-between; gap: 8px; margin: 13px 0; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: .64rem; }
+    .extra-status strong { color: var(--green); }
+    .extra-card a { display: grid; place-items: center; min-height: 40px; border: 1px solid rgba(76,236,255,.3); border-radius: 10px; color: var(--cyan); font-size: .7rem; font-weight: 950; text-decoration: none; }
+    .arcade-radar { display: grid; grid-template-columns: .9fr 1.1fr; gap: 22px; align-items: center; margin: 20px 0 44px; padding: 24px; border: 1px solid rgba(76,236,255,.24); border-radius: 28px; background: linear-gradient(145deg, rgba(33,16,59,.94), rgba(9,3,19,.96)); overflow: hidden; }
+    .radar-screen { position: relative; width: min(100%, 390px); aspect-ratio: 1; margin: auto; border: 2px solid rgba(76,236,255,.55); border-radius: 50%; background: repeating-radial-gradient(circle, transparent 0 18%, rgba(76,236,255,.16) 18.5% 19%, transparent 19.5% 36%), linear-gradient(90deg, transparent 49.6%, rgba(76,236,255,.18) 50%, transparent 50.4%), linear-gradient(transparent 49.6%, rgba(76,236,255,.18) 50%, transparent 50.4%), #080713; box-shadow: inset 0 0 45px rgba(76,236,255,.12), 0 0 35px rgba(123,53,255,.2); overflow: hidden; }
+    .radar-screen::before { content: ""; position: absolute; inset: 50% 50% 0 50%; width: 50%; height: 50%; transform-origin: 0 0; background: conic-gradient(from 270deg, rgba(76,236,255,.58), transparent 42deg); }
+    .radar-screen.scanning::before { animation: sweep 1s linear infinite; }
+    .radar-screen::after { content: ""; position: absolute; inset: 8%; border: 1px dashed rgba(255,63,207,.35); border-radius: 50%; }
+    .target { position: absolute; z-index: 3; left: 65%; top: 30%; width: 20px; height: 20px; border: 3px solid var(--green); transform: rotate(45deg) scale(0); box-shadow: 0 0 18px var(--green); transition: transform .3s; }
+    .target.detected { transform: rotate(45deg) scale(1); animation: pulse .8s infinite alternate; }
+    .radar-copy h2 { margin: 7px 0 10px; font-size: clamp(2rem, 5vw, 3.5rem); line-height: .95; letter-spacing: -.05em; }
+    .radar-copy p { color: var(--muted); line-height: 1.5; }
+    .radar-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+    .radar-button { min-height: 50px; border: 0; border-radius: 13px; padding: 0 18px; color: #080311; background: var(--green); font-weight: 950; cursor: pointer; }
+    .radar-button.secondary { color: white; border: 1px solid var(--line); background: transparent; }
+    .detection { display: none; margin-top: 18px; padding: 16px; border-left: 4px solid var(--cyan); background: rgba(76,236,255,.07); }
+    .detection.visible { display: block; animation: reveal .35s ease-out; }
+    .detection-label { color: var(--green); font-size: .68rem; font-weight: 950; letter-spacing: .14em; text-transform: uppercase; }
+    .detection h3 { margin: 5px 0; font-size: 1.55rem; }
+    .detection-score { color: var(--cyan); font-size: 1.2rem; font-weight: 950; }
+    .detection a { display: inline-grid; place-items: center; min-height: 43px; margin-top: 12px; padding: 0 15px; border-radius: 10px; color: #080311; background: var(--cyan); font-size: .75rem; font-weight: 950; text-decoration: none; }
+    .live-code { display: grid; grid-template-columns: 1fr auto; gap: 22px; align-items: center; margin: 28px 0; padding: 22px; border: 1px solid rgba(101,255,173,.34); border-radius: 24px; background: linear-gradient(135deg, rgba(101,255,173,.08), rgba(123,53,255,.11)); }
+    .live-code h2 { margin: 5px 0 8px; font-size: clamp(1.6rem, 4vw, 2.5rem); letter-spacing: -.04em; }
+    .live-code p { margin: 0; color: var(--muted); line-height: 1.45; }
+    .code-details { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 15px; }
+    .code-detail { padding: 10px; border: 1px solid var(--line); border-radius: 11px; color: var(--muted); font-size: .72rem; }
+    .code-detail strong { display: block; margin-bottom: 3px; color: white; }
+    .code-proof { min-width: 280px; padding: 16px; border: 1px solid rgba(76,236,255,.32); border-radius: 16px; background: #080411; }
+    .code-proof-top { display: flex; justify-content: space-between; gap: 12px; color: var(--green); font-size: .65rem; font-weight: 950; text-transform: uppercase; }
+    .code-value { margin: 12px 0; color: white; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.45rem; font-weight: 950; letter-spacing: .04em; }
+    .code-proof-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .code-proof button, .code-proof a { display: grid; place-items: center; min-height: 42px; border: 0; border-radius: 10px; color: #080311; background: var(--cyan); font-size: .7rem; font-weight: 950; text-decoration: none; cursor: pointer; }
+    .code-proof a { color: white; border: 1px solid var(--line); background: transparent; }
+    .review-banner { display:grid; grid-template-columns:1fr auto; gap:18px; align-items:center; margin:34px 0; padding:22px; border:1px solid rgba(76,236,255,.3); border-radius:22px; background:linear-gradient(135deg,rgba(76,236,255,.08),rgba(123,53,255,.12)); }
+    .review-banner h2 { margin:4px 0 7px; font-size:clamp(1.5rem,4vw,2.3rem); }
+    .review-banner p { margin:0; color:var(--muted); line-height:1.45; }
+    .review-banner a { display:grid; place-items:center; min-height:46px; padding:0 17px; border-radius:12px; color:#080311; background:var(--cyan); font-size:.72rem; font-weight:950; text-decoration:none; }
+    @keyframes sweep { to { transform: rotate(360deg); } }
+    @keyframes pulse { to { opacity: .45; } }
+    @keyframes reveal { from { opacity: 0; transform: translateY(8px); } }
+    .pipeline { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 48px; }
+    .step { position: relative; padding: 14px 10px; border: 1px solid var(--line); border-radius: 14px; color: var(--muted); background: rgba(22,10,41,.66); text-align: center; font-size: .68rem; }
+    .step strong { display: block; color: white; margin-bottom: 3px; }
+    .step:not(:last-child)::after { content: "›"; position: absolute; right: -8px; top: 50%; z-index: 2; color: var(--cyan); font-size: 1.2rem; transform: translateY(-55%); }
+    footer { margin-top: 36px; padding-top: 20px; border-top: 1px solid var(--line); color: #8f849e; font-size: .7rem; line-height: 1.5; text-align: center; }
+    .toast { position: fixed; right: 18px; bottom: 18px; z-index: 30; max-width: 320px; padding: 13px 16px; border: 1px solid rgba(101,255,173,.4); border-radius: 13px; color: white; background: #10231a; font-size: .78rem; transform: translateY(120px); transition: transform .25s; }
+    .toast.show { transform: translateY(0); }
+    .compare-dock { position: fixed; left: 50%; bottom: 16px; z-index: 25; display: flex; align-items: center; gap: 12px; width: min(620px, calc(100% - 28px)); padding: 12px 14px; border: 1px solid rgba(76,236,255,.32); border-radius: 18px; background: rgba(9,3,19,.96); box-shadow: 0 22px 70px rgba(0,0,0,.5); transform: translate(-50%, 130px); transition: transform .25s; }
+    .compare-dock.visible { transform: translate(-50%, 0); }
+    .compare-dock strong { flex: 1; font-size: .78rem; }
+    .compare-dock span { color: var(--muted); font-size: .68rem; }
+    .compare-dock button { border: 0; border-radius: 10px; padding: 10px 13px; color: #080311; background: var(--cyan); font-size: .7rem; font-weight: 950; cursor: pointer; }
+    .monitoring { opacity: .8; }
+    .monitoring .primary { pointer-events: none; color: var(--muted); background: rgba(255,255,255,.08); }
+    @media (max-width: 880px) {
+      .hero { grid-template-columns: 1fr; }
+      .hero-emblem { min-height: 250px; }
+      .hero-emblem img { width: min(70vw, 380px); }
+      .grid { grid-template-columns: 1fr 1fr; }
+      .extras-grid { grid-template-columns: 1fr; }
+      .arcade-radar { grid-template-columns: 1fr; }
+      .live-code { grid-template-columns: 1fr; }
+      .review-banner { grid-template-columns:1fr; }
+      .code-proof { min-width: 0; }
+      .code-details { grid-template-columns: 1fr; }
+      .pipeline { grid-template-columns: repeat(3, 1fr); }
+      .step:nth-child(3)::after { display: none; }
+    }
+    @media (max-width: 620px) {
+      .shell { width: min(100% - 20px, 1180px); padding-top: 12px; }
+      .hero { padding-top: 18px; }
+      .hero-emblem { order: -1; min-height: auto; }
+      .hero-emblem img { width: min(86vw, 390px); }
+      h1 { font-size: clamp(3rem, 16vw, 4.9rem); }
+      .search-panel { width: 100%; grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .pipeline { grid-template-columns: 1fr 1fr; }
+      .step:nth-child(3)::after { display: block; }
+      .step:nth-child(even)::after { display: none; }
+      .section-head { align-items: start; flex-direction: column; gap: 6px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .toast, .code { transition: none; } }
+  </style>
+</head>
+<body>
+  <div class="stars" aria-hidden="true"></div>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Promociones bajo el radar</div>
+        <h1>Encuentra ofertas estratosféricas.</h1>
+        <p>Escaneamos productos, precios y códigos para mostrarte qué vale la pena, qué sigue vigente y qué conviene descartar. Cada señal recibe una calificación clara sobre 10.</p>
+      </div>
+      <div class="hero-emblem"><img src="assets/promodetector-emblema-v1.png" alt="PromoDetector IA: encuentra ofertas estratosféricas"></div>
+    </section>
+
+    <div class="verified-line">Señal verificada · Radar activo · Datos comerciales separados del criterio editorial</div>
+    <section class="search-panel" aria-label="Buscador de promociones">
+      <input id="query" class="field" type="search" placeholder="Producto, marca o categoría" aria-label="Buscar producto, marca o categoría">
+      <select id="country" class="field" aria-label="Seleccionar país">
+        <option value="todos">Todos los países</option>
+        <option value="colombia">Colombia</option>
+        <option value="latam">Latinoamérica</option>
+        <option value="global">Global</option>
+      </select>
+      <button id="scan" class="scan" type="button">BUSCAR</button>
+    </section>
+
+    <div class="categories" aria-label="Filtrar por categoría">
+      <button class="filter active" data-filter="todos">Todas</button>
+      <button class="filter" data-filter="creadores">Creadores</button>
+      <button class="filter" data-filter="gaming">Gaming</button>
+      <button class="filter" data-filter="gastronomia">Gastronomía</button>
+      <button class="filter" data-filter="hogar">Hogar inteligente</button>
+      <button class="filter" data-filter="movilidad">Movilidad</button>
+    </div>
+
+    <section class="arcade-radar" aria-labelledby="radarTitle">
+      <div id="radarScreen" class="radar-screen" aria-hidden="true"><span id="target" class="target"></span></div>
+      <div class="radar-copy">
+        <div class="eyebrow">Modo arcade · descubrimiento</div>
+        <h2 id="radarTitle">Activa el radar sorpresa.</h2>
+        <p>Detectamos una señal aleatoria dentro de nuestras categorías. Primero revelamos el producto y su calificación; tú decides si quieres abrir la oferta.</p>
+        <div class="radar-actions"><button id="randomScan" class="radar-button" type="button">INICIAR ESCANEO</button></div>
+        <div id="detection" class="detection" aria-live="polite">
+          <div class="detection-label">Nave detectada · señal verificada</div>
+          <h3 id="detectedName">Producto</h3>
+          <div id="detectedScore" class="detection-score">0/10</div>
+          <p id="detectedReason"></p>
+          <a id="detectedLink" href="#" target="_blank" rel="sponsored nofollow noopener">VER OFERTA</a>
+          <p class="arcade-help">Enlace afiliado: podemos recibir una comisión por compras calificadas.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Señales recomendadas</h2><p>Nota mínima pública: 7.5/10</p></div>
+      <div id="results" class="grid">
+        <article class="card" data-category="creadores" data-country="global" data-search="mini mic pro microfono creadores streaming celular">
+          <div class="visual"><span class="badge">Verificado</span><img src="assets/mini-mic.png" alt="Micrófono inalámbrico compacto"></div>
+          <div class="body">
+            <div class="meta">Creadores · Amazon</div><h3>Mini Mic Pro</h3>
+            <p class="summary">Micrófono compacto para voz móvil, entrevistas y contenido corto.</p>
+            <div class="score-row"><span>Calificación PromoDetector</span><div class="score">8.8<small>/10</small></div></div>
+            <div class="signals"><div class="signal"><strong>Alta</strong>Utilidad</div><div class="signal"><strong>8.8</strong>Reputación</div><div class="signal"><strong>Global</strong>Cobertura</div></div>
+            <div class="validity"><span>Verificado: 3 ago. 2026</span><strong>Vigente</strong></div>
+            <div class="actions"><a class="primary" href="mini-mic-pro.html">Ver ficha</a><button class="compare" type="button">+ Comparar</button></div>
+          </div>
+        </article>
+
+        <article class="card" data-category="gaming" data-country="latam global" data-search="bengoo g9000 headset gaming audifonos gamer">
+          <div class="visual"><span class="badge">Verificado</span><img src="assets/headset.png" alt="Audífonos gamer con micrófono"></div>
+          <div class="body">
+            <div class="meta">Gaming · Amazon</div><h3>BENGOO G9000</h3>
+            <p class="summary">Headset de entrada para jugar y comunicarse desde una sola pieza.</p>
+            <div class="score-row"><span>Calificación PromoDetector</span><div class="score">8.4<small>/10</small></div></div>
+            <div class="signals"><div class="signal"><strong>Alta</strong>Demanda</div><div class="signal"><strong>8.4</strong>Reputación</div><div class="signal"><strong>LATAM</strong>Cobertura</div></div>
+            <div class="validity"><span>Verificado: 3 ago. 2026</span><strong>Vigente</strong></div>
+            <div class="actions"><a class="primary" href="bengoo-g9000.html">Ver ficha</a><button class="compare" type="button">+ Comparar</button></div>
+          </div>
+        </article>
+
+        <article class="card" data-category="gastronomia" data-country="colombia latam global" data-search="alpha grillers termometro cocina gastronomia parrilla">
+          <div class="visual"><span class="badge">Verificado</span><img src="assets/thermometer.png" alt="Termómetro digital de cocina"></div>
+          <div class="body">
+            <div class="meta">Gastronomía · Amazon</div><h3>Alpha Grillers</h3>
+            <p class="summary">Lectura digital para parrilla y recetas sensibles a la temperatura.</p>
+            <div class="score-row"><span>Calificación PromoDetector</span><div class="score">8.6<small>/10</small></div></div>
+            <div class="signals"><div class="signal"><strong>Alta</strong>Utilidad</div><div class="signal"><strong>8.9</strong>Reputación</div><div class="signal"><strong>Revisar</strong>Envío</div></div>
+            <div class="validity"><span>Verificado: 3 ago. 2026</span><strong>Vigente</strong></div>
+            <div class="actions"><a class="primary" href="alpha-grillers.html">Ver ficha</a><button class="compare" type="button">+ Comparar</button></div>
+          </div>
+        </article>
+
+        <article class="card" data-category="hogar" data-country="latam global" data-search="tapo c100 camara hogar inteligente seguridad vision nocturna">
+          <div class="visual"><span class="badge">Verificado</span><img src="assets/tapo-c100.jpg" alt="Cámara interior Tapo C100"></div>
+          <div class="body">
+            <div class="meta">Hogar inteligente · Amazon</div><h3>Tapo C100</h3>
+            <p class="summary">Cámara interior 1080p con movimiento, visión nocturna y audio.</p>
+            <div class="score-row"><span>Calificación PromoDetector</span><div class="score">8.9<small>/10</small></div></div>
+            <div class="signals"><div class="signal"><strong>Alta</strong>Utilidad</div><div class="signal"><strong>1080p</strong>Video</div><div class="signal"><strong>Interior</strong>Uso</div></div>
+            <div class="validity"><span>Verificado: 3 ago. 2026</span><strong>Vigente</strong></div>
+            <div class="actions"><a class="primary" href="tapo-c100.html">Ver ficha</a><button class="compare" type="button">+ Comparar</button></div>
+          </div>
+        </article>
+
+        <article class="card" data-category="movilidad" data-country="latam global" data-search="astroai c2 inflador llantas compresor movilidad carro moto">
+          <div class="visual"><span class="badge">Verificado</span><img src="assets/astroai-c2.jpg" alt="Inflador portátil AstroAI C2"></div>
+          <div class="body">
+            <div class="meta">Movilidad · Amazon</div><h3>AstroAI C2</h3>
+            <p class="summary">Inflador portátil con presión digital, batería y alimentación de 12 V.</p>
+            <div class="score-row"><span>Calificación PromoDetector</span><div class="score">8.3<small>/10</small></div></div>
+            <div class="signals"><div class="signal"><strong>160 PSI</strong>Máximo</div><div class="signal"><strong>Portátil</strong>Formato</div><div class="signal"><strong>12 V</strong>Respaldo</div></div>
+            <div class="validity"><span>Verificado: 3 ago. 2026</span><strong>Vigente</strong></div>
+            <div class="actions"><a class="primary" href="astroai-c2.html">Ver ficha</a><button class="compare" type="button">+ Comparar</button></div>
+          </div>
+        </article>
+      </div>
+      <div id="empty" class="empty">El radar no encontró coincidencias en este prototipo. Prueba “gaming”, “micrófono” o “cocina”.</div>
+    </section>
+
+    <section class="game-extras" aria-labelledby="extrasTitle">
+      <div class="section-head"><div><div class="eyebrow">Muestra real · Radar Gaming</div><h2 id="extrasTitle">Extras y recompensas</h2></div><p>Contenido oficial · Región y condiciones visibles</p></div>
+      <div class="extras-grid">
+        <article class="extra-card featured">
+          <div class="fc-media" role="img" aria-label="Composición editorial de EA Sports FC Points"><span>FC</span></div>
+          <div class="extra-content">
+            <div class="extra-platform">EA Sports FC · Compra segura</div>
+            <h3>10 % menos en FC Points</h3>
+            <p>EA Play reduce 10 % los paquetes elegibles. La ficha explica dónde comprarlos y por qué nunca debes comprar monedas a terceros.</p>
+            <div class="extra-status"><span>PlayStation · Xbox · PC</span><strong>Verificado</strong></div>
+            <a href="fc-points-compra-segura.html">ABRIR FICHA COMPLETA</a>
+          </div>
+        </article>
+        <article class="extra-card featured">
+          <div class="extra-media"><img src="assets/mario-kart-booster-official.jpg" alt="Mario Kart 8 Deluxe Booster Course Pass, imagen oficial de Nintendo"></div>
+          <div class="extra-content">
+            <div class="extra-platform">Nintendo Switch · Ficha editorial piloto</div>
+            <h3>Mario Kart: 48 pistas extra</h3>
+            <p>Booster Course Pass agrega 48 circuitos y 8 personajes. Cuesta USD 24,99 o está incluido mientras mantengas Switch Online + Expansion Pack.</p>
+            <div class="extra-status"><span>Requiere Mario Kart 8 Deluxe</span><strong>Disponible</strong></div>
+            <a href="mario-kart-booster.html">ABRIR FICHA COMPLETA</a>
+          </div>
+        </article>
+        <article class="extra-card featured">
+          <div class="minecraft-media" role="img" aria-label="Composición gráfica editorial inspirada en bloques de Minecraft"></div>
+          <div class="extra-content">
+            <div class="extra-platform">Minecraft Bedrock · Ficha editorial</div>
+            <h3>Marketplace Pass: ¿vale la pena?</h3>
+            <p>Biblioteca de mundos, complementos, texturas y skins por USD 3,99 al mes. Conviene según cuánto contenido explores.</p>
+            <div class="extra-status"><span>No funciona en Java Edition</span><strong>Verificado</strong></div>
+            <a href="minecraft-marketplace-pass.html">ABRIR FICHA COMPLETA</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="pipeline" aria-label="Flujo de validación de PromoDetector IA">
+      <div class="step"><strong>1. Detecta</strong>Encuentra señales</div>
+      <div class="step"><strong>2. Verifica</strong>País y vigencia</div>
+      <div class="step"><strong>3. Califica</strong>Nota sobre 10</div>
+      <div class="step"><strong>4. Publica</strong>Solo lo útil</div>
+      <div class="step"><strong>5. Mide</strong>Clics y ventas</div>
+      <div class="step"><strong>6. Descarta</strong>Lo vencido</div>
+    </section>
+
+    <section class="review-banner" aria-label="Estado del bloque PromoDetector">
+      <div><div class="eyebrow">Paquete automático · Bloque 01</div><h2>8 fichas listas para revisión conjunta.</h2><p>Cinco productos con evidencia comercial y tres oportunidades editoriales verificadas. Ninguna ficha dudosa se publica.</p></div>
+      <a href="batch-review.html">VER ESTADO DEL BLOQUE</a>
+    </section>
+
+    <section class="live-code" aria-labelledby="liveCodeTitle">
+      <div>
+        <div class="eyebrow">Zona de códigos · Señal vigente</div>
+        <h2 id="liveCodeTitle">20 % menos en seguridad para equipos.</h2>
+        <p><strong>NordLayer</strong> es una plataforma de ciberseguridad empresarial para proteger conexiones, accesos remotos y redes de trabajo. El código aplica a sus planes anuales y está pensado para empresas, equipos remotos y profesionales que administran información sensible.</p>
+        <div class="code-details">
+          <div class="code-detail"><strong>¿Dónde funciona?</strong>En la tienda oficial de NordLayer.</div>
+          <div class="code-detail"><strong>¿Qué descuenta?</strong>20 % sobre planes anuales elegibles.</div>
+          <div class="code-detail"><strong>¿Cómo se usa?</strong>Copia el código, abre la oferta y aplícalo al pagar.</div>
+          <div class="code-detail"><strong>¿Hasta cuándo?</strong>31 de agosto de 2026, según la tienda.</div>
+        </div>
+      </div>
+      <div class="code-proof">
+        <div class="code-proof-top"><span>Verificado por NordLayer</span><span>Vence 31 AGO</span></div>
+        <div id="liveCodeValue" class="code-value">nl-summer-26</div>
+        <div class="code-proof-actions"><button id="copyLiveCode" type="button">COPIAR CÓDIGO</button><a href="https://nordlayer.com/contact-sales/" target="_blank" rel="nofollow noopener">IR A NORDLAYER</a></div>
+        <p class="arcade-help">Última comprobación: 3 de agosto de 2026 · Fuente oficial. La tienda confirma la elegibilidad final según el plan y el país.</p>
+      </div>
+    </section>
+
+    <footer><strong>Una herramienta de La Estratosférica · Powered by Brandele</strong><br>Solo habilitamos códigos y enlaces después de verificar vigencia, destino y producto. Los enlaces afiliados pueden generar una comisión sin costo adicional para el comprador.</footer>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <aside id="compareDock" class="compare-dock" aria-live="polite"><div><strong>Comparador activo</strong><br><span id="compareList">Sin productos</span></div><button id="clearCompare" type="button">LIMPIAR</button></aside>
+  <script>
+    const query = document.querySelector('#query');
+    const country = document.querySelector('#country');
+    const cards = [...document.querySelectorAll('.card')];
+    const filters = [...document.querySelectorAll('.filter')];
+    const empty = document.querySelector('#empty');
+    const toast = document.querySelector('#toast');
+    const compareDock = document.querySelector('#compareDock');
+    const compareList = document.querySelector('#compareList');
+    const selectedProducts = new Set();
+    const radarCatalog = [
+      { name: 'Mini Mic Pro', score: '8.8/10', reason: 'Una señal útil para creadores que necesitan mejorar la voz sin cargar un estudio.', url: 'https://www.amazon.com/dp/B0CMJTSVRW?tag=estrato-web-20' },
+      { name: 'BENGOO G9000', score: '8.4/10', reason: 'Una opción de entrada para gaming, comunicación y sesiones largas.', url: 'https://www.amazon.com/dp/B01H6GUCCQ?tag=estrato-web-20' },
+      { name: 'Alpha Grillers', score: '8.6/10', reason: 'Precisión y velocidad para cocinar sin depender de aproximaciones.', url: 'https://www.amazon.com/dp/B00S93EQUK?tag=estrato-web-20' },
+      { name: 'Tapo C100', score: '8.9/10', reason: 'Una señal útil para vigilar interiores con video, movimiento y visión nocturna.', url: 'https://www.amazon.com/dp/B0866S3D82?tag=estrato-web-20' },
+      { name: 'AstroAI C2', score: '8.3/10', reason: 'Una herramienta portátil para recuperar presión y continuar el viaje.', url: 'https://www.amazon.com/dp/B0948WY5YX?tag=estrato-web-20' }
+    ];
+    let activeCategory = 'todos';
+
+    function notify(message) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+    }
+
+    function runScan() {
+      const term = query.value.trim().toLowerCase();
+      const selectedCountry = country.value;
+      let visible = 0;
+      cards.forEach(card => {
+        const matchesText = !term || card.dataset.search.includes(term);
+        const matchesCategory = activeCategory === 'todos' || card.dataset.category === activeCategory;
+        const matchesCountry = selectedCountry === 'todos' || card.dataset.country.includes(selectedCountry);
+        const show = matchesText && matchesCategory && matchesCountry;
+        card.hidden = !show;
+        if (show) visible += 1;
+      });
+      empty.classList.toggle('visible', visible === 0);
+      notify(visible ? `Radar completado: ${visible} señal${visible === 1 ? '' : 'es'}.` : 'Sin señales para este filtro.');
+    }
+
+    document.querySelector('#scan').addEventListener('click', runScan);
+    query.addEventListener('keydown', event => { if (event.key === 'Enter') runScan(); });
+    country.addEventListener('change', runScan);
+    filters.forEach(button => button.addEventListener('click', () => {
+      filters.forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+      activeCategory = button.dataset.filter;
+      runScan();
+    }));
+    document.querySelectorAll('.compare').forEach(button => button.addEventListener('click', () => {
+      const name = button.closest('.card').querySelector('h3').textContent;
+      if (selectedProducts.has(name)) selectedProducts.delete(name); else selectedProducts.add(name);
+      button.textContent = selectedProducts.has(name) ? '✓ Añadido' : '+ Comparar';
+      compareList.textContent = selectedProducts.size ? [...selectedProducts].join(' · ') : 'Sin productos';
+      compareDock.classList.toggle('visible', selectedProducts.size > 0);
+      notify(selectedProducts.has(name) ? 'Producto añadido a la comparación.' : 'Producto retirado.');
+    }));
+    document.querySelector('#clearCompare').addEventListener('click', () => {
+      selectedProducts.clear();
+      document.querySelectorAll('.compare').forEach(button => button.textContent = '+ Comparar');
+      compareDock.classList.remove('visible');
+      compareList.textContent = 'Sin productos';
+    });
+    function runRandomRadar() {
+      const screen = document.querySelector('#radarScreen');
+      const target = document.querySelector('#target');
+      const detection = document.querySelector('#detection');
+      const button = document.querySelector('#randomScan');
+      detection.classList.remove('visible');
+      target.classList.remove('detected');
+      screen.classList.add('scanning');
+      button.disabled = true;
+      button.textContent = 'ESCANEANDO...';
+      window.setTimeout(() => {
+        const product = radarCatalog[Math.floor(Math.random() * radarCatalog.length)];
+        document.querySelector('#detectedName').textContent = product.name;
+        document.querySelector('#detectedScore').textContent = product.score;
+        document.querySelector('#detectedReason').textContent = product.reason;
+        document.querySelector('#detectedLink').href = product.url;
+        screen.classList.remove('scanning');
+        target.classList.add('detected');
+        detection.classList.add('visible');
+        button.disabled = false;
+        button.textContent = 'INICIAR ESCANEO';
+        notify(`Señal detectada: ${product.name}.`);
+      }, 1800);
+    }
+    document.querySelector('#randomScan').addEventListener('click', runRandomRadar);
+    document.querySelector('#copyLiveCode').addEventListener('click', () => {
+      const value = document.querySelector('#liveCodeValue').textContent.trim();
+      if (navigator.clipboard) navigator.clipboard.writeText(value).catch(() => {});
+      notify(`Código ${value} copiado. Ábrelo en la tienda y confirma la elegibilidad.`);
+    });
+  </script>
+</body>
+</html>

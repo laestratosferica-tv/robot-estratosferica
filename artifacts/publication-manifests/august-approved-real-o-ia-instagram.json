@@ -1,11 +1,14 @@
 {
   "schema": "approved_carousel_publication_v1",
   "slug": "august-approved-real-o-ia-instagram",
-  "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-instagram",
-  "platforms": ["instagram"],
-  "expected_accounts": {"instagram_username": "laestratosfericatv"},
+  "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-carousel",
+  "platforms": ["instagram", "threads"],
+  "expected_accounts": {
+    "instagram_username": "laestratosfericatv",
+    "threads_username": "laestratosfericatv"
+  },
   "caption": "Uno de estos setups no existe. Mira los cables, el control y las conexiones antes de deslizar hasta la respuesta. ¿La inteligencia artificial debería identificarse siempre? Fuente oficial: Meta. #InteligenciaArtificial #Tecnologia #GamingLATAM #CulturaDigital #LaEstratosferica",
-  "threads_text": "",
+  "threads_text": "Uno de estos setups no existe. Mira los cables, el control y las conexiones antes de llegar a la respuesta. ¿El contenido generado con inteligencia artificial debería identificarse siempre? Fuente oficial: Meta.",
   "assets": [
     {"order": 1, "path": "artifacts/approved/scheduled/august-2026/august-approved-real-o-ia/01-portada.png", "sha256": "f54c2b043aa8600ae0a3a027cd0398e416d937c7b8541ac79ee0d3c530706bab"},
     {"order": 2, "path": "artifacts/approved/scheduled/august-2026/august-approved-real-o-ia/02-opcion-a.png", "sha256": "549e66907ee5b6fa4cd4794ec8bdffc6a44ef44482ce616dc4a77ec92716b835"},

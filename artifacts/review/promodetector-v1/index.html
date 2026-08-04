@@ -114,6 +114,9 @@
     .live-code { display: grid; grid-template-columns: 1fr auto; gap: 22px; align-items: center; margin: 28px 0; padding: 22px; border: 1px solid rgba(101,255,173,.34); border-radius: 24px; background: linear-gradient(135deg, rgba(101,255,173,.08), rgba(123,53,255,.11)); }
     .live-code h2 { margin: 5px 0 8px; font-size: clamp(1.6rem, 4vw, 2.5rem); letter-spacing: -.04em; }
     .live-code p { margin: 0; color: var(--muted); line-height: 1.45; }
+    .code-details { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 15px; }
+    .code-detail { padding: 10px; border: 1px solid var(--line); border-radius: 11px; color: var(--muted); font-size: .72rem; }
+    .code-detail strong { display: block; margin-bottom: 3px; color: white; }
     .code-proof { min-width: 280px; padding: 16px; border: 1px solid rgba(76,236,255,.32); border-radius: 16px; background: #080411; }
     .code-proof-top { display: flex; justify-content: space-between; gap: 12px; color: var(--green); font-size: .65rem; font-weight: 950; text-transform: uppercase; }
     .code-value { margin: 12px 0; color: white; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.45rem; font-weight: 950; letter-spacing: .04em; }
@@ -145,6 +148,7 @@
       .arcade-radar { grid-template-columns: 1fr; }
       .live-code { grid-template-columns: 1fr; }
       .code-proof { min-width: 0; }
+      .code-details { grid-template-columns: 1fr; }
       .pipeline { grid-template-columns: repeat(3, 1fr); }
       .step:nth-child(3)::after { display: none; }
     }
@@ -194,20 +198,6 @@
       <button class="filter" data-filter="gaming">Gaming</button>
       <button class="filter" data-filter="gastronomia">Gastronomía</button>
     </div>
-
-    <section class="live-code" aria-labelledby="liveCodeTitle">
-      <div>
-        <div class="eyebrow">Prueba real · Código vigente</div>
-        <h2 id="liveCodeTitle">Así funciona el detector de códigos.</h2>
-        <p>Encontramos el código en la tienda oficial, comprobamos beneficio, condiciones y vencimiento, y lo dejamos listo para copiar. Este ofrece 20 % en planes anuales de NordLayer hasta el 31 de agosto de 2026.</p>
-      </div>
-      <div class="code-proof">
-        <div class="code-proof-top"><span>Verificado por la tienda</span><span>Vence 31 AGO</span></div>
-        <div id="liveCodeValue" class="code-value">nl-summer-26</div>
-        <div class="code-proof-actions"><button id="copyLiveCode" type="button">COPIAR CÓDIGO</button><a href="https://nordlayer.com/contact-sales/" target="_blank" rel="nofollow noopener">VER OFERTA</a></div>
-        <p class="arcade-help">Última comprobación: 3 de agosto de 2026 · Fuente oficial de NordLayer. La elegibilidad final se confirma en la tienda.</p>
-      </div>
-    </section>
 
     <section class="arcade-radar" aria-labelledby="radarTitle">
       <div id="radarScreen" class="radar-screen" aria-hidden="true"><span id="target" class="target"></span></div>
@@ -279,6 +269,26 @@
       <div class="step"><strong>4. Publica</strong>Solo lo útil</div>
       <div class="step"><strong>5. Mide</strong>Clics y ventas</div>
       <div class="step"><strong>6. Descarta</strong>Lo vencido</div>
+    </section>
+
+    <section class="live-code" aria-labelledby="liveCodeTitle">
+      <div>
+        <div class="eyebrow">Zona de códigos · Señal vigente</div>
+        <h2 id="liveCodeTitle">20 % menos en seguridad para equipos.</h2>
+        <p><strong>NordLayer</strong> es una plataforma de ciberseguridad empresarial para proteger conexiones, accesos remotos y redes de trabajo. El código aplica a sus planes anuales y está pensado para empresas, equipos remotos y profesionales que administran información sensible.</p>
+        <div class="code-details">
+          <div class="code-detail"><strong>¿Dónde funciona?</strong>En la tienda oficial de NordLayer.</div>
+          <div class="code-detail"><strong>¿Qué descuenta?</strong>20 % sobre planes anuales elegibles.</div>
+          <div class="code-detail"><strong>¿Cómo se usa?</strong>Copia el código, abre la oferta y aplícalo al pagar.</div>
+          <div class="code-detail"><strong>¿Hasta cuándo?</strong>31 de agosto de 2026, según la tienda.</div>
+        </div>
+      </div>
+      <div class="code-proof">
+        <div class="code-proof-top"><span>Verificado por NordLayer</span><span>Vence 31 AGO</span></div>
+        <div id="liveCodeValue" class="code-value">nl-summer-26</div>
+        <div class="code-proof-actions"><button id="copyLiveCode" type="button">COPIAR CÓDIGO</button><a href="https://nordlayer.com/contact-sales/" target="_blank" rel="nofollow noopener">IR A NORDLAYER</a></div>
+        <p class="arcade-help">Última comprobación: 3 de agosto de 2026 · Fuente oficial. La tienda confirma la elegibilidad final según el plan y el país.</p>
+      </div>
     </section>
 
     <footer><strong>Una herramienta de La Estratosférica · Powered by Brandele</strong><br>Solo habilitamos códigos y enlaces después de verificar vigencia, destino y producto. Los enlaces afiliados pueden generar una comisión sin costo adicional para el comprador.</footer>

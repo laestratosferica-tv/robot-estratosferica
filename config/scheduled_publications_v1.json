@@ -678,6 +678,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/01-vr-dignidad/SOURCE_AND_LICENSE.json"
     },
     {
@@ -688,6 +690,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/01-vr-dignidad/SOURCE_AND_LICENSE.json"
     },
     {
@@ -698,6 +702,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/01-vr-dignidad/SOURCE_AND_LICENSE.json"
     },
     {
@@ -708,6 +714,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/01-vr-dignidad/SOURCE_AND_LICENSE.json"
     },
     {
@@ -718,6 +726,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/02-enemigo-invisible/SOURCE_AND_LICENSE.json"
     },
     {
@@ -728,6 +738,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/02-enemigo-invisible/SOURCE_AND_LICENSE.json"
     },
     {
@@ -738,6 +750,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/02-enemigo-invisible/SOURCE_AND_LICENSE.json"
     },
     {
@@ -748,6 +762,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/02-enemigo-invisible/SOURCE_AND_LICENSE.json"
     },
     {
@@ -758,6 +774,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/03-celebracion-mundial/SOURCE_AND_LICENSE.json"
     },
     {
@@ -768,6 +786,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/03-celebracion-mundial/SOURCE_AND_LICENSE.json"
     },
     {
@@ -778,6 +798,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/03-celebracion-mundial/SOURCE_AND_LICENSE.json"
     },
     {
@@ -788,6 +810,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/03-celebracion-mundial/SOURCE_AND_LICENSE.json"
     },
     {
@@ -798,6 +822,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/04-control-en-peligro/SOURCE_AND_LICENSE.json"
     },
     {
@@ -808,6 +834,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/04-control-en-peligro/SOURCE_AND_LICENSE.json"
     },
     {
@@ -818,6 +846,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/04-control-en-peligro/SOURCE_AND_LICENSE.json"
     },
     {
@@ -828,6 +858,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/04-control-en-peligro/SOURCE_AND_LICENSE.json"
     },
     {
@@ -838,6 +870,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/05-retro-sin-lag/SOURCE_AND_LICENSE.json"
     },
     {
@@ -848,6 +882,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/05-retro-sin-lag/SOURCE_AND_LICENSE.json"
     },
     {
@@ -858,6 +894,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/05-retro-sin-lag/SOURCE_AND_LICENSE.json"
     },
     {
@@ -868,6 +906,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/05-retro-sin-lag/SOURCE_AND_LICENSE.json"
     },
     {
@@ -878,6 +918,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/06-culpa-del-control/SOURCE_AND_LICENSE.json"
     },
     {
@@ -888,6 +930,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/06-culpa-del-control/SOURCE_AND_LICENSE.json"
     },
     {
@@ -898,6 +942,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/06-culpa-del-control/SOURCE_AND_LICENSE.json"
     },
     {
@@ -908,6 +954,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/06-culpa-del-control/SOURCE_AND_LICENSE.json"
     },
     {
@@ -918,6 +966,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/07-estrategia-tres-segundos/SOURCE_AND_LICENSE.json"
     },
     {
@@ -928,6 +978,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/07-estrategia-tres-segundos/SOURCE_AND_LICENSE.json"
     },
     {
@@ -938,6 +990,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/07-estrategia-tres-segundos/SOURCE_AND_LICENSE.json"
     },
     {
@@ -948,6 +1002,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/07-estrategia-tres-segundos/SOURCE_AND_LICENSE.json"
     },
     {
@@ -958,6 +1014,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/08-cuatro-cerebros/SOURCE_AND_LICENSE.json"
     },
     {
@@ -968,6 +1026,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/08-cuatro-cerebros/SOURCE_AND_LICENSE.json"
     },
     {
@@ -978,6 +1038,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/08-cuatro-cerebros/SOURCE_AND_LICENSE.json"
     },
     {
@@ -988,6 +1050,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/08-cuatro-cerebros/SOURCE_AND_LICENSE.json"
     },
     {
@@ -998,6 +1062,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/09-vr-nueva-generacion/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1008,6 +1074,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/09-vr-nueva-generacion/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1018,6 +1086,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/09-vr-nueva-generacion/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1028,6 +1098,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/09-vr-nueva-generacion/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1038,6 +1110,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/10-gamer-sin-pantalla/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1048,6 +1122,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/10-gamer-sin-pantalla/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1058,6 +1134,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/10-gamer-sin-pantalla/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1068,6 +1146,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/10-gamer-sin-pantalla/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1078,6 +1158,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/11-jefe-final-sala/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1088,6 +1170,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/11-jefe-final-sala/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1098,6 +1182,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/11-jefe-final-sala/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1108,6 +1194,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/11-jefe-final-sala/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1118,6 +1206,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/12-ultima-partida/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1128,6 +1218,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/12-ultima-partida/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1138,6 +1230,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/12-ultima-partida/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1148,6 +1242,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/12-ultima-partida/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1158,6 +1254,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/13-buscando-salida-vr/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1168,6 +1266,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/13-buscando-salida-vr/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1178,6 +1278,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/13-buscando-salida-vr/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1188,6 +1290,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/13-buscando-salida-vr/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1198,6 +1302,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/14-sonrisa-antes-susto/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1208,6 +1314,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/14-sonrisa-antes-susto/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1218,6 +1326,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/14-sonrisa-antes-susto/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1228,6 +1338,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/14-sonrisa-antes-susto/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1238,6 +1350,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/15-silencio-equipo/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1248,6 +1362,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/15-silencio-equipo/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1258,6 +1374,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/15-silencio-equipo/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1268,6 +1386,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/15-silencio-equipo/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1278,6 +1398,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/16-victoria-colectiva/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1288,6 +1410,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/16-victoria-colectiva/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1298,6 +1422,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/16-victoria-colectiva/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1308,6 +1434,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/16-victoria-colectiva/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1318,6 +1446,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/17-vr-vista-lujo/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1328,6 +1458,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/17-vr-vista-lujo/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1338,6 +1470,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/17-vr-vista-lujo/SOURCE_AND_LICENSE.json"
     },
     {
@@ -1348,6 +1482,8 @@
       "status": "approved",
       "enabled": true,
       "experiment": "gamer-viral-daily-2am-v1",
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/17-vr-vista-lujo/SOURCE_AND_LICENSE.json"
     }
   ]

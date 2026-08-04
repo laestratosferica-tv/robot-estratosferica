@@ -92,6 +92,9 @@
     .extra-media { position: relative; aspect-ratio: 16/9; overflow: hidden; background: #080411; }
     .extra-media img { width: 100%; height: 100%; object-fit: cover; }
     .extra-media::after { content: "FUENTE OFICIAL NINTENDO"; position: absolute; left: 10px; bottom: 10px; padding: 6px 8px; border-radius: 7px; color: white; background: rgba(8,4,17,.82); font-size: .56rem; font-weight: 950; letter-spacing: .08em; }
+    .minecraft-media { position:relative; display:grid; place-items:center; aspect-ratio:16/9; overflow:hidden; background:linear-gradient(155deg,#74c94c 0 38%,#73533b 38% 52%,#171123 52%); }
+    .minecraft-media::before { content:""; width:92px; aspect-ratio:1; background:#66bb45; box-shadow:23px 0 #75cb50,-23px 0 #58a53b,0 23px #50402f,23px 23px #654b34,-23px 23px #3d3228; transform:rotate(45deg); }
+    .minecraft-media::after { content:"MARKETPLACE PASS"; position:absolute; left:12px; bottom:10px; padding:6px 8px; border-radius:7px; color:white; background:rgba(8,4,17,.82); font-size:.56rem; font-weight:950; letter-spacing:.08em; }
     .extra-platform { color: var(--pink); font-size: .63rem; font-weight: 950; letter-spacing: .12em; text-transform: uppercase; }
     .extra-card h3 { margin: 6px 0 8px; font-size: 1.15rem; }
     .extra-card p { min-height: 68px; margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
@@ -285,12 +288,15 @@
             <a href="mario-kart-booster.html">ABRIR FICHA COMPLETA</a>
           </div>
         </article>
-        <article class="extra-card">
-          <div class="extra-platform">Minecraft · Skins y mundos</div>
-          <h3>Minecoins y Marketplace Pass</h3>
-          <p>Moneda oficial para skins, mapas, texturas y aventuras en Bedrock. Marketplace Pass ofrece prueba de 30 días y luego cuesta USD 3,99 al mes.</p>
-          <div class="extra-status"><span>Windows · Xbox · Switch · móvil</span><strong>Oferta oficial</strong></div>
-          <a href="https://www.minecraft.net/en-us/marketplace/buy-minecoins" target="_blank" rel="nofollow noopener">VER EN MINECRAFT</a>
+        <article class="extra-card featured">
+          <div class="minecraft-media" role="img" aria-label="Composición gráfica editorial inspirada en bloques de Minecraft"></div>
+          <div class="extra-content">
+            <div class="extra-platform">Minecraft Bedrock · Ficha editorial</div>
+            <h3>Marketplace Pass: ¿vale la pena?</h3>
+            <p>Biblioteca de mundos, complementos, texturas y skins por USD 3,99 al mes. Conviene según cuánto contenido explores.</p>
+            <div class="extra-status"><span>No funciona en Java Edition</span><strong>Verificado</strong></div>
+            <a href="minecraft-marketplace-pass.html">ABRIR FICHA COMPLETA</a>
+          </div>
         </article>
       </div>
     </section>

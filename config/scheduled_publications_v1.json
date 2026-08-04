@@ -34,7 +34,9 @@
       "status": "approved",
       "enabled": true,
       "commercial": true,
-      "commercial_checks": {"asset_final": true},
+      "commercial_checks": {
+        "asset_final": true
+      },
       "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
     },
     {
@@ -45,7 +47,9 @@
       "status": "approved",
       "enabled": true,
       "commercial": true,
-      "commercial_checks": {"asset_final": true},
+      "commercial_checks": {
+        "asset_final": true
+      },
       "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
     },
     {
@@ -56,7 +60,9 @@
       "status": "approved",
       "enabled": true,
       "commercial": true,
-      "commercial_checks": {"asset_final": true},
+      "commercial_checks": {
+        "asset_final": true
+      },
       "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
     },
     {
@@ -67,7 +73,9 @@
       "status": "approved",
       "enabled": true,
       "commercial": true,
-      "commercial_checks": {"asset_final": true},
+      "commercial_checks": {
+        "asset_final": true
+      },
       "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
     },
     {
@@ -83,6 +91,454 @@
       "manifest_path": "artifacts/publication-manifests/lcs-cdmx-v4-facebook.json",
       "approval_id": "calendar-02suo0g4hq6b7mo6ho0qm1bu0l-facebook",
       "publish_at": "2026-08-04T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "bengoo-g9000-v1-instagram-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/bengoo-g9000-v1-instagram.json",
+      "approval_id": "amazon-block-2026-08-02-bengoo-g9000-v1-instagram",
+      "publish_at": "2026-08-06T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/bengoo-g9000-v1-amazon.json"
+    },
+    {
+      "content_id": "bengoo-g9000-v1-facebook-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/bengoo-g9000-v1-facebook.json",
+      "approval_id": "amazon-block-2026-08-02-bengoo-g9000-v1-facebook",
+      "publish_at": "2026-08-06T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/bengoo-g9000-v1-amazon.json"
+    },
+    {
+      "content_id": "bengoo-g9000-v1-threads-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/bengoo-g9000-v1-threads.json",
+      "approval_id": "amazon-block-2026-08-02-bengoo-g9000-v1-threads",
+      "publish_at": "2026-08-06T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/bengoo-g9000-v1-amazon.json"
+    },
+    {
+      "content_id": "bengoo-g9000-v1-youtube-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/bengoo-g9000-v1-youtube.json",
+      "approval_id": "amazon-block-2026-08-02-bengoo-g9000-v1-youtube",
+      "publish_at": "2026-08-06T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/bengoo-g9000-v1-amazon.json"
+    },
+    {
+      "content_id": "alpha-grillers-v1-instagram-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/alpha-grillers-v1-instagram.json",
+      "approval_id": "amazon-block-2026-08-02-alpha-grillers-v1-instagram",
+      "publish_at": "2026-08-09T16:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/alpha-grillers-v1-amazon.json"
+    },
+    {
+      "content_id": "alpha-grillers-v1-facebook-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/alpha-grillers-v1-facebook.json",
+      "approval_id": "amazon-block-2026-08-02-alpha-grillers-v1-facebook",
+      "publish_at": "2026-08-09T16:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/alpha-grillers-v1-amazon.json"
+    },
+    {
+      "content_id": "alpha-grillers-v1-threads-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/alpha-grillers-v1-threads.json",
+      "approval_id": "amazon-block-2026-08-02-alpha-grillers-v1-threads",
+      "publish_at": "2026-08-09T16:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/alpha-grillers-v1-amazon.json"
+    },
+    {
+      "content_id": "alpha-grillers-v1-youtube-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/alpha-grillers-v1-youtube.json",
+      "approval_id": "amazon-block-2026-08-02-alpha-grillers-v1-youtube",
+      "publish_at": "2026-08-09T16:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/alpha-grillers-v1-amazon.json"
+    },
+    {
+      "content_id": "tapo-c100-v1-instagram-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/tapo-c100-v1-instagram.json",
+      "approval_id": "amazon-block-2026-08-02-tapo-c100-v1-instagram",
+      "publish_at": "2026-08-12T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/tapo-c100-v1-amazon.json"
+    },
+    {
+      "content_id": "tapo-c100-v1-facebook-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/tapo-c100-v1-facebook.json",
+      "approval_id": "amazon-block-2026-08-02-tapo-c100-v1-facebook",
+      "publish_at": "2026-08-12T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/tapo-c100-v1-amazon.json"
+    },
+    {
+      "content_id": "tapo-c100-v1-threads-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/tapo-c100-v1-threads.json",
+      "approval_id": "amazon-block-2026-08-02-tapo-c100-v1-threads",
+      "publish_at": "2026-08-12T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/tapo-c100-v1-amazon.json"
+    },
+    {
+      "content_id": "tapo-c100-v1-youtube-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/tapo-c100-v1-youtube.json",
+      "approval_id": "amazon-block-2026-08-02-tapo-c100-v1-youtube",
+      "publish_at": "2026-08-12T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/tapo-c100-v1-amazon.json"
+    },
+    {
+      "content_id": "astroai-c2-v1-instagram-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/astroai-c2-v1-instagram.json",
+      "approval_id": "amazon-block-2026-08-02-astroai-c2-v1-instagram",
+      "publish_at": "2026-08-18T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/astroai-c2-v1-amazon.json"
+    },
+    {
+      "content_id": "astroai-c2-v1-facebook-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/astroai-c2-v1-facebook.json",
+      "approval_id": "amazon-block-2026-08-02-astroai-c2-v1-facebook",
+      "publish_at": "2026-08-18T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/astroai-c2-v1-amazon.json"
+    },
+    {
+      "content_id": "astroai-c2-v1-threads-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/astroai-c2-v1-threads.json",
+      "approval_id": "amazon-block-2026-08-02-astroai-c2-v1-threads",
+      "publish_at": "2026-08-18T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/astroai-c2-v1-amazon.json"
+    },
+    {
+      "content_id": "astroai-c2-v1-youtube-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/astroai-c2-v1-youtube.json",
+      "approval_id": "amazon-block-2026-08-02-astroai-c2-v1-youtube",
+      "publish_at": "2026-08-18T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/astroai-c2-v1-amazon.json"
+    },
+    {
+      "content_id": "august-approved-real-o-ia-instagram",
+      "manifest_path": "artifacts/publication-manifests/august-approved-real-o-ia-instagram.json",
+      "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-carousel",
+      "publish_at": "2026-08-05T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-real-o-ia-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-real-o-ia-facebook.json",
+      "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-facebook",
+      "publish_at": "2026-08-05T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-real-o-ia-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-real-o-ia-youtube.json",
+      "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-youtube",
+      "publish_at": "2026-08-05T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-ia-gamer",
+      "manifest_path": "artifacts/publication-manifests/august-approved-ia-gamer.json",
+      "approval_id": "calendar-7rjurd84r4s8bponvnnlraq83l",
+      "publish_at": "2026-08-07T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-fosil-guardar-instagram",
+      "manifest_path": "artifacts/publication-manifests/august-approved-fosil-guardar-instagram.json",
+      "approval_id": "calendar-7tsofoae5fjsddi8bmpvmorvkk-instagram",
+      "publish_at": "2026-08-08T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-fosil-guardar-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-fosil-guardar-facebook.json",
+      "approval_id": "calendar-7tsofoae5fjsddi8bmpvmorvkk-facebook",
+      "publish_at": "2026-08-08T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-fosil-guardar-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-fosil-guardar-youtube.json",
+      "approval_id": "calendar-7tsofoae5fjsddi8bmpvmorvkk-youtube",
+      "publish_at": "2026-08-08T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-dlss-instagram",
+      "manifest_path": "artifacts/publication-manifests/august-approved-dlss-instagram.json",
+      "approval_id": "calendar-7jrm2u6su1q9g6d5iqnp4goc84-instagram",
+      "publish_at": "2026-08-09T18:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-dlss-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-dlss-facebook.json",
+      "approval_id": "calendar-7jrm2u6su1q9g6d5iqnp4goc84-facebook",
+      "publish_at": "2026-08-09T18:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-dlss-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-dlss-youtube.json",
+      "approval_id": "calendar-7jrm2u6su1q9g6d5iqnp4goc84-youtube",
+      "publish_at": "2026-08-09T18:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-hle-remontada-instagram",
+      "manifest_path": "artifacts/publication-manifests/august-approved-hle-remontada-instagram.json",
+      "approval_id": "calendar-1jpdksv2lgff6gdg07a4g6igao-instagram",
+      "publish_at": "2026-08-10T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-hle-remontada-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-hle-remontada-facebook.json",
+      "approval_id": "calendar-1jpdksv2lgff6gdg07a4g6igao-facebook",
+      "publish_at": "2026-08-10T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-hle-remontada-threads",
+      "manifest_path": "artifacts/publication-manifests/august-approved-hle-remontada-threads.json",
+      "approval_id": "calendar-1jpdksv2lgff6gdg07a4g6igao-threads",
+      "publish_at": "2026-08-10T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-pantallas",
+      "manifest_path": "artifacts/publication-manifests/august-approved-pantallas.json",
+      "approval_id": "calendar-2crngrju4auj4cie1uk7ovm02p",
+      "publish_at": "2026-08-12T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-wolverine-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-wolverine-facebook.json",
+      "approval_id": "calendar-5h3mbuda3iae5b87rh15d2ubam-facebook",
+      "publish_at": "2026-08-14T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-wolverine-threads",
+      "manifest_path": "artifacts/publication-manifests/august-approved-wolverine-threads.json",
+      "approval_id": "calendar-5h3mbuda3iae5b87rh15d2ubam-threads",
+      "publish_at": "2026-08-14T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-drones-instagram",
+      "manifest_path": "artifacts/publication-manifests/august-approved-drones-instagram.json",
+      "approval_id": "calendar-5kj5c1v8gtefg95cltpncco4mu-instagram",
+      "publish_at": "2026-08-15T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-drones-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-drones-facebook.json",
+      "approval_id": "calendar-5kj5c1v8gtefg95cltpncco4mu-facebook",
+      "publish_at": "2026-08-15T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-drones-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-drones-youtube.json",
+      "approval_id": "calendar-5kj5c1v8gtefg95cltpncco4mu-youtube",
+      "publish_at": "2026-08-15T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-nostalgia",
+      "manifest_path": "artifacts/publication-manifests/august-approved-nostalgia.json",
+      "approval_id": "calendar-3ca4b6j9d9kqfnk2q2nnlvsfe6",
+      "publish_at": "2026-08-16T18:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-esports-lectura-instagram",
+      "manifest_path": "artifacts/publication-manifests/august-approved-esports-lectura-instagram.json",
+      "approval_id": "calendar-05pvfpc07s0ukkeh9sfi5pofhj-instagram",
+      "publish_at": "2026-08-17T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-esports-lectura-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-esports-lectura-facebook.json",
+      "approval_id": "calendar-05pvfpc07s0ukkeh9sfi5pofhj-facebook",
+      "publish_at": "2026-08-17T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-esports-lectura-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-esports-lectura-youtube.json",
+      "approval_id": "calendar-05pvfpc07s0ukkeh9sfi5pofhj-youtube",
+      "publish_at": "2026-08-17T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-unity-instagram",
+      "manifest_path": "artifacts/publication-manifests/august-approved-unity-instagram.json",
+      "approval_id": "calendar-6ceo2f1k9dm42hgsqbmnupdc4g-instagram",
+      "publish_at": "2026-08-18T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-unity-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-unity-facebook.json",
+      "approval_id": "calendar-6ceo2f1k9dm42hgsqbmnupdc4g-facebook",
+      "publish_at": "2026-08-18T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-unity-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-unity-youtube.json",
+      "approval_id": "calendar-6ceo2f1k9dm42hgsqbmnupdc4g-youtube",
+      "publish_at": "2026-08-18T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-xbox-reglas",
+      "manifest_path": "artifacts/publication-manifests/august-approved-xbox-reglas.json",
+      "approval_id": "calendar-7p55h1d8o4jsveg107c2skesah",
+      "publish_at": "2026-08-19T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-multiverso-instagram",
+      "manifest_path": "artifacts/publication-manifests/august-approved-multiverso-instagram.json",
+      "approval_id": "calendar-30t3u3mr5sgf03vu954ig4s5kj-instagram",
+      "publish_at": "2026-08-20T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-multiverso-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-multiverso-facebook.json",
+      "approval_id": "calendar-30t3u3mr5sgf03vu954ig4s5kj-facebook",
+      "publish_at": "2026-08-20T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-multiverso-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-multiverso-youtube.json",
+      "approval_id": "calendar-30t3u3mr5sgf03vu954ig4s5kj-youtube",
+      "publish_at": "2026-08-20T20:00:00-05:00",
       "status": "approved",
       "enabled": true
     }

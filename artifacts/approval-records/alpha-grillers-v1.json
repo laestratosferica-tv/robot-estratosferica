@@ -1,0 +1,15 @@
+{
+  "schema": "commercial_approval_record_v1",
+  "approval_id": "amazon-block-2026-08-02-alpha-grillers-v1",
+  "approved_by": "Jose Luis",
+  "approved_at": "2026-08-02",
+  "product": "Alpha Grillers",
+  "asin": "B00S93EQUK",
+  "affiliate_url": "https://www.amazon.com/dp/B00S93EQUK?tag=estrato-web-20",
+  "source_evidence": {
+    "approval_block_sha256": "2a69b5bbb81d3e71d1b72dd416995e55ff785e2828403e91182a135344be4074",
+    "publication_package_sha256": "perl: warning: Setting locale failed.\nperl: warning: Please check that your locale settings:\n\tLC_ALL = \"C.UTF-8\",\n\tLC_CTYPE = \"C.UTF-8\",\n\tLANG = \"C.UTF-8\"\n    are supported and installed on your system.\nperl: warning: Falling back to the standard locale (\"C\").\n80ab1fda706ae3cff5186306ba6ff46363bd93270c899a1e942f98e1b09659ce"
+  },
+  "video_sha256": "d3de5bc7bd6237087fbfdfbf75f04bc39d86499d88771129ff3a2dd61bf52419",
+  "do_not_request_reapproval": true
+}

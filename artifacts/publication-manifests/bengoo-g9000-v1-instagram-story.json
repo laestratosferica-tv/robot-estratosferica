@@ -1,0 +1,13 @@
+{
+  "schema": "supervised_native_story_v1",
+  "slug": "bengoo-g9000-v1-instagram-story-2026-08-06",
+  "platform": "instagram",
+  "post_type": "story_video_link_sticker",
+  "video_path": "artifacts/approved/scheduled/amazon-batch-02/02-headset-review.mp4",
+  "video_sha256": "22b3a9bff5c082c24eeca61068ce30021e9f0d00569940e621703d14f7449fdc",
+  "text": "BENGOO G9000 · 8.4/10",
+  "sticker_text": "Ver opcion real en Amazon",
+  "destination": "https://www.amazon.com/dp/B01H6GUCCQ?tag=estrato-web-20",
+  "approval_id": "amazon-block-2026-08-02-bengoo-g9000-v1-instagram-story",
+  "execution": "native_supervised_not_in_automatic_queue"
+}

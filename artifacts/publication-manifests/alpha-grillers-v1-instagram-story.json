@@ -1,0 +1,13 @@
+{
+  "schema": "supervised_native_story_v1",
+  "slug": "alpha-grillers-v1-instagram-story-2026-08-09",
+  "platform": "instagram",
+  "post_type": "story_video_link_sticker",
+  "video_path": "artifacts/approved/scheduled/amazon-batch-02/03-thermometer-review.mp4",
+  "video_sha256": "d3de5bc7bd6237087fbfdfbf75f04bc39d86499d88771129ff3a2dd61bf52419",
+  "text": "Alpha Grillers · 8.6/10",
+  "sticker_text": "Ver opcion real en Amazon",
+  "destination": "https://www.amazon.com/dp/B00S93EQUK?tag=estrato-web-20",
+  "approval_id": "amazon-block-2026-08-02-alpha-grillers-v1-instagram-story",
+  "execution": "native_supervised_not_in_automatic_queue"
+}

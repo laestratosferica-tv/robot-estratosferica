@@ -1,0 +1,31 @@
+{
+  "schema": "amazon_affiliate_resolution_v1",
+  "request_id": "tapo-c100-v1-2026-08-12",
+  "publishable": true,
+  "source": "amazon_listing_plus_editorial_approval",
+  "resolved_at": "2026-08-03T19:30:00-05:00",
+  "marketplace": "www.amazon.com",
+  "product": {
+    "asin": "B0866S3D82",
+    "title": "TP-Link Tapo 1080P Indoor Security Camera (Tapo C100)",
+    "detail_url": "https://www.amazon.com/dp/B0866S3D82?tag=estrato-web-20"
+  },
+  "affiliate_url": "https://www.amazon.com/dp/B0866S3D82?tag=estrato-web-20",
+  "associate_tag_verified": true,
+  "https_verified": true,
+  "availability_verified": true,
+  "availability_evidence": "Amazon US devolvio HTTP 200 y una ficha publica con ASIN y titulo coincidentes el 3 de agosto de 2026.",
+  "product_match_verified": true,
+  "visual_reference_verified": true,
+  "approval_verified": true,
+  "approval_record_path": "artifacts/approval-records/tapo-c100-v1.json",
+  "affiliate_disclosure": "Como Afiliado de Amazon, La Estratosferica obtiene ingresos por compras calificadas.",
+  "routes": {
+    "instagram_reel": "profile_link",
+    "instagram_story": "native_link_sticker_supervised",
+    "facebook": "direct_affiliate_url",
+    "threads": "direct_affiliate_url",
+    "youtube_short": "channel_profile"
+  },
+  "secret_values_exposed": false
+}

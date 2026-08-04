@@ -238,6 +238,7 @@ def execute_queue(
         "checked_at": current_time.isoformat(),
         "due_count": len(selected),
         "results": [],
+        "failed_count": 0,
         "secret_values_exposed": False,
     }
     for item in selected:
@@ -259,12 +260,25 @@ def execute_queue(
                 environment=item_env,
                 live=live,
             )
-        except Exception:
+        except Exception as error:
             if live:
                 state["items"][item["content_id"]]["status"] = "failed"
                 state["items"][item["content_id"]]["failed_at"] = datetime.now(timezone.utc).isoformat()
+                state["items"][item["content_id"]]["error_type"] = type(error).__name__
                 save_remote_state(env, state_key, state)
-            raise
+            report["failed_count"] += 1
+            report["results"].append(
+                {
+                    "content_id": item["content_id"],
+                    "schema": manifest["schema"],
+                    "platform": manifest.get("platform", "multi"),
+                    "published": False,
+                    "dry_run": not live,
+                    "error_type": type(error).__name__,
+                    "error": str(error)[:240],
+                }
+            )
+            continue
 
         report["results"].append(
             {
@@ -305,8 +319,11 @@ def main() -> int:
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"Cola revisada: {report['due_count']} pieza(s) vencida(s).")
-    return 0
+    print(
+        f"Cola revisada: {report['due_count']} pieza(s) vencida(s), "
+        f"{report['failed_count']} fallo(s)."
+    )
+    return 1 if report["failed_count"] else 0
 
 
 if __name__ == "__main__":

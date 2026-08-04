@@ -34,7 +34,9 @@
       "status": "approved",
       "enabled": true,
       "commercial": true,
-      "commercial_checks": {"asset_final": true},
+      "commercial_checks": {
+        "asset_final": true
+      },
       "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
     },
     {
@@ -45,7 +47,9 @@
       "status": "approved",
       "enabled": true,
       "commercial": true,
-      "commercial_checks": {"asset_final": true},
+      "commercial_checks": {
+        "asset_final": true
+      },
       "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
     },
     {
@@ -56,7 +60,9 @@
       "status": "approved",
       "enabled": true,
       "commercial": true,
-      "commercial_checks": {"asset_final": true},
+      "commercial_checks": {
+        "asset_final": true
+      },
       "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
     },
     {
@@ -67,7 +73,9 @@
       "status": "approved",
       "enabled": true,
       "commercial": true,
-      "commercial_checks": {"asset_final": true},
+      "commercial_checks": {
+        "asset_final": true
+      },
       "resolver_evidence_path": "artifacts/commercial-evidence/mini-mic-v1-amazon.json"
     },
     {
@@ -85,6 +93,214 @@
       "publish_at": "2026-08-04T20:00:00-05:00",
       "status": "approved",
       "enabled": true
+    },
+    {
+      "content_id": "bengoo-g9000-v1-instagram-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/bengoo-g9000-v1-instagram.json",
+      "approval_id": "amazon-block-2026-08-02-bengoo-g9000-v1-instagram",
+      "publish_at": "2026-08-06T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/bengoo-g9000-v1-amazon.json"
+    },
+    {
+      "content_id": "bengoo-g9000-v1-facebook-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/bengoo-g9000-v1-facebook.json",
+      "approval_id": "amazon-block-2026-08-02-bengoo-g9000-v1-facebook",
+      "publish_at": "2026-08-06T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/bengoo-g9000-v1-amazon.json"
+    },
+    {
+      "content_id": "bengoo-g9000-v1-threads-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/bengoo-g9000-v1-threads.json",
+      "approval_id": "amazon-block-2026-08-02-bengoo-g9000-v1-threads",
+      "publish_at": "2026-08-06T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/bengoo-g9000-v1-amazon.json"
+    },
+    {
+      "content_id": "bengoo-g9000-v1-youtube-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/bengoo-g9000-v1-youtube.json",
+      "approval_id": "amazon-block-2026-08-02-bengoo-g9000-v1-youtube",
+      "publish_at": "2026-08-06T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/bengoo-g9000-v1-amazon.json"
+    },
+    {
+      "content_id": "alpha-grillers-v1-instagram-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/alpha-grillers-v1-instagram.json",
+      "approval_id": "amazon-block-2026-08-02-alpha-grillers-v1-instagram",
+      "publish_at": "2026-08-09T16:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/alpha-grillers-v1-amazon.json"
+    },
+    {
+      "content_id": "alpha-grillers-v1-facebook-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/alpha-grillers-v1-facebook.json",
+      "approval_id": "amazon-block-2026-08-02-alpha-grillers-v1-facebook",
+      "publish_at": "2026-08-09T16:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/alpha-grillers-v1-amazon.json"
+    },
+    {
+      "content_id": "alpha-grillers-v1-threads-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/alpha-grillers-v1-threads.json",
+      "approval_id": "amazon-block-2026-08-02-alpha-grillers-v1-threads",
+      "publish_at": "2026-08-09T16:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/alpha-grillers-v1-amazon.json"
+    },
+    {
+      "content_id": "alpha-grillers-v1-youtube-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/alpha-grillers-v1-youtube.json",
+      "approval_id": "amazon-block-2026-08-02-alpha-grillers-v1-youtube",
+      "publish_at": "2026-08-09T16:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/alpha-grillers-v1-amazon.json"
+    },
+    {
+      "content_id": "tapo-c100-v1-instagram-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/tapo-c100-v1-instagram.json",
+      "approval_id": "amazon-block-2026-08-02-tapo-c100-v1-instagram",
+      "publish_at": "2026-08-12T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/tapo-c100-v1-amazon.json"
+    },
+    {
+      "content_id": "tapo-c100-v1-facebook-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/tapo-c100-v1-facebook.json",
+      "approval_id": "amazon-block-2026-08-02-tapo-c100-v1-facebook",
+      "publish_at": "2026-08-12T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/tapo-c100-v1-amazon.json"
+    },
+    {
+      "content_id": "tapo-c100-v1-threads-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/tapo-c100-v1-threads.json",
+      "approval_id": "amazon-block-2026-08-02-tapo-c100-v1-threads",
+      "publish_at": "2026-08-12T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/tapo-c100-v1-amazon.json"
+    },
+    {
+      "content_id": "tapo-c100-v1-youtube-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/tapo-c100-v1-youtube.json",
+      "approval_id": "amazon-block-2026-08-02-tapo-c100-v1-youtube",
+      "publish_at": "2026-08-12T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/tapo-c100-v1-amazon.json"
+    },
+    {
+      "content_id": "astroai-c2-v1-instagram-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/astroai-c2-v1-instagram.json",
+      "approval_id": "amazon-block-2026-08-02-astroai-c2-v1-instagram",
+      "publish_at": "2026-08-18T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/astroai-c2-v1-amazon.json"
+    },
+    {
+      "content_id": "astroai-c2-v1-facebook-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/astroai-c2-v1-facebook.json",
+      "approval_id": "amazon-block-2026-08-02-astroai-c2-v1-facebook",
+      "publish_at": "2026-08-18T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/astroai-c2-v1-amazon.json"
+    },
+    {
+      "content_id": "astroai-c2-v1-threads-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/astroai-c2-v1-threads.json",
+      "approval_id": "amazon-block-2026-08-02-astroai-c2-v1-threads",
+      "publish_at": "2026-08-18T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/astroai-c2-v1-amazon.json"
+    },
+    {
+      "content_id": "astroai-c2-v1-youtube-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/astroai-c2-v1-youtube.json",
+      "approval_id": "amazon-block-2026-08-02-astroai-c2-v1-youtube",
+      "publish_at": "2026-08-18T17:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "commercial": true,
+      "commercial_checks": {
+        "asset_final": true
+      },
+      "resolver_evidence_path": "artifacts/commercial-evidence/astroai-c2-v1-amazon.json"
     }
   ]
 }

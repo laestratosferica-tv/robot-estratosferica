@@ -1,0 +1,13 @@
+{
+  "schema": "supervised_native_story_v1",
+  "slug": "astroai-c2-v1-instagram-story-2026-08-18",
+  "platform": "instagram",
+  "post_type": "story_video_link_sticker",
+  "video_path": "artifacts/approved/scheduled/amazon-batch-02/06-inflator-review.mp4",
+  "video_sha256": "a597e2e5122d0fbc9992299c208f6e15a6690769f96d0065b1e981ee7d03d32a",
+  "text": "AstroAI C2 · 8.3/10",
+  "sticker_text": "Ver opcion real en Amazon",
+  "destination": "https://www.amazon.com/dp/B0948WY5YX?tag=estrato-web-20",
+  "approval_id": "amazon-block-2026-08-02-astroai-c2-v1-instagram-story",
+  "execution": "native_supervised_not_in_automatic_queue"
+}

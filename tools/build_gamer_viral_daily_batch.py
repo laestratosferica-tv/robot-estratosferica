@@ -131,6 +131,8 @@ def render(index: int, piece: tuple[str, ...]) -> tuple[Path, dict]:
     run("ffmpeg", "-v", "error", "-i", str(output), "-f", "null", "-")
     evidence = {
         "slug": slug,
+        "category": "contenido_divertido",
+        "category_label": "Contenido divertido",
         "source_page": page,
         "direct_asset": source,
         "author": author,
@@ -188,6 +190,8 @@ def main() -> None:
                 "status": "approved",
                 "enabled": True,
                 "experiment": "gamer-viral-daily-2am-v1",
+                "category": "contenido_divertido",
+                "category_label": "Contenido divertido",
                 "license_evidence_path": (video.parent / "SOURCE_AND_LICENSE.json").relative_to(ROOT).as_posix(),
             })
         print(f"[{index:02d}/{len(PIECES)}] {slug} -> {publish_day.isoformat()} 02:00")

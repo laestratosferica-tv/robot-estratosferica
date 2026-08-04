@@ -93,6 +93,27 @@
     .compare { border: 1px solid var(--line); color: white; background: transparent; padding: 0 13px; cursor: pointer; }
     .empty { display: none; padding: 36px; border: 1px dashed var(--line); border-radius: 22px; color: var(--muted); text-align: center; }
     .empty.visible { display: block; }
+    .arcade-radar { display: grid; grid-template-columns: .9fr 1.1fr; gap: 22px; align-items: center; margin: 20px 0 44px; padding: 24px; border: 1px solid rgba(76,236,255,.24); border-radius: 28px; background: linear-gradient(145deg, rgba(33,16,59,.94), rgba(9,3,19,.96)); overflow: hidden; }
+    .radar-screen { position: relative; width: min(100%, 390px); aspect-ratio: 1; margin: auto; border: 2px solid rgba(76,236,255,.55); border-radius: 50%; background: repeating-radial-gradient(circle, transparent 0 18%, rgba(76,236,255,.16) 18.5% 19%, transparent 19.5% 36%), linear-gradient(90deg, transparent 49.6%, rgba(76,236,255,.18) 50%, transparent 50.4%), linear-gradient(transparent 49.6%, rgba(76,236,255,.18) 50%, transparent 50.4%), #080713; box-shadow: inset 0 0 45px rgba(76,236,255,.12), 0 0 35px rgba(123,53,255,.2); overflow: hidden; }
+    .radar-screen::before { content: ""; position: absolute; inset: 50% 50% 0 50%; width: 50%; height: 50%; transform-origin: 0 0; background: conic-gradient(from 270deg, rgba(76,236,255,.58), transparent 42deg); }
+    .radar-screen.scanning::before { animation: sweep 1s linear infinite; }
+    .radar-screen::after { content: ""; position: absolute; inset: 8%; border: 1px dashed rgba(255,63,207,.35); border-radius: 50%; }
+    .target { position: absolute; z-index: 3; left: 65%; top: 30%; width: 20px; height: 20px; border: 3px solid var(--green); transform: rotate(45deg) scale(0); box-shadow: 0 0 18px var(--green); transition: transform .3s; }
+    .target.detected { transform: rotate(45deg) scale(1); animation: pulse .8s infinite alternate; }
+    .radar-copy h2 { margin: 7px 0 10px; font-size: clamp(2rem, 5vw, 3.5rem); line-height: .95; letter-spacing: -.05em; }
+    .radar-copy p { color: var(--muted); line-height: 1.5; }
+    .radar-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+    .radar-button { min-height: 50px; border: 0; border-radius: 13px; padding: 0 18px; color: #080311; background: var(--green); font-weight: 950; cursor: pointer; }
+    .radar-button.secondary { color: white; border: 1px solid var(--line); background: transparent; }
+    .detection { display: none; margin-top: 18px; padding: 16px; border-left: 4px solid var(--cyan); background: rgba(76,236,255,.07); }
+    .detection.visible { display: block; animation: reveal .35s ease-out; }
+    .detection-label { color: var(--green); font-size: .68rem; font-weight: 950; letter-spacing: .14em; text-transform: uppercase; }
+    .detection h3 { margin: 5px 0; font-size: 1.55rem; }
+    .detection-score { color: var(--cyan); font-size: 1.2rem; font-weight: 950; }
+    .detection a { display: inline-grid; place-items: center; min-height: 43px; margin-top: 12px; padding: 0 15px; border-radius: 10px; color: #080311; background: var(--cyan); font-size: .75rem; font-weight: 950; text-decoration: none; }
+    @keyframes sweep { to { transform: rotate(360deg); } }
+    @keyframes pulse { to { opacity: .45; } }
+    @keyframes reveal { from { opacity: 0; transform: translateY(8px); } }
     .pipeline { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 48px; }
     .step { position: relative; padding: 14px 10px; border: 1px solid var(--line); border-radius: 14px; color: var(--muted); background: rgba(22,10,41,.66); text-align: center; font-size: .68rem; }
     .step strong { display: block; color: white; margin-bottom: 3px; }
@@ -112,6 +133,7 @@
       .hero-emblem { min-height: 250px; }
       .hero-emblem img { width: min(70vw, 380px); }
       .grid { grid-template-columns: 1fr 1fr; }
+      .arcade-radar { grid-template-columns: 1fr; }
       .pipeline { grid-template-columns: repeat(3, 1fr); }
       .step:nth-child(3)::after { display: none; }
     }
@@ -161,6 +183,24 @@
       <button class="filter" data-filter="gaming">Gaming</button>
       <button class="filter" data-filter="gastronomia">Gastronomía</button>
     </div>
+
+    <section class="arcade-radar" aria-labelledby="radarTitle">
+      <div id="radarScreen" class="radar-screen" aria-hidden="true"><span id="target" class="target"></span></div>
+      <div class="radar-copy">
+        <div class="eyebrow">Modo arcade · descubrimiento</div>
+        <h2 id="radarTitle">Activa el radar sorpresa.</h2>
+        <p>Detectamos una señal aleatoria dentro de nuestras categorías. Primero revelamos el producto y su calificación; tú decides si quieres abrir la oferta.</p>
+        <div class="radar-actions"><button id="randomScan" class="radar-button" type="button">INICIAR ESCANEO</button><button id="scanAgain" class="radar-button secondary" type="button">OTRA SEÑAL</button></div>
+        <div id="detection" class="detection" aria-live="polite">
+          <div class="detection-label">Nave detectada · señal verificada</div>
+          <h3 id="detectedName">Producto</h3>
+          <div id="detectedScore" class="detection-score">0/10</div>
+          <p id="detectedReason"></p>
+          <a id="detectedLink" href="#" target="_blank" rel="sponsored nofollow noopener">VER OFERTA</a>
+          <p class="arcade-help">Enlace afiliado: podemos recibir una comisión por compras calificadas.</p>
+        </div>
+      </div>
+    </section>
 
     <section>
       <div class="section-head"><h2>Señales recomendadas</h2><p>Nota mínima pública: 7.5/10</p></div>
@@ -230,6 +270,11 @@
     const compareDock = document.querySelector('#compareDock');
     const compareList = document.querySelector('#compareList');
     const selectedProducts = new Set();
+    const radarCatalog = [
+      { name: 'Mini Mic Pro', score: '8.8/10', reason: 'Una señal útil para creadores que necesitan mejorar la voz sin cargar un estudio.', url: 'https://www.amazon.com/dp/B0CMJTSVRW?tag=estrato-web-20' },
+      { name: 'BENGOO G9000', score: '8.4/10', reason: 'Una opción de entrada para gaming, comunicación y sesiones largas.', url: 'https://www.amazon.com/dp/B01H6GUCCQ?tag=estrato-web-20' },
+      { name: 'Alpha Grillers', score: '8.6/10', reason: 'Precisión y velocidad para cocinar sin depender de aproximaciones.', url: 'https://www.amazon.com/dp/B00S93EQUK?tag=estrato-web-20' }
+    ];
     let activeCategory = 'todos';
 
     function notify(message) {
@@ -290,6 +335,32 @@
       compareDock.classList.remove('visible');
       compareList.textContent = 'Sin productos';
     });
+    function runRandomRadar() {
+      const screen = document.querySelector('#radarScreen');
+      const target = document.querySelector('#target');
+      const detection = document.querySelector('#detection');
+      const button = document.querySelector('#randomScan');
+      detection.classList.remove('visible');
+      target.classList.remove('detected');
+      screen.classList.add('scanning');
+      button.disabled = true;
+      button.textContent = 'ESCANEANDO...';
+      window.setTimeout(() => {
+        const product = radarCatalog[Math.floor(Math.random() * radarCatalog.length)];
+        document.querySelector('#detectedName').textContent = product.name;
+        document.querySelector('#detectedScore').textContent = product.score;
+        document.querySelector('#detectedReason').textContent = product.reason;
+        document.querySelector('#detectedLink').href = product.url;
+        screen.classList.remove('scanning');
+        target.classList.add('detected');
+        detection.classList.add('visible');
+        button.disabled = false;
+        button.textContent = 'INICIAR ESCANEO';
+        notify(`Señal detectada: ${product.name}.`);
+      }, 1800);
+    }
+    document.querySelector('#randomScan').addEventListener('click', runRandomRadar);
+    document.querySelector('#scanAgain').addEventListener('click', runRandomRadar);
   </script>
 </body>
 </html>

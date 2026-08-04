@@ -93,6 +93,15 @@
     .compare { border: 1px solid var(--line); color: white; background: transparent; padding: 0 13px; cursor: pointer; }
     .empty { display: none; padding: 36px; border: 1px dashed var(--line); border-radius: 22px; color: var(--muted); text-align: center; }
     .empty.visible { display: block; }
+    .game-extras { margin: 34px 0; }
+    .extras-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .extra-card { padding: 17px; border: 1px solid var(--line); border-radius: 18px; background: rgba(22,10,41,.72); }
+    .extra-platform { color: var(--pink); font-size: .63rem; font-weight: 950; letter-spacing: .12em; text-transform: uppercase; }
+    .extra-card h3 { margin: 6px 0 8px; font-size: 1.15rem; }
+    .extra-card p { min-height: 68px; margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
+    .extra-status { display: flex; justify-content: space-between; gap: 8px; margin: 13px 0; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: .64rem; }
+    .extra-status strong { color: var(--green); }
+    .extra-card a { display: grid; place-items: center; min-height: 40px; border: 1px solid rgba(76,236,255,.3); border-radius: 10px; color: var(--cyan); font-size: .7rem; font-weight: 950; text-decoration: none; }
     .arcade-radar { display: grid; grid-template-columns: .9fr 1.1fr; gap: 22px; align-items: center; margin: 20px 0 44px; padding: 24px; border: 1px solid rgba(76,236,255,.24); border-radius: 28px; background: linear-gradient(145deg, rgba(33,16,59,.94), rgba(9,3,19,.96)); overflow: hidden; }
     .radar-screen { position: relative; width: min(100%, 390px); aspect-ratio: 1; margin: auto; border: 2px solid rgba(76,236,255,.55); border-radius: 50%; background: repeating-radial-gradient(circle, transparent 0 18%, rgba(76,236,255,.16) 18.5% 19%, transparent 19.5% 36%), linear-gradient(90deg, transparent 49.6%, rgba(76,236,255,.18) 50%, transparent 50.4%), linear-gradient(transparent 49.6%, rgba(76,236,255,.18) 50%, transparent 50.4%), #080713; box-shadow: inset 0 0 45px rgba(76,236,255,.12), 0 0 35px rgba(123,53,255,.2); overflow: hidden; }
     .radar-screen::before { content: ""; position: absolute; inset: 50% 50% 0 50%; width: 50%; height: 50%; transform-origin: 0 0; background: conic-gradient(from 270deg, rgba(76,236,255,.58), transparent 42deg); }
@@ -145,6 +154,7 @@
       .hero-emblem { min-height: 250px; }
       .hero-emblem img { width: min(70vw, 380px); }
       .grid { grid-template-columns: 1fr 1fr; }
+      .extras-grid { grid-template-columns: 1fr; }
       .arcade-radar { grid-template-columns: 1fr; }
       .live-code { grid-template-columns: 1fr; }
       .code-proof { min-width: 0; }
@@ -260,6 +270,33 @@
         </article>
       </div>
       <div id="empty" class="empty">El radar no encontró coincidencias en este prototipo. Prueba “gaming”, “micrófono” o “cocina”.</div>
+    </section>
+
+    <section class="game-extras" aria-labelledby="extrasTitle">
+      <div class="section-head"><div><div class="eyebrow">Muestra real · Radar Gaming</div><h2 id="extrasTitle">Extras y recompensas</h2></div><p>Contenido oficial · Región y condiciones visibles</p></div>
+      <div class="extras-grid">
+        <article class="extra-card">
+          <div class="extra-platform">EA Sports FC · Moneda oficial</div>
+          <h3>10 % menos en FC Points</h3>
+          <p>Los miembros de EA Play reciben 10 % de descuento en paquetes elegibles de FC Points para sobres, Draft, pases y artículos cosméticos.</p>
+          <div class="extra-status"><span>PlayStation · Xbox · PC</span><strong>Beneficio vigente</strong></div>
+          <a href="https://help.ea.com/es/articles/ea-sports-fc/buy-fc-points/" target="_blank" rel="nofollow noopener">VER GUÍA OFICIAL</a>
+        </article>
+        <article class="extra-card">
+          <div class="extra-platform">Nintendo Switch · Expansión</div>
+          <h3>Mario Kart: 48 pistas extra</h3>
+          <p>Booster Course Pass agrega 48 circuitos y 8 personajes. Cuesta USD 24,99 o está incluido mientras mantengas Switch Online + Expansion Pack.</p>
+          <div class="extra-status"><span>Requiere Mario Kart 8 Deluxe</span><strong>Disponible</strong></div>
+          <a href="https://www.nintendo.com/us/store/products/mario-kart-8-deluxe-booster-course-pass-70070000013723-switch/" target="_blank" rel="nofollow noopener">VER EN NINTENDO</a>
+        </article>
+        <article class="extra-card">
+          <div class="extra-platform">Minecraft · Skins y mundos</div>
+          <h3>Minecoins y Marketplace Pass</h3>
+          <p>Moneda oficial para skins, mapas, texturas y aventuras en Bedrock. Marketplace Pass ofrece prueba de 30 días y luego cuesta USD 3,99 al mes.</p>
+          <div class="extra-status"><span>Windows · Xbox · Switch · móvil</span><strong>Oferta oficial</strong></div>
+          <a href="https://www.minecraft.net/en-us/marketplace/buy-minecoins" target="_blank" rel="nofollow noopener">VER EN MINECRAFT</a>
+        </article>
+      </div>
     </section>
 
     <section class="pipeline" aria-label="Flujo de validación de PromoDetector IA">

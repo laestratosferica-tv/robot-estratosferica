@@ -95,10 +95,13 @@ def text_link(items: list[dict], *, slug: str, publish_at: str, approval: str, f
 
 def main() -> None:
     queue = json.loads(QUEUE.read_text(encoding="utf-8"))
-    retained = [item for item in queue["items"] if not item["content_id"].startswith("august-approved-")]
+    retained = [
+        item
+        for item in queue["items"]
+        if not item["content_id"].startswith("august-approved-")
+        or item["content_id"].startswith("august-approved-real-o-ia-")
+    ]
     items: list[dict] = []
-
-    text_link(items, slug="august-approved-real-o-ia", publish_at="2026-08-05T12:30:00-05:00", approval="calendar-32odvbtiii38r21d91h25o41t8", link="https://about.fb.com/news/2026/07/meta-is-signing-the-eu-ai-act-code-of-practice-on-transparency-of-ai-generated-content/", facebook="¿Real o generado con IA? Meta avanza en transparencia para identificar contenido generado con inteligencia artificial. ¿Toda imagen creada con IA debería llevar una marca visible?", threads="¿Toda imagen creada con IA debería llevar una marca visible? La transparencia puede cambiar cómo confiamos en lo que vemos. Fuente oficial: https://about.fb.com/news/2026/07/meta-is-signing-the-eu-ai-act-code-of-practice-on-transparency-of-ai-generated-content/")
 
     carousel(items, slug="august-approved-ia-gamer", publish_at="2026-08-07T12:30:00-05:00", approval="calendar-7rjurd84r4s8bponvnnlraq83l", sources=[BACKUP / f"ia-gamer-carrusel-v1/slide-{i}.png" for i in range(1, 7)], caption="La IA ya no solo crea imágenes: también empieza a acompañarte dentro de la partida. Xbox Game Assist (beta) ofrece ayuda contextual, actividad y logros, recomendaciones y modo voz. ¿Ayuda o trampa? Fuente: Xbox Game Assist. #InteligenciaArtificial #Gaming #Xbox #Tecnologia #LaEstratosferica", threads_text="Xbox Game Assist (beta) puede darte contexto, revisar logros, recomendar juegos y responder por voz. ¿Ayuda o trampa?")
 

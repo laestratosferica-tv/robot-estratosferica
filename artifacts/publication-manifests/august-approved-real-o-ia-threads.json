@@ -1,8 +1,10 @@
 {
   "schema": "approved_social_post_v1",
   "slug": "august-approved-real-o-ia-threads",
-  "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-threads",
   "platform": "threads",
-  "post_type": "text",
-  "text": "¿Toda imagen creada con IA debería llevar una marca visible? La transparencia puede cambiar cómo confiamos en lo que vemos. Fuente oficial: https://about.fb.com/news/2026/07/meta-is-signing-the-eu-ai-act-code-of-practice-on-transparency-of-ai-generated-content/"
+  "post_type": "video",
+  "text": "¿A o B? Uno de estos setups fue generado con IA. Mira los cables y el control antes de decidir. ¿Debería identificarse siempre el contenido generado con inteligencia artificial? Fuente oficial: Meta.",
+  "asset_path": "artifacts/approved/scheduled/august-2026/august-approved-real-o-ia/real-o-ia-video-aprobado.mp4",
+  "asset_sha256": "bee1851b64218ccc29235e68e380f2ea339f5dd02400b51b95c8326ad7193da6",
+  "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-threads"
 }

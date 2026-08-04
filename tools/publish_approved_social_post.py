@@ -18,6 +18,7 @@ SUPPORTED = {
     ("facebook", "image"),
     ("facebook", "text_link"),
     ("threads", "image"),
+    ("threads", "video"),
     ("threads", "text"),
 }
 
@@ -53,7 +54,7 @@ def load_manifest(path: Path, root: Path) -> dict[str, Any]:
             raise ValueError(f"manifest_{field}_missing")
     if manifest.get("interactive_sticker_required") is True:
         raise ValueError("interactive_story_requires_native_manual_step")
-    needs_asset = post_type in {"image", "story_image"}
+    needs_asset = post_type in {"image", "story_image", "video"}
     if needs_asset:
         asset = (root / str(manifest.get("asset_path", ""))).resolve()
         if root.resolve() not in asset.parents or not asset.is_file():
@@ -101,7 +102,7 @@ def storage(env: Mapping[str, str]):
 def upload_asset(manifest: Mapping[str, Any], root: Path, env: Mapping[str, str]) -> str:
     path = root / manifest["asset_path"]
     extension = path.suffix.lower()
-    content_type = "image/png" if extension == ".png" else "image/jpeg"
+    content_type = "video/mp4" if extension == ".mp4" else ("image/png" if extension == ".png" else "image/jpeg")
     key = f"approved/social/{manifest['slug']}-{manifest['asset_sha256'][:16]}{extension}"
     storage(env).put_object(Bucket=env["BUCKET_NAME"], Key=key, Body=path.read_bytes(), ContentType=content_type)
     return f"{env['R2_PUBLIC_BASE_URL'].rstrip('/')}/{key}"
@@ -148,6 +149,8 @@ def publish_threads(manifest: Mapping[str, Any], url: str | None, env: Mapping[s
     data = {"media_type": "TEXT", "text": manifest["text"]}
     if manifest["post_type"] == "image":
         data = {"media_type": "IMAGE", "image_url": str(url), "text": manifest["text"]}
+    elif manifest["post_type"] == "video":
+        data = {"media_type": "VIDEO", "video_url": str(url), "text": manifest["text"]}
     created = graph_request("POST", base, f"{env['THREADS_USER_ID']}/threads", token=env["THREADS_USER_ACCESS_TOKEN"], data=data)
     deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
@@ -188,7 +191,7 @@ def run(manifest_path: Path, *, root: Path, live: bool, env: Mapping[str, str]) 
         return receipt
     if env.get("PRODUCTION_ARMED") != "true" or env.get("PUBLICATION_APPROVAL_ID") != manifest["approval_id"]:
         raise RuntimeError("production_approval_not_armed")
-    url = upload_asset(manifest, root, env) if manifest["post_type"] in {"image", "story_image"} else None
+    url = upload_asset(manifest, root, env) if manifest["post_type"] in {"image", "story_image", "video"} else None
     receipt["publishing_attempted"] = True
     if manifest["platform"] == "instagram":
         result = publish_instagram(manifest, str(url), env)

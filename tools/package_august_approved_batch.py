@@ -101,6 +101,7 @@ def main() -> None:
         if not item["content_id"].startswith("august-approved-")
         or item["content_id"].startswith("august-approved-real-o-ia-")
         or item["content_id"].startswith("august-approved-ia-gamer")
+        or item["content_id"].startswith("august-approved-pantallas")
     ]
     items: list[dict] = []
 
@@ -109,8 +110,6 @@ def main() -> None:
     reel(items, slug="august-approved-dlss", source=BACKUP / "dlss-fluidity-v1/Tecnologia-que-cambia-como-juegas-v3-video-real.mp4", publish_at="2026-08-09T18:30:00-05:00", approval="calendar-7jrm2u6su1q9g6d5iqnp4goc84", title="Tu GPU no dibuja todo", caption="DLSS 4.5 usa IA y generación dinámica de cuadros para cambiar la fluidez del juego. ¿Fluidez real o truco visual? Fuente: NVIDIA GeForce, CES 2026. #Gaming #NVIDIA #IA #LaEstratosferica")
 
     image(items, slug="august-approved-hle-remontada", source=BACKUP / "esports-comeback-data-v1/3-dias-remontada-MSI-v2-epica.png", publish_at="2026-08-10T12:30:00-05:00", approval="calendar-1jpdksv2lgff6gdg07a4g6igao", text="HLE cayó 1–3 ante BLG. Tres días después venció 3–2 al mismo rival y levantó el trofeo del MSI 2026. Una remontada que convirtió la derrota en lectura de juego. Fuente: LoL Esports. #Esports #MSI2026 #LeagueOfLegends #LaEstratosferica")
-
-    carousel(items, slug="august-approved-pantallas", publish_at="2026-08-12T12:30:00-05:00", approval="calendar-2crngrju4auj4cie1uk7ovm02p", sources=[BACKUP / "digital-screens-carousel-v1/01-portada-crecimos-cambiando-pantalla-v1.png", *[BACKUP / f"digital-screens-carousel-v1/{i:02d}-{name}.png" for i, name in [(2,"mundo-arcade"),(3,"mundo-consola-crt"),(4,"mundo-cibercafe-lan"),(5,"mundo-juego-movil"),(6,"mundo-inmersivo")]]], caption="Del arcade al mundo inmersivo: cada pantalla cambió cómo jugamos y con quién compartimos la partida. ¿En cuál comenzó tu historia? #NostalgiaGamer #GamingLATAM #CulturaDigital #LaEstratosferica", threads_text="Arcade, CRT, cibercafé, móvil e inmersión. Cada pantalla abrió un mundo distinto. ¿En cuál comenzó tu historia gamer?")
 
     text_link(items, slug="august-approved-wolverine", publish_at="2026-08-14T12:30:00-05:00", approval="calendar-5h3mbuda3iae5b87rh15d2ubam", link="https://blog.playstation.com/2026/07/23/marvels-wolverine-story-trailer-new-art-composer-details-and-more/", facebook="Wolverine no viene a salvarte. Está intentando sobrevivirse a sí mismo. El tráiler enfrenta a Logan con Jean Grey, The Hand y Deathstrike. Marvel’s Wolverine llega a PS5 el 15 de septiembre de 2026. ¿Imparable o vulnerable?", threads="Wolverine no viene a salvarte. Está intentando sobrevivirse a sí mismo. Jean Grey, The Hand y Deathstrike rodean a un Logan tan peligroso para sus enemigos como para él mismo. Llega a PS5 el 15 de septiembre. https://blog.playstation.com/2026/07/23/marvels-wolverine-story-trailer-new-art-composer-details-and-more/")
 

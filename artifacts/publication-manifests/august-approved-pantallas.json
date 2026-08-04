@@ -1,15 +1,13 @@
 {
   "schema": "approved_carousel_publication_v1",
   "slug": "august-approved-pantallas",
-  "approval_id": "calendar-2crngrju4auj4cie1uk7ovm02p",
+  "approval_id": "calendar-2crngrju4auj4cie1uk7ovm02p-carousel",
   "platforms": [
     "instagram",
-    "facebook",
     "threads"
   ],
   "expected_accounts": {
     "instagram_username": "laestratosfericatv",
-    "facebook_page_name": "La Estratosférica TV",
     "threads_username": "laestratosfericatv"
   },
   "caption": "Del arcade al mundo inmersivo: cada pantalla cambió cómo jugamos y con quién compartimos la partida. ¿En cuál comenzó tu historia? #NostalgiaGamer #GamingLATAM #CulturaDigital #LaEstratosferica",

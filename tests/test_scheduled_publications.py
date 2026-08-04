@@ -146,6 +146,33 @@ class ScheduledPublicationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "commercial_resolver_evidence_missing"):
             load_queue(self.queue_path)
 
+    def test_one_failed_item_does_not_block_later_due_items(self):
+        payload = json.loads(self.queue_path.read_text(encoding="utf-8"))
+        second = {**payload["items"][0], "content_id": "content-2"}
+        payload["items"].append(second)
+        self.queue_path.write_text(json.dumps(payload), encoding="utf-8")
+        armed = {
+            **self.env,
+            "PRODUCTION_ARMED": "true",
+            "SCHEDULED_PUBLISHING_ARMED": "true",
+        }
+        with patch("tools.run_scheduled_publications.load_remote_state", return_value={"schema": "scheduled_publication_state_v1", "items": {}}), patch(
+            "tools.run_scheduled_publications.save_remote_state"
+        ), patch(
+            "tools.run_scheduled_publications.publish_item",
+            side_effect=[RuntimeError("provider_failed"), {"published": True, "platform": "instagram"}],
+        ):
+            report = execute_queue(
+                self.queue_path,
+                repository_root=self.root,
+                environment=armed,
+                now=datetime(2026, 8, 3, 18, 0, tzinfo=timezone.utc),
+                live=True,
+            )
+        self.assertEqual(report["failed_count"], 1)
+        self.assertEqual(len(report["results"]), 2)
+        self.assertTrue(report["results"][1]["published"])
+
 
 if __name__ == "__main__":
     unittest.main()

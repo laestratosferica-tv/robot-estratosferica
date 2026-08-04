@@ -8,3 +8,5 @@ workers_dev = true
 TIKTOK_APP_REVIEW_STATUS = "rejected"
 ENABLE_TIKTOK_DRAFT_TRANSFER = "false"
 TIKTOK_SANDBOX_REVIEW_MODE = "false"
+TIKTOK_URL_VERIFICATION_PATH = "/tiktokINscSosMdmsHm4FnjS3QvgCA7U3gitGk.txt"
+TIKTOK_URL_VERIFICATION_CONTENT = "tiktok-developers-site-verification=INscSosMdmsHm4FnjS3QvgCA7U3gitGk"

@@ -1,0 +1,13 @@
+{
+  "schema": "supervised_native_story_v1",
+  "slug": "tapo-c100-v1-instagram-story-2026-08-12",
+  "platform": "instagram",
+  "post_type": "story_video_link_sticker",
+  "video_path": "artifacts/approved/scheduled/amazon-batch-02/04-camera-review.mp4",
+  "video_sha256": "c0644242a344c1e01dba7042917623eaa946dc085f44dea078c2574b3420893f",
+  "text": "Tapo C100 · 8.9/10",
+  "sticker_text": "Ver opcion real en Amazon",
+  "destination": "https://www.amazon.com/dp/B0866S3D82?tag=estrato-web-20",
+  "approval_id": "amazon-block-2026-08-02-tapo-c100-v1-instagram-story",
+  "execution": "native_supervised_not_in_automatic_queue"
+}

@@ -1,0 +1,15 @@
+{
+  "schema": "commercial_approval_record_v1",
+  "approval_id": "amazon-block-2026-08-02-tapo-c100-v1",
+  "approved_by": "Jose Luis",
+  "approved_at": "2026-08-02",
+  "product": "Tapo C100",
+  "asin": "B0866S3D82",
+  "affiliate_url": "https://www.amazon.com/dp/B0866S3D82?tag=estrato-web-20",
+  "source_evidence": {
+    "approval_block_sha256": "2a69b5bbb81d3e71d1b72dd416995e55ff785e2828403e91182a135344be4074",
+    "publication_package_sha256": "perl: warning: Setting locale failed.\nperl: warning: Please check that your locale settings:\n\tLC_ALL = \"C.UTF-8\",\n\tLC_CTYPE = \"C.UTF-8\",\n\tLANG = \"C.UTF-8\"\n    are supported and installed on your system.\nperl: warning: Falling back to the standard locale (\"C\").\n80ab1fda706ae3cff5186306ba6ff46363bd93270c899a1e942f98e1b09659ce"
+  },
+  "video_sha256": "c0644242a344c1e01dba7042917623eaa946dc085f44dea078c2574b3420893f",
+  "do_not_request_reapproval": true
+}

@@ -59,6 +59,10 @@ def reel(items: list[dict], *, slug: str, source: Path, publish_at: str, approva
         name = f"{slug}-{platform}"
         manifest = write_manifest(name, {"schema": "supervised_meta_publication_v1", "slug": name, "platform": platform, "approval_id": aid, "caption": caption, "video_path": relative(video), "video_sha256": digest(video)})
         add_queue(items, name, manifest, aid, publish_at)
+    aid = f"{approval}-threads"
+    name = f"{slug}-threads"
+    manifest = write_manifest(name, {"schema": "approved_social_post_v1", "slug": name, "platform": "threads", "post_type": "video", "approval_id": aid, "text": caption, "asset_path": relative(video), "asset_sha256": digest(video)})
+    add_queue(items, name, manifest, aid, publish_at)
     aid = f"{approval}-youtube"
     name = f"{slug}-youtube"
     manifest = write_manifest(name, {"schema": "approved_youtube_short_publication_v1", "slug": name, "approval_id": aid, "title": title, "description": caption + "\n\n#Shorts", "video_path": relative(video), "video_sha256": digest(video), "privacy_status": "public"})

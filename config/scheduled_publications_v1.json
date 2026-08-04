@@ -605,6 +605,70 @@
       "publish_at": "2026-08-20T20:00:00-05:00",
       "status": "approved",
       "enabled": true
+    },
+    {
+      "content_id": "lcs-cdmx-v4-threads-2026-08-04",
+      "manifest_path": "artifacts/publication-manifests/lcs-cdmx-v4-threads.json",
+      "approval_id": "calendar-02suo0g4hq6b7mo6ho0qm1bu0l-threads",
+      "publish_at": "2026-08-04T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "lcs-cdmx-v4-youtube-2026-08-04",
+      "manifest_path": "artifacts/publication-manifests/lcs-cdmx-v4-youtube.json",
+      "approval_id": "calendar-02suo0g4hq6b7mo6ho0qm1bu0l-youtube",
+      "publish_at": "2026-08-04T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-fosil-guardar-threads",
+      "manifest_path": "artifacts/publication-manifests/august-approved-fosil-guardar-threads.json",
+      "approval_id": "calendar-7tsofoae5fjsddi8bmpvmorvkk-threads",
+      "publish_at": "2026-08-08T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-dlss-threads",
+      "manifest_path": "artifacts/publication-manifests/august-approved-dlss-threads.json",
+      "approval_id": "calendar-7jrm2u6su1q9g6d5iqnp4goc84-threads",
+      "publish_at": "2026-08-09T18:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-drones-threads",
+      "manifest_path": "artifacts/publication-manifests/august-approved-drones-threads.json",
+      "approval_id": "calendar-5kj5c1v8gtefg95cltpncco4mu-threads",
+      "publish_at": "2026-08-15T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-esports-lectura-threads",
+      "manifest_path": "artifacts/publication-manifests/august-approved-esports-lectura-threads.json",
+      "approval_id": "calendar-05pvfpc07s0ukkeh9sfi5pofhj-threads",
+      "publish_at": "2026-08-17T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-unity-threads",
+      "manifest_path": "artifacts/publication-manifests/august-approved-unity-threads.json",
+      "approval_id": "calendar-6ceo2f1k9dm42hgsqbmnupdc4g-threads",
+      "publish_at": "2026-08-18T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-multiverso-threads",
+      "manifest_path": "artifacts/publication-manifests/august-approved-multiverso-threads.json",
+      "approval_id": "calendar-30t3u3mr5sgf03vu954ig4s5kj-threads",
+      "publish_at": "2026-08-20T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true
     }
   ]
 }

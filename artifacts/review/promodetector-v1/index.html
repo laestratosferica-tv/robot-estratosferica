@@ -95,6 +95,10 @@
     .minecraft-media { position:relative; display:grid; place-items:center; aspect-ratio:16/9; overflow:hidden; background:linear-gradient(155deg,#74c94c 0 38%,#73533b 38% 52%,#171123 52%); }
     .minecraft-media::before { content:""; width:92px; aspect-ratio:1; background:#66bb45; box-shadow:23px 0 #75cb50,-23px 0 #58a53b,0 23px #50402f,23px 23px #654b34,-23px 23px #3d3228; transform:rotate(45deg); }
     .minecraft-media::after { content:"MARKETPLACE PASS"; position:absolute; left:12px; bottom:10px; padding:6px 8px; border-radius:7px; color:white; background:rgba(8,4,17,.82); font-size:.56rem; font-weight:950; letter-spacing:.08em; }
+    .fc-media { position:relative; display:grid; place-items:center; aspect-ratio:16/9; overflow:hidden; background:radial-gradient(circle at 50% 45%,rgba(76,236,255,.34),transparent 32%),linear-gradient(145deg,#151032,#06030d); }
+    .fc-media::before { content:"FC"; display:grid; place-items:center; width:108px; aspect-ratio:1; border:3px solid var(--cyan); color:white; font-size:2.5rem; font-weight:950; transform:rotate(45deg); box-shadow:0 0 34px rgba(76,236,255,.45); }
+    .fc-media::after { content:"10 % EA PLAY"; position:absolute; left:12px; bottom:10px; padding:6px 8px; border-radius:7px; color:#080311; background:var(--green); font-size:.56rem; font-weight:950; letter-spacing:.08em; }
+    .fc-media span { position:absolute; font-size:2.5rem; font-weight:950; transform:rotate(-45deg); }
     .extra-platform { color: var(--pink); font-size: .63rem; font-weight: 950; letter-spacing: .12em; text-transform: uppercase; }
     .extra-card h3 { margin: 6px 0 8px; font-size: 1.15rem; }
     .extra-card p { min-height: 68px; margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
@@ -271,12 +275,15 @@
     <section class="game-extras" aria-labelledby="extrasTitle">
       <div class="section-head"><div><div class="eyebrow">Muestra real · Radar Gaming</div><h2 id="extrasTitle">Extras y recompensas</h2></div><p>Contenido oficial · Región y condiciones visibles</p></div>
       <div class="extras-grid">
-        <article class="extra-card">
-          <div class="extra-platform">EA Sports FC · Moneda oficial</div>
-          <h3>10 % menos en FC Points</h3>
-          <p>Los miembros de EA Play reciben 10 % de descuento en paquetes elegibles de FC Points para sobres, Draft, pases y artículos cosméticos.</p>
-          <div class="extra-status"><span>PlayStation · Xbox · PC</span><strong>Beneficio vigente</strong></div>
-          <a href="https://help.ea.com/es/articles/ea-sports-fc/buy-fc-points/" target="_blank" rel="nofollow noopener">VER GUÍA OFICIAL</a>
+        <article class="extra-card featured">
+          <div class="fc-media" role="img" aria-label="Composición editorial de EA Sports FC Points"><span>FC</span></div>
+          <div class="extra-content">
+            <div class="extra-platform">EA Sports FC · Compra segura</div>
+            <h3>10 % menos en FC Points</h3>
+            <p>EA Play reduce 10 % los paquetes elegibles. La ficha explica dónde comprarlos y por qué nunca debes comprar monedas a terceros.</p>
+            <div class="extra-status"><span>PlayStation · Xbox · PC</span><strong>Verificado</strong></div>
+            <a href="fc-points-compra-segura.html">ABRIR FICHA COMPLETA</a>
+          </div>
         </article>
         <article class="extra-card featured">
           <div class="extra-media"><img src="assets/mario-kart-booster-official.jpg" alt="Mario Kart 8 Deluxe Booster Course Pass, imagen oficial de Nintendo"></div>

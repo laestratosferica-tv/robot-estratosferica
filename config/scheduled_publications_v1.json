@@ -669,6 +669,686 @@
       "publish_at": "2026-08-20T20:00:00-05:00",
       "status": "approved",
       "enabled": true
+    },
+    {
+      "content_id": "gamer-viral-vr-dignidad-facebook-2026-08-04",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-dignidad-facebook-2026-08-04.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-dignidad-facebook",
+      "publish_at": "2026-08-04T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/01-vr-dignidad/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-vr-dignidad-instagram-2026-08-04",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-dignidad-instagram-2026-08-04.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-dignidad-instagram",
+      "publish_at": "2026-08-04T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/01-vr-dignidad/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-vr-dignidad-threads-2026-08-04",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-dignidad-threads-2026-08-04.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-dignidad-threads",
+      "publish_at": "2026-08-04T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/01-vr-dignidad/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-vr-dignidad-youtube-2026-08-04",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-dignidad-youtube-2026-08-04.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-dignidad-youtube",
+      "publish_at": "2026-08-04T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/01-vr-dignidad/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-enemigo-invisible-facebook-2026-08-05",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-enemigo-invisible-facebook-2026-08-05.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-enemigo-invisible-facebook",
+      "publish_at": "2026-08-05T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/02-enemigo-invisible/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-enemigo-invisible-instagram-2026-08-05",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-enemigo-invisible-instagram-2026-08-05.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-enemigo-invisible-instagram",
+      "publish_at": "2026-08-05T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/02-enemigo-invisible/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-enemigo-invisible-threads-2026-08-05",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-enemigo-invisible-threads-2026-08-05.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-enemigo-invisible-threads",
+      "publish_at": "2026-08-05T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/02-enemigo-invisible/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-enemigo-invisible-youtube-2026-08-05",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-enemigo-invisible-youtube-2026-08-05.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-enemigo-invisible-youtube",
+      "publish_at": "2026-08-05T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/02-enemigo-invisible/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-celebracion-mundial-facebook-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-celebracion-mundial-facebook-2026-08-06.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-celebracion-mundial-facebook",
+      "publish_at": "2026-08-06T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/03-celebracion-mundial/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-celebracion-mundial-instagram-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-celebracion-mundial-instagram-2026-08-06.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-celebracion-mundial-instagram",
+      "publish_at": "2026-08-06T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/03-celebracion-mundial/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-celebracion-mundial-threads-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-celebracion-mundial-threads-2026-08-06.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-celebracion-mundial-threads",
+      "publish_at": "2026-08-06T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/03-celebracion-mundial/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-celebracion-mundial-youtube-2026-08-06",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-celebracion-mundial-youtube-2026-08-06.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-celebracion-mundial-youtube",
+      "publish_at": "2026-08-06T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/03-celebracion-mundial/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-control-en-peligro-facebook-2026-08-07",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-control-en-peligro-facebook-2026-08-07.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-control-en-peligro-facebook",
+      "publish_at": "2026-08-07T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/04-control-en-peligro/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-control-en-peligro-instagram-2026-08-07",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-control-en-peligro-instagram-2026-08-07.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-control-en-peligro-instagram",
+      "publish_at": "2026-08-07T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/04-control-en-peligro/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-control-en-peligro-threads-2026-08-07",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-control-en-peligro-threads-2026-08-07.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-control-en-peligro-threads",
+      "publish_at": "2026-08-07T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/04-control-en-peligro/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-control-en-peligro-youtube-2026-08-07",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-control-en-peligro-youtube-2026-08-07.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-control-en-peligro-youtube",
+      "publish_at": "2026-08-07T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/04-control-en-peligro/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-retro-sin-lag-facebook-2026-08-08",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-retro-sin-lag-facebook-2026-08-08.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-retro-sin-lag-facebook",
+      "publish_at": "2026-08-08T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/05-retro-sin-lag/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-retro-sin-lag-instagram-2026-08-08",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-retro-sin-lag-instagram-2026-08-08.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-retro-sin-lag-instagram",
+      "publish_at": "2026-08-08T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/05-retro-sin-lag/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-retro-sin-lag-threads-2026-08-08",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-retro-sin-lag-threads-2026-08-08.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-retro-sin-lag-threads",
+      "publish_at": "2026-08-08T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/05-retro-sin-lag/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-retro-sin-lag-youtube-2026-08-08",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-retro-sin-lag-youtube-2026-08-08.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-retro-sin-lag-youtube",
+      "publish_at": "2026-08-08T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/05-retro-sin-lag/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-culpa-del-control-facebook-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-culpa-del-control-facebook-2026-08-09.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-culpa-del-control-facebook",
+      "publish_at": "2026-08-09T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/06-culpa-del-control/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-culpa-del-control-instagram-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-culpa-del-control-instagram-2026-08-09.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-culpa-del-control-instagram",
+      "publish_at": "2026-08-09T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/06-culpa-del-control/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-culpa-del-control-threads-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-culpa-del-control-threads-2026-08-09.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-culpa-del-control-threads",
+      "publish_at": "2026-08-09T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/06-culpa-del-control/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-culpa-del-control-youtube-2026-08-09",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-culpa-del-control-youtube-2026-08-09.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-culpa-del-control-youtube",
+      "publish_at": "2026-08-09T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/06-culpa-del-control/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-estrategia-tres-segundos-facebook-2026-08-10",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-estrategia-tres-segundos-facebook-2026-08-10.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-estrategia-tres-segundos-facebook",
+      "publish_at": "2026-08-10T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/07-estrategia-tres-segundos/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-estrategia-tres-segundos-instagram-2026-08-10",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-estrategia-tres-segundos-instagram-2026-08-10.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-estrategia-tres-segundos-instagram",
+      "publish_at": "2026-08-10T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/07-estrategia-tres-segundos/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-estrategia-tres-segundos-threads-2026-08-10",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-estrategia-tres-segundos-threads-2026-08-10.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-estrategia-tres-segundos-threads",
+      "publish_at": "2026-08-10T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/07-estrategia-tres-segundos/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-estrategia-tres-segundos-youtube-2026-08-10",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-estrategia-tres-segundos-youtube-2026-08-10.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-estrategia-tres-segundos-youtube",
+      "publish_at": "2026-08-10T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/07-estrategia-tres-segundos/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-cuatro-cerebros-facebook-2026-08-11",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-cuatro-cerebros-facebook-2026-08-11.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-cuatro-cerebros-facebook",
+      "publish_at": "2026-08-11T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/08-cuatro-cerebros/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-cuatro-cerebros-instagram-2026-08-11",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-cuatro-cerebros-instagram-2026-08-11.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-cuatro-cerebros-instagram",
+      "publish_at": "2026-08-11T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/08-cuatro-cerebros/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-cuatro-cerebros-threads-2026-08-11",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-cuatro-cerebros-threads-2026-08-11.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-cuatro-cerebros-threads",
+      "publish_at": "2026-08-11T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/08-cuatro-cerebros/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-cuatro-cerebros-youtube-2026-08-11",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-cuatro-cerebros-youtube-2026-08-11.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-cuatro-cerebros-youtube",
+      "publish_at": "2026-08-11T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/08-cuatro-cerebros/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-vr-nueva-generacion-facebook-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-nueva-generacion-facebook-2026-08-12.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-nueva-generacion-facebook",
+      "publish_at": "2026-08-12T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/09-vr-nueva-generacion/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-vr-nueva-generacion-instagram-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-nueva-generacion-instagram-2026-08-12.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-nueva-generacion-instagram",
+      "publish_at": "2026-08-12T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/09-vr-nueva-generacion/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-vr-nueva-generacion-threads-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-nueva-generacion-threads-2026-08-12.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-nueva-generacion-threads",
+      "publish_at": "2026-08-12T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/09-vr-nueva-generacion/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-vr-nueva-generacion-youtube-2026-08-12",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-nueva-generacion-youtube-2026-08-12.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-nueva-generacion-youtube",
+      "publish_at": "2026-08-12T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/09-vr-nueva-generacion/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-gamer-sin-pantalla-facebook-2026-08-13",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-gamer-sin-pantalla-facebook-2026-08-13.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-gamer-sin-pantalla-facebook",
+      "publish_at": "2026-08-13T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/10-gamer-sin-pantalla/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-gamer-sin-pantalla-instagram-2026-08-13",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-gamer-sin-pantalla-instagram-2026-08-13.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-gamer-sin-pantalla-instagram",
+      "publish_at": "2026-08-13T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/10-gamer-sin-pantalla/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-gamer-sin-pantalla-threads-2026-08-13",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-gamer-sin-pantalla-threads-2026-08-13.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-gamer-sin-pantalla-threads",
+      "publish_at": "2026-08-13T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/10-gamer-sin-pantalla/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-gamer-sin-pantalla-youtube-2026-08-13",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-gamer-sin-pantalla-youtube-2026-08-13.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-gamer-sin-pantalla-youtube",
+      "publish_at": "2026-08-13T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/10-gamer-sin-pantalla/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-jefe-final-sala-facebook-2026-08-14",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-jefe-final-sala-facebook-2026-08-14.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-jefe-final-sala-facebook",
+      "publish_at": "2026-08-14T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/11-jefe-final-sala/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-jefe-final-sala-instagram-2026-08-14",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-jefe-final-sala-instagram-2026-08-14.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-jefe-final-sala-instagram",
+      "publish_at": "2026-08-14T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/11-jefe-final-sala/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-jefe-final-sala-threads-2026-08-14",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-jefe-final-sala-threads-2026-08-14.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-jefe-final-sala-threads",
+      "publish_at": "2026-08-14T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/11-jefe-final-sala/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-jefe-final-sala-youtube-2026-08-14",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-jefe-final-sala-youtube-2026-08-14.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-jefe-final-sala-youtube",
+      "publish_at": "2026-08-14T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/11-jefe-final-sala/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-ultima-partida-facebook-2026-08-15",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-ultima-partida-facebook-2026-08-15.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-ultima-partida-facebook",
+      "publish_at": "2026-08-15T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/12-ultima-partida/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-ultima-partida-instagram-2026-08-15",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-ultima-partida-instagram-2026-08-15.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-ultima-partida-instagram",
+      "publish_at": "2026-08-15T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/12-ultima-partida/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-ultima-partida-threads-2026-08-15",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-ultima-partida-threads-2026-08-15.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-ultima-partida-threads",
+      "publish_at": "2026-08-15T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/12-ultima-partida/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-ultima-partida-youtube-2026-08-15",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-ultima-partida-youtube-2026-08-15.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-ultima-partida-youtube",
+      "publish_at": "2026-08-15T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/12-ultima-partida/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-buscando-salida-vr-facebook-2026-08-16",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-buscando-salida-vr-facebook-2026-08-16.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-buscando-salida-vr-facebook",
+      "publish_at": "2026-08-16T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/13-buscando-salida-vr/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-buscando-salida-vr-instagram-2026-08-16",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-buscando-salida-vr-instagram-2026-08-16.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-buscando-salida-vr-instagram",
+      "publish_at": "2026-08-16T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/13-buscando-salida-vr/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-buscando-salida-vr-threads-2026-08-16",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-buscando-salida-vr-threads-2026-08-16.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-buscando-salida-vr-threads",
+      "publish_at": "2026-08-16T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/13-buscando-salida-vr/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-buscando-salida-vr-youtube-2026-08-16",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-buscando-salida-vr-youtube-2026-08-16.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-buscando-salida-vr-youtube",
+      "publish_at": "2026-08-16T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/13-buscando-salida-vr/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-sonrisa-antes-susto-facebook-2026-08-17",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-sonrisa-antes-susto-facebook-2026-08-17.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-sonrisa-antes-susto-facebook",
+      "publish_at": "2026-08-17T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/14-sonrisa-antes-susto/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-sonrisa-antes-susto-instagram-2026-08-17",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-sonrisa-antes-susto-instagram-2026-08-17.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-sonrisa-antes-susto-instagram",
+      "publish_at": "2026-08-17T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/14-sonrisa-antes-susto/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-sonrisa-antes-susto-threads-2026-08-17",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-sonrisa-antes-susto-threads-2026-08-17.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-sonrisa-antes-susto-threads",
+      "publish_at": "2026-08-17T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/14-sonrisa-antes-susto/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-sonrisa-antes-susto-youtube-2026-08-17",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-sonrisa-antes-susto-youtube-2026-08-17.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-sonrisa-antes-susto-youtube",
+      "publish_at": "2026-08-17T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/14-sonrisa-antes-susto/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-silencio-equipo-facebook-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-silencio-equipo-facebook-2026-08-18.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-silencio-equipo-facebook",
+      "publish_at": "2026-08-18T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/15-silencio-equipo/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-silencio-equipo-instagram-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-silencio-equipo-instagram-2026-08-18.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-silencio-equipo-instagram",
+      "publish_at": "2026-08-18T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/15-silencio-equipo/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-silencio-equipo-threads-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-silencio-equipo-threads-2026-08-18.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-silencio-equipo-threads",
+      "publish_at": "2026-08-18T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/15-silencio-equipo/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-silencio-equipo-youtube-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-silencio-equipo-youtube-2026-08-18.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-silencio-equipo-youtube",
+      "publish_at": "2026-08-18T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/15-silencio-equipo/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-victoria-colectiva-facebook-2026-08-19",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-victoria-colectiva-facebook-2026-08-19.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-victoria-colectiva-facebook",
+      "publish_at": "2026-08-19T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/16-victoria-colectiva/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-victoria-colectiva-instagram-2026-08-19",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-victoria-colectiva-instagram-2026-08-19.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-victoria-colectiva-instagram",
+      "publish_at": "2026-08-19T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/16-victoria-colectiva/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-victoria-colectiva-threads-2026-08-19",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-victoria-colectiva-threads-2026-08-19.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-victoria-colectiva-threads",
+      "publish_at": "2026-08-19T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/16-victoria-colectiva/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-victoria-colectiva-youtube-2026-08-19",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-victoria-colectiva-youtube-2026-08-19.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-victoria-colectiva-youtube",
+      "publish_at": "2026-08-19T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/16-victoria-colectiva/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-vr-vista-lujo-facebook-2026-08-20",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-vista-lujo-facebook-2026-08-20.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-vista-lujo-facebook",
+      "publish_at": "2026-08-20T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/17-vr-vista-lujo/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-vr-vista-lujo-instagram-2026-08-20",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-vista-lujo-instagram-2026-08-20.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-vista-lujo-instagram",
+      "publish_at": "2026-08-20T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/17-vr-vista-lujo/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-vr-vista-lujo-threads-2026-08-20",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-vista-lujo-threads-2026-08-20.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-vista-lujo-threads",
+      "publish_at": "2026-08-20T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/17-vr-vista-lujo/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "gamer-viral-vr-vista-lujo-youtube-2026-08-20",
+      "manifest_path": "artifacts/publication-manifests/gamer-viral-vr-vista-lujo-youtube-2026-08-20.json",
+      "approval_id": "autonomous-gamer-viral-experiment-2026-08-03-vr-vista-lujo-youtube",
+      "publish_at": "2026-08-20T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "gamer-viral-daily-2am-v1",
+      "license_evidence_path": "artifacts/approved/scheduled/gamer-viral-daily-2026-08/17-vr-vista-lujo/SOURCE_AND_LICENSE.json"
     }
   ]
 }

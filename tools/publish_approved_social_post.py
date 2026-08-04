@@ -149,6 +149,23 @@ def publish_threads(manifest: Mapping[str, Any], url: str | None, env: Mapping[s
     if manifest["post_type"] == "image":
         data = {"media_type": "IMAGE", "image_url": str(url), "text": manifest["text"]}
     created = graph_request("POST", base, f"{env['THREADS_USER_ID']}/threads", token=env["THREADS_USER_ACCESS_TOKEN"], data=data)
+    deadline = time.monotonic() + 300
+    while time.monotonic() < deadline:
+        status = graph_request(
+            "GET",
+            base,
+            str(created["id"]),
+            token=env["THREADS_USER_ACCESS_TOKEN"],
+            params={"fields": "status,error_message"},
+        )
+        state = str(status.get("status", "")).upper()
+        if state in {"FINISHED", "PUBLISHED"}:
+            break
+        if state in {"ERROR", "FAILED", "EXPIRED"}:
+            raise RuntimeError("threads_container_failed")
+        time.sleep(2)
+    else:
+        raise TimeoutError("threads_container_timeout")
     published = graph_request("POST", base, f"{env['THREADS_USER_ID']}/threads_publish", token=env["THREADS_USER_ACCESS_TOKEN"], data={"creation_id": str(created["id"])})
     return {"media_id": str(published["id"])}
 

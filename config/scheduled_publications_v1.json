@@ -425,7 +425,23 @@
     {
       "content_id": "august-approved-pantallas",
       "manifest_path": "artifacts/publication-manifests/august-approved-pantallas.json",
-      "approval_id": "calendar-2crngrju4auj4cie1uk7ovm02p",
+      "approval_id": "calendar-2crngrju4auj4cie1uk7ovm02p-carousel",
+      "publish_at": "2026-08-12T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-pantallas-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-pantallas-facebook.json",
+      "approval_id": "calendar-2crngrju4auj4cie1uk7ovm02p-facebook",
+      "publish_at": "2026-08-12T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-pantallas-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-pantallas-youtube.json",
+      "approval_id": "calendar-2crngrju4auj4cie1uk7ovm02p-youtube",
       "publish_at": "2026-08-12T12:30:00-05:00",
       "status": "approved",
       "enabled": true

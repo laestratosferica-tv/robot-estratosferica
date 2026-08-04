@@ -2,13 +2,9 @@ name = "estratosferica-tiktok-creators"
 main = "src/index.js"
 compatibility_date = "2026-08-04"
 
-routes = [
-  { pattern = "creadores.laestratosfericatv.com", custom_domain = true }
-]
+workers_dev = true
 
 [vars]
-PUBLIC_BASE_URL = "https://creadores.laestratosfericatv.com"
-TIKTOK_REDIRECT_URI = "https://creadores.laestratosfericatv.com/oauth/tiktok/callback"
 TIKTOK_APP_REVIEW_STATUS = "rejected"
 ENABLE_TIKTOK_DRAFT_TRANSFER = "false"
 TIKTOK_SANDBOX_REVIEW_MODE = "false"

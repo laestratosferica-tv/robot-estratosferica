@@ -111,6 +111,15 @@
     .detection h3 { margin: 5px 0; font-size: 1.55rem; }
     .detection-score { color: var(--cyan); font-size: 1.2rem; font-weight: 950; }
     .detection a { display: inline-grid; place-items: center; min-height: 43px; margin-top: 12px; padding: 0 15px; border-radius: 10px; color: #080311; background: var(--cyan); font-size: .75rem; font-weight: 950; text-decoration: none; }
+    .live-code { display: grid; grid-template-columns: 1fr auto; gap: 22px; align-items: center; margin: 28px 0; padding: 22px; border: 1px solid rgba(101,255,173,.34); border-radius: 24px; background: linear-gradient(135deg, rgba(101,255,173,.08), rgba(123,53,255,.11)); }
+    .live-code h2 { margin: 5px 0 8px; font-size: clamp(1.6rem, 4vw, 2.5rem); letter-spacing: -.04em; }
+    .live-code p { margin: 0; color: var(--muted); line-height: 1.45; }
+    .code-proof { min-width: 280px; padding: 16px; border: 1px solid rgba(76,236,255,.32); border-radius: 16px; background: #080411; }
+    .code-proof-top { display: flex; justify-content: space-between; gap: 12px; color: var(--green); font-size: .65rem; font-weight: 950; text-transform: uppercase; }
+    .code-value { margin: 12px 0; color: white; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.45rem; font-weight: 950; letter-spacing: .04em; }
+    .code-proof-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .code-proof button, .code-proof a { display: grid; place-items: center; min-height: 42px; border: 0; border-radius: 10px; color: #080311; background: var(--cyan); font-size: .7rem; font-weight: 950; text-decoration: none; cursor: pointer; }
+    .code-proof a { color: white; border: 1px solid var(--line); background: transparent; }
     @keyframes sweep { to { transform: rotate(360deg); } }
     @keyframes pulse { to { opacity: .45; } }
     @keyframes reveal { from { opacity: 0; transform: translateY(8px); } }
@@ -134,6 +143,8 @@
       .hero-emblem img { width: min(70vw, 380px); }
       .grid { grid-template-columns: 1fr 1fr; }
       .arcade-radar { grid-template-columns: 1fr; }
+      .live-code { grid-template-columns: 1fr; }
+      .code-proof { min-width: 0; }
       .pipeline { grid-template-columns: repeat(3, 1fr); }
       .step:nth-child(3)::after { display: none; }
     }
@@ -183,6 +194,20 @@
       <button class="filter" data-filter="gaming">Gaming</button>
       <button class="filter" data-filter="gastronomia">Gastronomía</button>
     </div>
+
+    <section class="live-code" aria-labelledby="liveCodeTitle">
+      <div>
+        <div class="eyebrow">Prueba real · Código vigente</div>
+        <h2 id="liveCodeTitle">Así funciona el detector de códigos.</h2>
+        <p>Encontramos el código en la tienda oficial, comprobamos beneficio, condiciones y vencimiento, y lo dejamos listo para copiar. Este ofrece 20 % en planes anuales de NordLayer hasta el 31 de agosto de 2026.</p>
+      </div>
+      <div class="code-proof">
+        <div class="code-proof-top"><span>Verificado por la tienda</span><span>Vence 31 AGO</span></div>
+        <div id="liveCodeValue" class="code-value">nl-summer-26</div>
+        <div class="code-proof-actions"><button id="copyLiveCode" type="button">COPIAR CÓDIGO</button><a href="https://nordlayer.com/contact-sales/" target="_blank" rel="nofollow noopener">VER OFERTA</a></div>
+        <p class="arcade-help">Última comprobación: 3 de agosto de 2026 · Fuente oficial de NordLayer. La elegibilidad final se confirma en la tienda.</p>
+      </div>
+    </section>
 
     <section class="arcade-radar" aria-labelledby="radarTitle">
       <div id="radarScreen" class="radar-screen" aria-hidden="true"><span id="target" class="target"></span></div>
@@ -361,6 +386,11 @@
     }
     document.querySelector('#randomScan').addEventListener('click', runRandomRadar);
     document.querySelector('#scanAgain').addEventListener('click', runRandomRadar);
+    document.querySelector('#copyLiveCode').addEventListener('click', () => {
+      const value = document.querySelector('#liveCodeValue').textContent.trim();
+      if (navigator.clipboard) navigator.clipboard.writeText(value).catch(() => {});
+      notify(`Código ${value} copiado. Ábrelo en la tienda y confirma la elegibilidad.`);
+    });
   </script>
 </body>
 </html>

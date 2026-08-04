@@ -5,6 +5,10 @@
 TikTok continúa desactivado. Esta etapa prepara autenticación, permisos y
 diagnóstico sin cargar ni publicar contenido.
 
+El portal público sandbox para creadores está documentado en
+`docs/TIKTOK_PUBLIC_CREATOR_SANDBOX_V1.md`. Su transferencia también permanece
+bloqueada de forma predeterminada.
+
 Los dos interruptores deben permanecer en `false`:
 
 - `ENABLE_TIKTOK`

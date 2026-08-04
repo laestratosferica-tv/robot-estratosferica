@@ -10,6 +10,6 @@
     "approval_block_sha256": "2a69b5bbb81d3e71d1b72dd416995e55ff785e2828403e91182a135344be4074",
     "publication_package_sha256": "perl: warning: Setting locale failed.\nperl: warning: Please check that your locale settings:\n\tLC_ALL = \"C.UTF-8\",\n\tLC_CTYPE = \"C.UTF-8\",\n\tLANG = \"C.UTF-8\"\n    are supported and installed on your system.\nperl: warning: Falling back to the standard locale (\"C\").\n80ab1fda706ae3cff5186306ba6ff46363bd93270c899a1e942f98e1b09659ce"
   },
-  "video_sha256": "22b3a9bff5c082c24eeca61068ce30021e9f0d00569940e621703d14f7449fdc",
+  "video_sha256": "946d4fee333b167e7992c09202740bccc174a8abd759607dcbe5b44763363c27",
   "do_not_request_reapproval": true
 }

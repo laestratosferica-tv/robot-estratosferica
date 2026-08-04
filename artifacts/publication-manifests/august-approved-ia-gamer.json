@@ -1,0 +1,49 @@
+{
+  "schema": "approved_carousel_publication_v1",
+  "slug": "august-approved-ia-gamer",
+  "approval_id": "calendar-7rjurd84r4s8bponvnnlraq83l",
+  "platforms": [
+    "instagram",
+    "facebook",
+    "threads"
+  ],
+  "expected_accounts": {
+    "instagram_username": "laestratosfericatv",
+    "facebook_page_name": "La Estratosférica TV",
+    "threads_username": "laestratosfericatv"
+  },
+  "caption": "La IA ya no solo crea imágenes: también empieza a acompañarte dentro de la partida. Xbox Game Assist (beta) ofrece ayuda contextual, actividad y logros, recomendaciones y modo voz. ¿Ayuda o trampa? Fuente: Xbox Game Assist. #InteligenciaArtificial #Gaming #Xbox #Tecnologia #LaEstratosferica",
+  "threads_text": "Xbox Game Assist (beta) puede darte contexto, revisar logros, recomendar juegos y responder por voz. ¿Ayuda o trampa?",
+  "assets": [
+    {
+      "order": 1,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-ia-gamer/01-slide-1.png",
+      "sha256": "6e8ca1fecbf2e5049bf51875f1daa062cb70f29171ce553132781e333b937e06"
+    },
+    {
+      "order": 2,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-ia-gamer/02-slide-2.png",
+      "sha256": "466c24882e22e038cee75454dc39dc17aee592faceff1cf6ff29abf07f9fa556"
+    },
+    {
+      "order": 3,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-ia-gamer/03-slide-3.png",
+      "sha256": "012678ce1c8b16442d62dc6db3710431d8f966fe0b0b521bea991bb318fa0df2"
+    },
+    {
+      "order": 4,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-ia-gamer/04-slide-4.png",
+      "sha256": "01091ba30a4a99ac5c177d1e3c835beb11ae86b2b97d9c37c63ac0848f19bd3a"
+    },
+    {
+      "order": 5,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-ia-gamer/05-slide-5.png",
+      "sha256": "2c7e092b539fc8654bdf8ff4ea1d524547960fd4dc8a184f5fb469b93047f991"
+    },
+    {
+      "order": 6,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-ia-gamer/06-slide-6.png",
+      "sha256": "5499c20ca14a2454098c36b44beaed063a636ba503ba3b3ad1d1b07b4013c288"
+    }
+  ]
+}

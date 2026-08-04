@@ -1,0 +1,49 @@
+{
+  "schema": "approved_carousel_publication_v1",
+  "slug": "august-approved-pantallas",
+  "approval_id": "calendar-2crngrju4auj4cie1uk7ovm02p",
+  "platforms": [
+    "instagram",
+    "facebook",
+    "threads"
+  ],
+  "expected_accounts": {
+    "instagram_username": "laestratosfericatv",
+    "facebook_page_name": "La Estratosférica TV",
+    "threads_username": "laestratosfericatv"
+  },
+  "caption": "Del arcade al mundo inmersivo: cada pantalla cambió cómo jugamos y con quién compartimos la partida. ¿En cuál comenzó tu historia? #NostalgiaGamer #GamingLATAM #CulturaDigital #LaEstratosferica",
+  "threads_text": "Arcade, CRT, cibercafé, móvil e inmersión. Cada pantalla abrió un mundo distinto. ¿En cuál comenzó tu historia gamer?",
+  "assets": [
+    {
+      "order": 1,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-pantallas/01-01-portada-crecimos-cambiando-pantalla-v1.png",
+      "sha256": "b3a631f0de4bfebea6154cb077697f8b1b74ac1063c2998688bcafa2b231a841"
+    },
+    {
+      "order": 2,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-pantallas/02-02-mundo-arcade.png",
+      "sha256": "bfb30a3d003c0e9737aeb9e4b3349bc795432ac8f2877361f6ff64b815cdedc1"
+    },
+    {
+      "order": 3,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-pantallas/03-03-mundo-consola-crt.png",
+      "sha256": "971dce4d8909fb153bfc2962c15ac6bbb43fe77ba7905cd2a26d59e05b146f8c"
+    },
+    {
+      "order": 4,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-pantallas/04-04-mundo-cibercafe-lan.png",
+      "sha256": "96ad939d1a62f8065184f79243b2810355dc99c624dbf208c515ea3f7c6038d6"
+    },
+    {
+      "order": 5,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-pantallas/05-05-mundo-juego-movil.png",
+      "sha256": "0d280038db247ce9c8cbdc745bd4e8c89d29c7691b175b6e5fc28626837f395d"
+    },
+    {
+      "order": 6,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-pantallas/06-06-mundo-inmersivo.png",
+      "sha256": "d6924d24476e43fddb46db25a31fcc8113d8b86f5e59ebe6ba5637757c419439"
+    }
+  ]
+}

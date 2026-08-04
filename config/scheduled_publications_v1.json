@@ -561,7 +561,23 @@
     {
       "content_id": "august-approved-xbox-reglas",
       "manifest_path": "artifacts/publication-manifests/august-approved-xbox-reglas.json",
-      "approval_id": "calendar-7p55h1d8o4jsveg107c2skesah",
+      "approval_id": "calendar-7p55h1d8o4jsveg107c2skesah-carousel",
+      "publish_at": "2026-08-19T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-xbox-reglas-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-xbox-reglas-facebook.json",
+      "approval_id": "calendar-7p55h1d8o4jsveg107c2skesah-facebook",
+      "publish_at": "2026-08-19T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-xbox-reglas-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-xbox-reglas-youtube.json",
+      "approval_id": "calendar-7p55h1d8o4jsveg107c2skesah-youtube",
       "publish_at": "2026-08-19T12:30:00-05:00",
       "status": "approved",
       "enabled": true

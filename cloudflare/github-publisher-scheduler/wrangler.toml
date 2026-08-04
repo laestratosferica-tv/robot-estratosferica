@@ -1,0 +1,13 @@
+name = "estratosferica-publisher-scheduler"
+main = "src/index.js"
+compatibility_date = "2026-08-03"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+GITHUB_OWNER = "laestratosferica-tv"
+GITHUB_REPO = "robot-estratosferica"
+GITHUB_WORKFLOW = "scheduled-meta-publisher.yml"
+GITHUB_REF = "main"
+

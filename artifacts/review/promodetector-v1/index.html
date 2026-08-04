@@ -205,7 +205,7 @@
         <div class="eyebrow">Modo arcade · descubrimiento</div>
         <h2 id="radarTitle">Activa el radar sorpresa.</h2>
         <p>Detectamos una señal aleatoria dentro de nuestras categorías. Primero revelamos el producto y su calificación; tú decides si quieres abrir la oferta.</p>
-        <div class="radar-actions"><button id="randomScan" class="radar-button" type="button">INICIAR ESCANEO</button><button id="scanAgain" class="radar-button secondary" type="button">OTRA SEÑAL</button></div>
+        <div class="radar-actions"><button id="randomScan" class="radar-button" type="button">INICIAR ESCANEO</button></div>
         <div id="detection" class="detection" aria-live="polite">
           <div class="detection-label">Nave detectada · señal verificada</div>
           <h3 id="detectedName">Producto</h3>
@@ -395,7 +395,6 @@
       }, 1800);
     }
     document.querySelector('#randomScan').addEventListener('click', runRandomRadar);
-    document.querySelector('#scanAgain').addEventListener('click', runRandomRadar);
     document.querySelector('#copyLiveCode').addEventListener('click', () => {
       const value = document.querySelector('#liveCodeValue').textContent.trim();
       if (navigator.clipboard) navigator.clipboard.writeText(value).catch(() => {});

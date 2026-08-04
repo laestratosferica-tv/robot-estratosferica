@@ -56,6 +56,18 @@ function allowed(env) {
     (env.TIKTOK_SANDBOX_REVIEW_MODE === "true" || env.TIKTOK_APP_REVIEW_STATUS === "approved");
 }
 
+function verification(requestUrl, env) {
+  const path = env.TIKTOK_URL_VERIFICATION_PATH || "";
+  const content = env.TIKTOK_URL_VERIFICATION_CONTENT || "";
+  if (!path || !content || requestUrl.pathname !== path) return null;
+  return new Response(content, {
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "public, max-age=300",
+    },
+  });
+}
+
 function page(content) {
   return new Response(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Creadores | La Estratosférica</title><style>
 :root{--bg:#090313;--panel:#170a2b;--purple:#7628ff;--cyan:#25e9ff;--pink:#ff2dbb;--text:#fff;--muted:#bcb2ce}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,#30105b 0,transparent 34%),var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;min-height:100vh}main{width:min(880px,92vw);margin:auto;padding:42px 0 72px}.brand{font-weight:900;letter-spacing:.08em}.eyebrow{color:var(--cyan);font-size:.8rem;text-transform:uppercase;letter-spacing:.16em;margin-top:80px}h1{font-size:clamp(2.4rem,7vw,5rem);line-height:.95;margin:.35em 0}.lead{font-size:1.15rem;line-height:1.6;color:var(--muted);max-width:650px}.card{background:linear-gradient(145deg,rgba(38,15,69,.96),rgba(18,7,35,.96));border:1px solid #54279a;border-radius:24px;padding:26px;margin:28px 0}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.step{padding:18px;border-radius:16px;background:#ffffff0a;border:1px solid #ffffff14}.num{display:block;color:var(--pink);font-weight:900;font-size:1.5rem}.button,button{display:inline-block;border:0;border-radius:999px;background:var(--purple);color:#fff;padding:15px 24px;font-weight:800;text-decoration:none;cursor:pointer}.secondary{background:#ffffff12;border:1px solid #ffffff30}.status{padding:12px 16px;border-radius:12px;background:#25e9ff18;color:var(--cyan);margin:16px 0}.profile{display:flex;align-items:center;gap:14px}.profile img{width:58px;height:58px;border-radius:50%}.drop{display:block;border:2px dashed #7040a7;border-radius:18px;padding:28px;text-align:center;margin:18px 0}.fine{font-size:.82rem;color:var(--muted);line-height:1.5}@media(max-width:650px){.steps{grid-template-columns:1fr}.eyebrow{margin-top:42px}}</style></head><body><main><div class="brand">LA ESTRATOSFÉRICA</div>${content}</main></body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
@@ -96,6 +108,8 @@ async function sendDraft(video, accessToken) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const verificationResponse = verification(url, env);
+    if (verificationResponse) return verificationResponse;
     const redirectUri = `${url.origin}/oauth/tiktok/callback`;
     const configured = Boolean(env.TIKTOK_CLIENT_KEY && env.TIKTOK_CLIENT_SECRET && env.SESSION_SECRET);
     if (url.pathname === "/health") return Response.json({ ok: true, oauth_configured: configured, draft_transfer_enabled: env.ENABLE_TIKTOK_DRAFT_TRANSFER === "true", sandbox_review_mode: env.TIKTOK_SANDBOX_REVIEW_MODE === "true", transfer_allowed: allowed(env), direct_post_enabled: false });

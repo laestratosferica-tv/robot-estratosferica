@@ -29,3 +29,16 @@ test("oauth callback follows the public request origin", async () => {
   assert.equal(location.searchParams.get("redirect_uri"), "https://public-example.workers.dev/oauth/tiktok/callback");
   assert.equal(location.searchParams.get("scope"), "user.info.basic,video.upload");
 });
+
+test("serves TikTok URL verification only at the configured path", async () => {
+  const env = {
+    TIKTOK_URL_VERIFICATION_PATH: "/tiktok-site-verification.txt",
+    TIKTOK_URL_VERIFICATION_CONTENT: "tiktok-verification-value",
+  };
+  const verified = await worker.fetch(new Request("https://example.com/tiktok-site-verification.txt"), env);
+  assert.equal(verified.status, 200);
+  assert.equal(await verified.text(), "tiktok-verification-value");
+
+  const missing = await worker.fetch(new Request("https://example.com/another-path.txt"), env);
+  assert.equal(missing.status, 404);
+});

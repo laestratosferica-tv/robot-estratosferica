@@ -1,15 +1,13 @@
 {
   "schema": "approved_carousel_publication_v1",
   "slug": "august-approved-nostalgia",
-  "approval_id": "calendar-3ca4b6j9d9kqfnk2q2nnlvsfe6",
+  "approval_id": "calendar-3ca4b6j9d9kqfnk2q2nnlvsfe6-carousel",
   "platforms": [
     "instagram",
-    "facebook",
     "threads"
   ],
   "expected_accounts": {
     "instagram_username": "laestratosfericatv",
-    "facebook_page_name": "La Estratosférica TV",
     "threads_username": "laestratosfericatv"
   },
   "caption": "Guardar era sagrado. Los secretos vivían en un cuaderno. Esperar el turno también era jugar. ¿Cuál momento te desbloqueó un recuerdo? #NostalgiaGamer #GamingLATAM #CulturaGamer #LaEstratosferica",

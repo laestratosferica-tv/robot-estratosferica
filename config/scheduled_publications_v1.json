@@ -489,7 +489,23 @@
     {
       "content_id": "august-approved-nostalgia",
       "manifest_path": "artifacts/publication-manifests/august-approved-nostalgia.json",
-      "approval_id": "calendar-3ca4b6j9d9kqfnk2q2nnlvsfe6",
+      "approval_id": "calendar-3ca4b6j9d9kqfnk2q2nnlvsfe6-carousel",
+      "publish_at": "2026-08-16T18:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-nostalgia-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-nostalgia-facebook.json",
+      "approval_id": "calendar-3ca4b6j9d9kqfnk2q2nnlvsfe6-facebook",
+      "publish_at": "2026-08-16T18:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-nostalgia-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-nostalgia-youtube.json",
+      "approval_id": "calendar-3ca4b6j9d9kqfnk2q2nnlvsfe6-youtube",
       "publish_at": "2026-08-16T18:30:00-05:00",
       "status": "approved",
       "enabled": true

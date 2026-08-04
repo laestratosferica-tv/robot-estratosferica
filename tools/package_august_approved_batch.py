@@ -102,6 +102,7 @@ def main() -> None:
         or item["content_id"].startswith("august-approved-real-o-ia-")
         or item["content_id"].startswith("august-approved-ia-gamer")
         or item["content_id"].startswith("august-approved-pantallas")
+        or item["content_id"].startswith("august-approved-nostalgia")
     ]
     items: list[dict] = []
 
@@ -114,8 +115,6 @@ def main() -> None:
     text_link(items, slug="august-approved-wolverine", publish_at="2026-08-14T12:30:00-05:00", approval="calendar-5h3mbuda3iae5b87rh15d2ubam", link="https://blog.playstation.com/2026/07/23/marvels-wolverine-story-trailer-new-art-composer-details-and-more/", facebook="Wolverine no viene a salvarte. Está intentando sobrevivirse a sí mismo. El tráiler enfrenta a Logan con Jean Grey, The Hand y Deathstrike. Marvel’s Wolverine llega a PS5 el 15 de septiembre de 2026. ¿Imparable o vulnerable?", threads="Wolverine no viene a salvarte. Está intentando sobrevivirse a sí mismo. Jean Grey, The Hand y Deathstrike rodean a un Logan tan peligroso para sus enemigos como para él mismo. Llega a PS5 el 15 de septiembre. https://blog.playstation.com/2026/07/23/marvels-wolverine-story-trailer-new-art-composer-details-and-more/")
 
     reel(items, slug="august-approved-drones", source=BACKUP / "aprobadas/reel-ia-vs-campeones-drones-aprobado.mp4", publish_at="2026-08-15T20:00:00-05:00", approval="calendar-5kj5c1v8gtefg95cltpncco4mu", title="IA contra campeones de drones", caption="La inteligencia artificial ya compite contra pilotos campeones de drones. Velocidad, cálculo y reacción se encuentran en el aire. ¿Quién tiene la ventaja? #Drones #InteligenciaArtificial #Competencia #LaEstratosferica")
-
-    carousel(items, slug="august-approved-nostalgia", publish_at="2026-08-16T18:30:00-05:00", approval="calendar-3ca4b6j9d9kqfnk2q2nnlvsfe6", sources=[BACKUP / f"aprobadas/carrusel-nostalgia-gamer/{name}.png" for name in ("01-portada","02-guardar","03-secretos","04-turno","05-control")], caption="Guardar era sagrado. Los secretos vivían en un cuaderno. Esperar el turno también era jugar. ¿Cuál momento te desbloqueó un recuerdo? #NostalgiaGamer #GamingLATAM #CulturaGamer #LaEstratosferica", threads_text="Guardar en una tarjeta. Anotar secretos. Esperar el turno. Pasar el control. ¿Qué recuerdo gamer de esa época todavía tienes intacto?")
 
     reel(items, slug="august-approved-esports-lectura", source=BACKUP / "aprobadas/reel-esports-lectura-profesional-aprobado.mp4", publish_at="2026-08-17T12:30:00-05:00", approval="calendar-05pvfpc07s0ukkeh9sfi5pofhj", title="Lee la jugada como un profesional", caption="Una pelea se decide antes del primer disparo. Visión. Posición. Tiempo. ¿Qué miras primero cuando empieza la presión? Fuente audiovisual: Ron Lach / Pexels. #Esports #GamingLATAM #Competitivo #LaEstratosferica")
 

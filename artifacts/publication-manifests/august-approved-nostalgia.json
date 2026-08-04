@@ -1,0 +1,44 @@
+{
+  "schema": "approved_carousel_publication_v1",
+  "slug": "august-approved-nostalgia",
+  "approval_id": "calendar-3ca4b6j9d9kqfnk2q2nnlvsfe6",
+  "platforms": [
+    "instagram",
+    "facebook",
+    "threads"
+  ],
+  "expected_accounts": {
+    "instagram_username": "laestratosfericatv",
+    "facebook_page_name": "La Estratosférica TV",
+    "threads_username": "laestratosfericatv"
+  },
+  "caption": "Guardar era sagrado. Los secretos vivían en un cuaderno. Esperar el turno también era jugar. ¿Cuál momento te desbloqueó un recuerdo? #NostalgiaGamer #GamingLATAM #CulturaGamer #LaEstratosferica",
+  "threads_text": "Guardar en una tarjeta. Anotar secretos. Esperar el turno. Pasar el control. ¿Qué recuerdo gamer de esa época todavía tienes intacto?",
+  "assets": [
+    {
+      "order": 1,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-nostalgia/01-01-portada.png",
+      "sha256": "2423e63fb10d5143c82f65925c913cac6847a883bd4c66593d2f5c03174cb983"
+    },
+    {
+      "order": 2,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-nostalgia/02-02-guardar.png",
+      "sha256": "b0be85c993ff01bd923145932c92a851be9d975872123c1b2026a04435fded93"
+    },
+    {
+      "order": 3,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-nostalgia/03-03-secretos.png",
+      "sha256": "e98a255892950ca7aec10e12eb94cc4242c4147bf330e2b2522a72c28a0a5f58"
+    },
+    {
+      "order": 4,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-nostalgia/04-04-turno.png",
+      "sha256": "3dea7d4308ff94022f5e0ddba7aac2e251101fac6e2c16d2af82fe0b4230f729"
+    },
+    {
+      "order": 5,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-nostalgia/05-05-control.png",
+      "sha256": "c0fc340133ef1adfe1d50083ad50a3b5b6ec07d047381d2c7a09f379e99e8adb"
+    }
+  ]
+}

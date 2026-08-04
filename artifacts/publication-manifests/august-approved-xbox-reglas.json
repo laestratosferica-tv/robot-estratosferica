@@ -1,0 +1,49 @@
+{
+  "schema": "approved_carousel_publication_v1",
+  "slug": "august-approved-xbox-reglas",
+  "approval_id": "calendar-7p55h1d8o4jsveg107c2skesah",
+  "platforms": [
+    "instagram",
+    "facebook",
+    "threads"
+  ],
+  "expected_accounts": {
+    "instagram_username": "laestratosfericatv",
+    "facebook_page_name": "La Estratosférica TV",
+    "threads_username": "laestratosfericatv"
+  },
+  "caption": "Xbox está cambiando las reglas. Halo en PlayStation muestra una competencia que se mueve hacia acceso, suscripciones, PC, nube y comunidad. ¿Comprarías una consola sin exclusivos? Fuentes: Xbox Wire y PlayStation Blog. #Xbox #Halo #PlayStation #LaEstratosferica",
+  "threads_text": "Halo en PlayStation cambia el papel del exclusivo. Si las franquicias pueden viajar, ¿qué debería hacer diferente a cada consola?",
+  "assets": [
+    {
+      "order": 1,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-xbox-reglas/01-01-portada.png",
+      "sha256": "c5dce62f95c712256694fb9b8cdf24f39e12dea85fe5edadbeea6a608d549ada"
+    },
+    {
+      "order": 2,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-xbox-reglas/02-02-antes.png",
+      "sha256": "78315a3b43e8fa616a80d49a905e711491f9a74e08c6335b753d79617a785b44"
+    },
+    {
+      "order": 3,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-xbox-reglas/03-03-halo.png",
+      "sha256": "3c16a9f01406508b28d33d2d5e0d3c3d1376e8137c5cea786f86ef0689bf42b1"
+    },
+    {
+      "order": 4,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-xbox-reglas/04-04-negocio.png",
+      "sha256": "726ebc8be87e208571ded93363e3daf8511343ae089367a0c74e06adffa79df6"
+    },
+    {
+      "order": 5,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-xbox-reglas/05-05-balance.png",
+      "sha256": "e236338c155a2eb5bc99f29913cf8f60044d3c92b3e06e43c45e74732b8fc0c6"
+    },
+    {
+      "order": 6,
+      "path": "artifacts/approved/scheduled/august-2026/august-approved-xbox-reglas/06-06-pregunta.png",
+      "sha256": "757f2618b1c2c2daea03cfa5c10e56a3ae36be4afc6f1ad6740acd05eeeaf665"
+    }
+  ]
+}

@@ -87,6 +87,11 @@
     .game-extras { margin: 34px 0; }
     .extras-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
     .extra-card { padding: 17px; border: 1px solid var(--line); border-radius: 18px; background: rgba(22,10,41,.72); }
+    .extra-card.featured { padding: 0; overflow: hidden; border-color: rgba(76,236,255,.34); }
+    .extra-card.featured .extra-content { padding: 17px; }
+    .extra-media { position: relative; aspect-ratio: 16/9; overflow: hidden; background: #080411; }
+    .extra-media img { width: 100%; height: 100%; object-fit: cover; }
+    .extra-media::after { content: "FUENTE OFICIAL NINTENDO"; position: absolute; left: 10px; bottom: 10px; padding: 6px 8px; border-radius: 7px; color: white; background: rgba(8,4,17,.82); font-size: .56rem; font-weight: 950; letter-spacing: .08em; }
     .extra-platform { color: var(--pink); font-size: .63rem; font-weight: 950; letter-spacing: .12em; text-transform: uppercase; }
     .extra-card h3 { margin: 6px 0 8px; font-size: 1.15rem; }
     .extra-card p { min-height: 68px; margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
@@ -270,12 +275,15 @@
           <div class="extra-status"><span>PlayStation · Xbox · PC</span><strong>Beneficio vigente</strong></div>
           <a href="https://help.ea.com/es/articles/ea-sports-fc/buy-fc-points/" target="_blank" rel="nofollow noopener">VER GUÍA OFICIAL</a>
         </article>
-        <article class="extra-card">
-          <div class="extra-platform">Nintendo Switch · Expansión</div>
-          <h3>Mario Kart: 48 pistas extra</h3>
-          <p>Booster Course Pass agrega 48 circuitos y 8 personajes. Cuesta USD 24,99 o está incluido mientras mantengas Switch Online + Expansion Pack.</p>
-          <div class="extra-status"><span>Requiere Mario Kart 8 Deluxe</span><strong>Disponible</strong></div>
-          <a href="https://www.nintendo.com/us/store/products/mario-kart-8-deluxe-booster-course-pass-70070000013723-switch/" target="_blank" rel="nofollow noopener">VER EN NINTENDO</a>
+        <article class="extra-card featured">
+          <div class="extra-media"><img src="assets/mario-kart-booster-official.jpg" alt="Mario Kart 8 Deluxe Booster Course Pass, imagen oficial de Nintendo"></div>
+          <div class="extra-content">
+            <div class="extra-platform">Nintendo Switch · Ficha editorial piloto</div>
+            <h3>Mario Kart: 48 pistas extra</h3>
+            <p>Booster Course Pass agrega 48 circuitos y 8 personajes. Cuesta USD 24,99 o está incluido mientras mantengas Switch Online + Expansion Pack.</p>
+            <div class="extra-status"><span>Requiere Mario Kart 8 Deluxe</span><strong>Disponible</strong></div>
+            <a href="mario-kart-booster.html">ABRIR FICHA COMPLETA</a>
+          </div>
         </article>
         <article class="extra-card">
           <div class="extra-platform">Minecraft · Skins y mundos</div>

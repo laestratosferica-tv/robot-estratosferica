@@ -131,8 +131,8 @@ def render(index: int, piece: tuple[str, ...]) -> tuple[Path, dict]:
     run("ffmpeg", "-v", "error", "-i", str(output), "-f", "null", "-")
     evidence = {
         "slug": slug,
-        "category": "contenido_divertido",
-        "category_label": "Contenido divertido",
+        "category": "contenido_automatico",
+        "category_label": "Contenido automático",
         "source_page": page,
         "direct_asset": source,
         "author": author,
@@ -155,7 +155,7 @@ def manifest(slug: str, platform: str, video: Path, evidence: dict, publish_day:
     credit = evidence["credit"]
     caption = f"{evidence['hook'].capitalize()}. {evidence['payoff']}\n\n{credit}\n\n#Gaming #Gamer #HumorGamer #LaEstratosferica"
     mid = f"gamer-viral-{slug}-{platform}-{publish_day.isoformat()}"
-    approval = f"autonomous-gamer-viral-experiment-2026-08-03-{slug}-{platform}"
+    approval = f"contenido-automatico-2026-08-21-{slug}-{platform}"
     if platform == "youtube":
         data = {"schema": "approved_youtube_short_publication_v1", "slug": mid, "approval_id": approval,
                 "video_path": rel, "video_sha256": evidence["sha256"], "title": f"{evidence['hook'].title()} #Shorts",
@@ -174,10 +174,16 @@ def manifest(slug: str, platform: str, video: Path, evidence: dict, publish_day:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     queue = json.loads(QUEUE.read_text())
-    queue["items"] = [x for x in queue["items"] if not x["content_id"].startswith("gamer-viral-")]
-    start = date(2026, 8, 4)
-    for index, piece in enumerate(PIECES, start=1):
-        publish_day = start + timedelta(days=index - 1)
+    queue["items"] = [
+        x for x in queue["items"]
+        if not (
+            x["content_id"].startswith("gamer-viral-")
+            and x.get("publish_at", "") >= "2026-08-05T00:00:00-05:00"
+        )
+    ]
+    start = date(2026, 8, 21)
+    for index, piece in enumerate(PIECES[1:], start=2):
+        publish_day = start + timedelta(days=index - 2)
         video, evidence = render(index, piece)
         slug = piece[0]
         for platform in ("instagram", "facebook", "threads", "youtube"):
@@ -185,20 +191,16 @@ def main() -> None:
             queue["items"].append({
                 "content_id": f"gamer-viral-{slug}-{platform}-{publish_day.isoformat()}",
                 "manifest_path": path.relative_to(ROOT).as_posix(),
-                "approval_id": f"autonomous-gamer-viral-experiment-2026-08-03-{slug}-{platform}",
-                "publish_at": datetime.combine(publish_day, time(2, 0), TZ).isoformat(),
+                "approval_id": f"contenido-automatico-2026-08-21-{slug}-{platform}",
+                "publish_at": datetime.combine(publish_day, time(18, 0), TZ).isoformat(),
                 "status": "approved",
-                # Esta tanda exterior/VR fue sustituida por gameplay interno tras la
-                # revisión editorial del 4 de agosto. Mantenerla desarmada evita que
-                # una regeneración accidental vuelva a programarla.
-                "enabled": False,
-                "editorial_hold": "reemplazar_por_gameplay_interno_divertido",
-                "experiment": "gamer-viral-daily-2am-v1",
-                "category": "contenido_divertido",
-                "category_label": "Contenido divertido",
+                "enabled": True,
+                "experiment": "contenido-automatico-daily-6pm-v1",
+                "category": "contenido_automatico",
+                "category_label": "Contenido automático",
                 "license_evidence_path": (video.parent / "SOURCE_AND_LICENSE.json").relative_to(ROOT).as_posix(),
             })
-        print(f"[{index:02d}/{len(PIECES)}] {slug} -> {publish_day.isoformat()} 02:00")
+        print(f"[{index - 1:02d}/{len(PIECES) - 1}] {slug} -> {publish_day.isoformat()} 18:00")
     QUEUE.write_text(json.dumps(queue, ensure_ascii=False, indent=2) + "\n")
 
 

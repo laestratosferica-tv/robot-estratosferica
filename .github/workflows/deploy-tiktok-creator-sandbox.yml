@@ -1,0 +1,34 @@
+name: Deploy TikTok Creator Sandbox
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test safe defaults
+        run: npm test
+        working-directory: cloudflare/tiktok-creator-sandbox
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: cloudflare/tiktok-creator-sandbox
+          command: deploy
+          secrets: |
+            TIKTOK_CLIENT_KEY
+            TIKTOK_CLIENT_SECRET
+            SESSION_SECRET
+        env:
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          SESSION_SECRET: ${{ secrets.TIKTOK_SESSION_SECRET }}

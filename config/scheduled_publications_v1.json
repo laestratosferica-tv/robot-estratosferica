@@ -305,7 +305,7 @@
     {
       "content_id": "august-approved-real-o-ia-instagram",
       "manifest_path": "artifacts/publication-manifests/august-approved-real-o-ia-instagram.json",
-      "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-instagram",
+      "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-carousel",
       "publish_at": "2026-08-05T12:30:00-05:00",
       "status": "approved",
       "enabled": true
@@ -314,14 +314,6 @@
       "content_id": "august-approved-real-o-ia-facebook",
       "manifest_path": "artifacts/publication-manifests/august-approved-real-o-ia-facebook.json",
       "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-facebook",
-      "publish_at": "2026-08-05T12:30:00-05:00",
-      "status": "approved",
-      "enabled": true
-    },
-    {
-      "content_id": "august-approved-real-o-ia-threads",
-      "manifest_path": "artifacts/publication-manifests/august-approved-real-o-ia-threads.json",
-      "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-threads",
       "publish_at": "2026-08-05T12:30:00-05:00",
       "status": "approved",
       "enabled": true

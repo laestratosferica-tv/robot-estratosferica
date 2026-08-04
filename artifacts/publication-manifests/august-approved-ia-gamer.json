@@ -1,15 +1,13 @@
 {
   "schema": "approved_carousel_publication_v1",
   "slug": "august-approved-ia-gamer",
-  "approval_id": "calendar-7rjurd84r4s8bponvnnlraq83l",
+  "approval_id": "calendar-7rjurd84r4s8bponvnnlraq83l-carousel",
   "platforms": [
     "instagram",
-    "facebook",
     "threads"
   ],
   "expected_accounts": {
     "instagram_username": "laestratosfericatv",
-    "facebook_page_name": "La Estratosférica TV",
     "threads_username": "laestratosfericatv"
   },
   "caption": "La IA ya no solo crea imágenes: también empieza a acompañarte dentro de la partida. Xbox Game Assist (beta) ofrece ayuda contextual, actividad y logros, recomendaciones y modo voz. ¿Ayuda o trampa? Fuente: Xbox Game Assist. #InteligenciaArtificial #Gaming #Xbox #Tecnologia #LaEstratosferica",

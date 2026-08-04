@@ -329,7 +329,23 @@
     {
       "content_id": "august-approved-ia-gamer",
       "manifest_path": "artifacts/publication-manifests/august-approved-ia-gamer.json",
-      "approval_id": "calendar-7rjurd84r4s8bponvnnlraq83l",
+      "approval_id": "calendar-7rjurd84r4s8bponvnnlraq83l-carousel",
+      "publish_at": "2026-08-07T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-ia-gamer-facebook",
+      "manifest_path": "artifacts/publication-manifests/august-approved-ia-gamer-facebook.json",
+      "approval_id": "calendar-7rjurd84r4s8bponvnnlraq83l-facebook",
+      "publish_at": "2026-08-07T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-ia-gamer-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-ia-gamer-youtube.json",
+      "approval_id": "calendar-7rjurd84r4s8bponvnnlraq83l-youtube",
       "publish_at": "2026-08-07T12:30:00-05:00",
       "status": "approved",
       "enabled": true

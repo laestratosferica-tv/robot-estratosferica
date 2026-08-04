@@ -100,10 +100,9 @@ def main() -> None:
         for item in queue["items"]
         if not item["content_id"].startswith("august-approved-")
         or item["content_id"].startswith("august-approved-real-o-ia-")
+        or item["content_id"].startswith("august-approved-ia-gamer")
     ]
     items: list[dict] = []
-
-    carousel(items, slug="august-approved-ia-gamer", publish_at="2026-08-07T12:30:00-05:00", approval="calendar-7rjurd84r4s8bponvnnlraq83l", sources=[BACKUP / f"ia-gamer-carrusel-v1/slide-{i}.png" for i in range(1, 7)], caption="La IA ya no solo crea imágenes: también empieza a acompañarte dentro de la partida. Xbox Game Assist (beta) ofrece ayuda contextual, actividad y logros, recomendaciones y modo voz. ¿Ayuda o trampa? Fuente: Xbox Game Assist. #InteligenciaArtificial #Gaming #Xbox #Tecnologia #LaEstratosferica", threads_text="Xbox Game Assist (beta) puede darte contexto, revisar logros, recomendar juegos y responder por voz. ¿Ayuda o trampa?")
 
     reel(items, slug="august-approved-fosil-guardar", source=BACKUP / "nostalgia-save-icon-v1/Fosil-Boton-Guardar-v6.mp4", publish_at="2026-08-08T20:00:00-05:00", approval="calendar-7tsofoae5fjsddi8bmpvmorvkk", title="El fósil del botón Guardar 💾", caption="El ícono Guardar sobrevivió al disquete que lo originó. ¿Qué otro símbolo sobrevivió a su tecnología? #NostalgiaGamer #GamingLATAM #Tecnologia #LaEstratosferica")
 

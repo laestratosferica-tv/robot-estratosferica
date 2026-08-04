@@ -1,0 +1,18 @@
+{
+  "schema": "promodetector_review_batch_v1",
+  "batch_id": "promodetector-block-01-2026-08-03",
+  "generated_at": "2026-08-03T21:10:00-05:00",
+  "timezone": "America/Bogota",
+  "publication_allowed": false,
+  "summary": {"ready": 8, "commercial": 5, "editorial": 3, "blocked": 0, "discarded": 0},
+  "items": [
+    {"slug":"mini-mic-pro","kind":"commercial","status":"ready","page":"mini-mic-pro.html","evidence":"../../commercial-evidence/mini-mic-v1-amazon.json"},
+    {"slug":"bengoo-g9000","kind":"commercial","status":"ready","page":"bengoo-g9000.html","evidence":"../../commercial-evidence/bengoo-g9000-v1-amazon.json"},
+    {"slug":"alpha-grillers","kind":"commercial","status":"ready","page":"alpha-grillers.html","evidence":"../../commercial-evidence/alpha-grillers-v1-amazon.json"},
+    {"slug":"tapo-c100","kind":"commercial","status":"ready","page":"tapo-c100.html","evidence":"../../commercial-evidence/tapo-c100-v1-amazon.json"},
+    {"slug":"astroai-c2","kind":"commercial","status":"ready","page":"astroai-c2.html","evidence":"../../commercial-evidence/astroai-c2-v1-amazon.json"},
+    {"slug":"mario-kart-booster","kind":"editorial","status":"ready","page":"mario-kart-booster.html","source":"https://www.nintendo.com/us/store/products/mario-kart-8-deluxe-booster-course-pass-70070000013723-switch/"},
+    {"slug":"minecraft-marketplace-pass","kind":"editorial","status":"ready","page":"minecraft-marketplace-pass.html","source":"https://www.minecraft.net/es-mx/marketplace/marketplace-pass"},
+    {"slug":"fc-points-compra-segura","kind":"editorial","status":"ready","page":"fc-points-compra-segura.html","source":"https://help.ea.com/es/articles/ea-sports-fc/buy-fc-points/"}
+  ]
+}

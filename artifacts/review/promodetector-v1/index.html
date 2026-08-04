@@ -135,6 +135,10 @@
     .code-proof-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .code-proof button, .code-proof a { display: grid; place-items: center; min-height: 42px; border: 0; border-radius: 10px; color: #080311; background: var(--cyan); font-size: .7rem; font-weight: 950; text-decoration: none; cursor: pointer; }
     .code-proof a { color: white; border: 1px solid var(--line); background: transparent; }
+    .review-banner { display:grid; grid-template-columns:1fr auto; gap:18px; align-items:center; margin:34px 0; padding:22px; border:1px solid rgba(76,236,255,.3); border-radius:22px; background:linear-gradient(135deg,rgba(76,236,255,.08),rgba(123,53,255,.12)); }
+    .review-banner h2 { margin:4px 0 7px; font-size:clamp(1.5rem,4vw,2.3rem); }
+    .review-banner p { margin:0; color:var(--muted); line-height:1.45; }
+    .review-banner a { display:grid; place-items:center; min-height:46px; padding:0 17px; border-radius:12px; color:#080311; background:var(--cyan); font-size:.72rem; font-weight:950; text-decoration:none; }
     @keyframes sweep { to { transform: rotate(360deg); } }
     @keyframes pulse { to { opacity: .45; } }
     @keyframes reveal { from { opacity: 0; transform: translateY(8px); } }
@@ -160,6 +164,7 @@
       .extras-grid { grid-template-columns: 1fr; }
       .arcade-radar { grid-template-columns: 1fr; }
       .live-code { grid-template-columns: 1fr; }
+      .review-banner { grid-template-columns:1fr; }
       .code-proof { min-width: 0; }
       .code-details { grid-template-columns: 1fr; }
       .pipeline { grid-template-columns: repeat(3, 1fr); }
@@ -210,6 +215,8 @@
       <button class="filter" data-filter="creadores">Creadores</button>
       <button class="filter" data-filter="gaming">Gaming</button>
       <button class="filter" data-filter="gastronomia">Gastronomía</button>
+      <button class="filter" data-filter="hogar">Hogar inteligente</button>
+      <button class="filter" data-filter="movilidad">Movilidad</button>
     </div>
 
     <section class="arcade-radar" aria-labelledby="radarTitle">
@@ -240,32 +247,56 @@
             <p class="summary">Micrófono compacto para voz móvil, entrevistas y contenido corto.</p>
             <div class="score-row"><span>Calificación PromoDetector</span><div class="score">8.8<small>/10</small></div></div>
             <div class="signals"><div class="signal"><strong>Alta</strong>Utilidad</div><div class="signal"><strong>8.8</strong>Reputación</div><div class="signal"><strong>Global</strong>Cobertura</div></div>
-            <div class="validity"><span>Última revisión: hoy</span><strong>Vigente</strong></div>
-            <div class="actions"><a class="primary" href="https://www.amazon.com/dp/B0CMJTSVRW?tag=estrato-web-20" rel="sponsored nofollow noopener" target="_blank">Ver producto</a><button class="compare" type="button">+ Comparar</button></div>
+            <div class="validity"><span>Verificado: 3 ago. 2026</span><strong>Vigente</strong></div>
+            <div class="actions"><a class="primary" href="mini-mic-pro.html">Ver ficha</a><button class="compare" type="button">+ Comparar</button></div>
           </div>
         </article>
 
-        <article class="card monitoring" data-category="gaming" data-country="latam global" data-search="bengoo g9000 headset gaming audifonos gamer">
-          <div class="visual"><span class="badge watch">En monitoreo</span><img src="assets/headset.png" alt="Audífonos gamer con micrófono"></div>
+        <article class="card" data-category="gaming" data-country="latam global" data-search="bengoo g9000 headset gaming audifonos gamer">
+          <div class="visual"><span class="badge">Verificado</span><img src="assets/headset.png" alt="Audífonos gamer con micrófono"></div>
           <div class="body">
             <div class="meta">Gaming · Amazon</div><h3>BENGOO G9000</h3>
             <p class="summary">Headset de entrada para jugar y comunicarse desde una sola pieza.</p>
             <div class="score-row"><span>Calificación PromoDetector</span><div class="score">8.4<small>/10</small></div></div>
             <div class="signals"><div class="signal"><strong>Alta</strong>Demanda</div><div class="signal"><strong>8.4</strong>Reputación</div><div class="signal"><strong>LATAM</strong>Cobertura</div></div>
-            <div class="validity"><span>Esperando nueva comprobación</span><strong style="color:var(--amber)">Monitoreo</strong></div>
-            <div class="actions"><a class="primary" href="#" aria-disabled="true">Verificación pendiente</a><button class="compare" type="button">+ Comparar</button></div>
+            <div class="validity"><span>Verificado: 3 ago. 2026</span><strong>Vigente</strong></div>
+            <div class="actions"><a class="primary" href="bengoo-g9000.html">Ver ficha</a><button class="compare" type="button">+ Comparar</button></div>
           </div>
         </article>
 
         <article class="card" data-category="gastronomia" data-country="colombia latam global" data-search="alpha grillers termometro cocina gastronomia parrilla">
-          <div class="visual"><span class="badge watch">En observación</span><img src="assets/thermometer.png" alt="Termómetro digital de cocina"></div>
+          <div class="visual"><span class="badge">Verificado</span><img src="assets/thermometer.png" alt="Termómetro digital de cocina"></div>
           <div class="body">
             <div class="meta">Gastronomía · Amazon</div><h3>Alpha Grillers</h3>
             <p class="summary">Lectura digital para parrilla y recetas sensibles a la temperatura.</p>
             <div class="score-row"><span>Calificación PromoDetector</span><div class="score">8.6<small>/10</small></div></div>
             <div class="signals"><div class="signal"><strong>Alta</strong>Utilidad</div><div class="signal"><strong>8.9</strong>Reputación</div><div class="signal"><strong>Revisar</strong>Envío</div></div>
-            <div class="validity"><span>Última revisión: hoy</span><strong style="color:var(--amber)">En observación</strong></div>
-            <div class="actions"><a class="primary" href="#" aria-disabled="true">Verificación pendiente</a><button class="compare" type="button">+ Comparar</button></div>
+            <div class="validity"><span>Verificado: 3 ago. 2026</span><strong>Vigente</strong></div>
+            <div class="actions"><a class="primary" href="alpha-grillers.html">Ver ficha</a><button class="compare" type="button">+ Comparar</button></div>
+          </div>
+        </article>
+
+        <article class="card" data-category="hogar" data-country="latam global" data-search="tapo c100 camara hogar inteligente seguridad vision nocturna">
+          <div class="visual"><span class="badge">Verificado</span><img src="assets/tapo-c100.jpg" alt="Cámara interior Tapo C100"></div>
+          <div class="body">
+            <div class="meta">Hogar inteligente · Amazon</div><h3>Tapo C100</h3>
+            <p class="summary">Cámara interior 1080p con movimiento, visión nocturna y audio.</p>
+            <div class="score-row"><span>Calificación PromoDetector</span><div class="score">8.9<small>/10</small></div></div>
+            <div class="signals"><div class="signal"><strong>Alta</strong>Utilidad</div><div class="signal"><strong>1080p</strong>Video</div><div class="signal"><strong>Interior</strong>Uso</div></div>
+            <div class="validity"><span>Verificado: 3 ago. 2026</span><strong>Vigente</strong></div>
+            <div class="actions"><a class="primary" href="tapo-c100.html">Ver ficha</a><button class="compare" type="button">+ Comparar</button></div>
+          </div>
+        </article>
+
+        <article class="card" data-category="movilidad" data-country="latam global" data-search="astroai c2 inflador llantas compresor movilidad carro moto">
+          <div class="visual"><span class="badge">Verificado</span><img src="assets/astroai-c2.jpg" alt="Inflador portátil AstroAI C2"></div>
+          <div class="body">
+            <div class="meta">Movilidad · Amazon</div><h3>AstroAI C2</h3>
+            <p class="summary">Inflador portátil con presión digital, batería y alimentación de 12 V.</p>
+            <div class="score-row"><span>Calificación PromoDetector</span><div class="score">8.3<small>/10</small></div></div>
+            <div class="signals"><div class="signal"><strong>160 PSI</strong>Máximo</div><div class="signal"><strong>Portátil</strong>Formato</div><div class="signal"><strong>12 V</strong>Respaldo</div></div>
+            <div class="validity"><span>Verificado: 3 ago. 2026</span><strong>Vigente</strong></div>
+            <div class="actions"><a class="primary" href="astroai-c2.html">Ver ficha</a><button class="compare" type="button">+ Comparar</button></div>
           </div>
         </article>
       </div>
@@ -317,6 +348,11 @@
       <div class="step"><strong>6. Descarta</strong>Lo vencido</div>
     </section>
 
+    <section class="review-banner" aria-label="Estado del bloque PromoDetector">
+      <div><div class="eyebrow">Paquete automático · Bloque 01</div><h2>8 fichas listas para revisión conjunta.</h2><p>Cinco productos con evidencia comercial y tres oportunidades editoriales verificadas. Ninguna ficha dudosa se publica.</p></div>
+      <a href="batch-review.html">VER ESTADO DEL BLOQUE</a>
+    </section>
+
     <section class="live-code" aria-labelledby="liveCodeTitle">
       <div>
         <div class="eyebrow">Zona de códigos · Señal vigente</div>
@@ -354,7 +390,9 @@
     const radarCatalog = [
       { name: 'Mini Mic Pro', score: '8.8/10', reason: 'Una señal útil para creadores que necesitan mejorar la voz sin cargar un estudio.', url: 'https://www.amazon.com/dp/B0CMJTSVRW?tag=estrato-web-20' },
       { name: 'BENGOO G9000', score: '8.4/10', reason: 'Una opción de entrada para gaming, comunicación y sesiones largas.', url: 'https://www.amazon.com/dp/B01H6GUCCQ?tag=estrato-web-20' },
-      { name: 'Alpha Grillers', score: '8.6/10', reason: 'Precisión y velocidad para cocinar sin depender de aproximaciones.', url: 'https://www.amazon.com/dp/B00S93EQUK?tag=estrato-web-20' }
+      { name: 'Alpha Grillers', score: '8.6/10', reason: 'Precisión y velocidad para cocinar sin depender de aproximaciones.', url: 'https://www.amazon.com/dp/B00S93EQUK?tag=estrato-web-20' },
+      { name: 'Tapo C100', score: '8.9/10', reason: 'Una señal útil para vigilar interiores con video, movimiento y visión nocturna.', url: 'https://www.amazon.com/dp/B0866S3D82?tag=estrato-web-20' },
+      { name: 'AstroAI C2', score: '8.3/10', reason: 'Una herramienta portátil para recuperar presión y continuar el viaje.', url: 'https://www.amazon.com/dp/B0948WY5YX?tag=estrato-web-20' }
     ];
     let activeCategory = 'todos';
 

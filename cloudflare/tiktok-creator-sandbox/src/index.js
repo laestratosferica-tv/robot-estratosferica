@@ -71,8 +71,8 @@ function creator(session, transferAllowed) {
   return page(`<div class="eyebrow">Cuenta conectada</div><div class="card"><div class="profile">${avatar}<div><strong>${session.display_name || "Creator"}</strong><div class="fine">TikTok conectado · publicación bajo tu control</div></div></div></div><div class="card"><h2>Envía tu video a borradores</h2><p class="lead">Selecciona un MP4 propio. Máximo 50 MB para esta prueba.</p><label class="drop"><input id="video" type="file" accept="video/mp4"><span id="fileText">Seleccionar video</span></label><div id="message" class="status">${transferAllowed ? "Prueba sandbox autorizada." : "Transferencia bloqueada hasta autorizar la prueba sandbox."}</div><button id="send">Enviar como borrador</button> <a class="button secondary" href="/disconnect">Desconectar</a></div><script>const i=document.querySelector('#video'),m=document.querySelector('#message');i.onchange=()=>document.querySelector('#fileText').textContent=i.files[0]?.name||'Seleccionar video';document.querySelector('#send').onclick=async()=>{const f=i.files[0];if(!f){m.textContent='Selecciona un video.';return}m.textContent='Preparando…';const r=await fetch('/api/video',{method:'POST',headers:{'content-type':f.type},body:f});const d=await r.json();m.textContent=d.message||d.detail||'Respuesta recibida';};</script>`);
 }
 
-async function exchange(code, env) {
-  const response = await fetch(TOKEN_URL, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_key: env.TIKTOK_CLIENT_KEY, client_secret: env.TIKTOK_CLIENT_SECRET, code, grant_type: "authorization_code", redirect_uri: env.TIKTOK_REDIRECT_URI }) });
+async function exchange(code, env, redirectUri) {
+  const response = await fetch(TOKEN_URL, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_key: env.TIKTOK_CLIENT_KEY, client_secret: env.TIKTOK_CLIENT_SECRET, code, grant_type: "authorization_code", redirect_uri: redirectUri }) });
   if (!response.ok) throw new Error("token_exchange_failed");
   return response.json();
 }
@@ -96,6 +96,7 @@ async function sendDraft(video, accessToken) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const redirectUri = `${url.origin}/oauth/tiktok/callback`;
     const configured = Boolean(env.TIKTOK_CLIENT_KEY && env.TIKTOK_CLIENT_SECRET && env.SESSION_SECRET);
     if (url.pathname === "/health") return Response.json({ ok: true, oauth_configured: configured, draft_transfer_enabled: env.ENABLE_TIKTOK_DRAFT_TRANSFER === "true", sandbox_review_mode: env.TIKTOK_SANDBOX_REVIEW_MODE === "true", transfer_allowed: allowed(env), direct_post_enabled: false });
     if (url.pathname === "/") return home(configured);
@@ -103,13 +104,13 @@ export default {
       if (!configured) return new Response("OAuth not configured", { status: 503 });
       const state = crypto.randomUUID();
       const target = new URL(AUTH_URL);
-      target.search = new URLSearchParams({ client_key: env.TIKTOK_CLIENT_KEY, scope: "user.info.basic,video.upload", response_type: "code", redirect_uri: env.TIKTOK_REDIRECT_URI, state });
+      target.search = new URLSearchParams({ client_key: env.TIKTOK_CLIENT_KEY, scope: "user.info.basic,video.upload", response_type: "code", redirect_uri: redirectUri, state });
       return new Response(null, { status: 303, headers: { location: target.toString(), "set-cookie": setCookie(STATE_COOKIE, state, 600) } });
     }
     if (url.pathname === "/oauth/tiktok/callback") {
       if (url.searchParams.get("state") !== cookie(request, STATE_COOKIE)) return new Response("Invalid OAuth state", { status: 400 });
       try {
-        const token = await exchange(url.searchParams.get("code") || "", env);
+        const token = await exchange(url.searchParams.get("code") || "", env, redirectUri);
         const user = await profile(token.access_token);
         const session = await seal({ access_token: token.access_token, refresh_token: token.refresh_token, scopes: token.scope, ...user }, env.SESSION_SECRET);
         return new Response(null, { status: 303, headers: { location: "/creator", "set-cookie": setCookie(COOKIE, session) } });

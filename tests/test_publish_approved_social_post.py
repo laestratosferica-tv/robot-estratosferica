@@ -40,6 +40,18 @@ class ApprovedSocialPostTests(unittest.TestCase):
         receipt = run(path, root=self.root, live=False, env={})
         self.assertFalse(receipt["published"])
 
+    def test_threads_video_is_supported_and_hash_validated(self):
+        video = self.root / "approved.mp4"
+        video.write_bytes(b"approved-video")
+        path = self.write_manifest(
+            platform="threads",
+            post_type="video",
+            asset_path="approved.mp4",
+            asset_sha256=hashlib.sha256(video.read_bytes()).hexdigest(),
+        )
+        manifest = load_manifest(path, self.root)
+        self.assertEqual(manifest["post_type"], "video")
+
     def test_text_link_requires_https(self):
         path = self.write_manifest(
             platform="facebook",

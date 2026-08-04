@@ -303,6 +303,14 @@
       "resolver_evidence_path": "artifacts/commercial-evidence/astroai-c2-v1-amazon.json"
     },
     {
+      "content_id": "august-approved-real-o-ia-instagram",
+      "manifest_path": "artifacts/publication-manifests/august-approved-real-o-ia-instagram.json",
+      "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-instagram",
+      "publish_at": "2026-08-05T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
       "content_id": "august-approved-real-o-ia-facebook",
       "manifest_path": "artifacts/publication-manifests/august-approved-real-o-ia-facebook.json",
       "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-facebook",
@@ -314,6 +322,14 @@
       "content_id": "august-approved-real-o-ia-threads",
       "manifest_path": "artifacts/publication-manifests/august-approved-real-o-ia-threads.json",
       "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-threads",
+      "publish_at": "2026-08-05T12:30:00-05:00",
+      "status": "approved",
+      "enabled": true
+    },
+    {
+      "content_id": "august-approved-real-o-ia-youtube",
+      "manifest_path": "artifacts/publication-manifests/august-approved-real-o-ia-youtube.json",
+      "approval_id": "calendar-32odvbtiii38r21d91h25o41t8-youtube",
       "publish_at": "2026-08-05T12:30:00-05:00",
       "status": "approved",
       "enabled": true

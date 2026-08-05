@@ -1,0 +1,44 @@
+{
+  "schema": "amazon_influencer_growth_strategy_v1",
+  "account": "@laestratosfericatv",
+  "objective": "build_sustained_audience_activity_and_interaction_before_reapplication",
+  "current_constraint": "engagement_and_audience_growth",
+  "volume_policy": {
+    "minimum_instagram_posts_per_week": 3,
+    "maximum_instagram_feed_posts_per_day": 2,
+    "increase_volume_when_engagement_is_weak": false
+  },
+  "weekly_experiment_mix": {
+    "discovery_reels": 2,
+    "useful_carousels": 1,
+    "community_story_or_question": 1,
+    "commercial_posts_maximum": 1
+  },
+  "measurement_windows_hours": [
+    24,
+    48,
+    168
+  ],
+  "primary_metrics": [
+    "non_follower_reach",
+    "completion_rate",
+    "shares",
+    "saves",
+    "comments",
+    "follows"
+  ],
+  "decision_rules": {
+    "single_variable_per_experiment": true,
+    "minimum_equivalent_pieces_before_format_decision": 5,
+    "likes_alone_can_select_a_winner": false,
+    "automatic_strategy_changes_enabled": false,
+    "automatic_reapplication_enabled": false,
+    "requires_human_review": true
+  },
+  "commercial_continuity": {
+    "amazon_affiliates_enabled": true,
+    "promodetector_enabled": true,
+    "affiliate_disclosure_required": true,
+    "commercial_content_must_not_displace_community_learning": true
+  }
+}

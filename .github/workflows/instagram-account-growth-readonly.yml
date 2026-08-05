@@ -24,6 +24,9 @@ jobs:
           GRAPH_VERSION: v25.0
         run: python tools/collect_instagram_account_growth.py
 
+      - name: Assess sustained reapplication readiness
+        run: python tools/assess_amazon_influencer_readiness.py
+
       - name: Upload redacted growth report
         uses: actions/upload-artifact@v4
         with:

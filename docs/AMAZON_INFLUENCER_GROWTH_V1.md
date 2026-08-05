@@ -36,6 +36,21 @@ Una señal de 80 o más, con datos completos, cambia la recomendación a
 `review_reapplication_manually`. Nunca presenta una solicitud ni cambia la
 estrategia de forma automática.
 
+## Sostenibilidad antes de volver a solicitar
+
+Una semana buena no basta. El evaluador de reingreso exige cuatro cortes
+semanales y revisa, con metas internas visibles:
+
+- cuatro semanas completas;
+- al menos tres publicaciones en cada semana;
+- interacción de 3 % o más en al menos tres de cuatro semanas;
+- crecimiento positivo de seguidores en al menos tres de cuatro semanas;
+- meta interna de 2.000 seguidores.
+
+Solo si todas las compuertas pasan genera
+`ready_for_human_reapplication_review: true`. Esto sigue sin representar un
+criterio oficial ni garantizar que Amazon acepte la cuenta.
+
 ## Ejecución
 
 El workflow `instagram-account-growth-readonly.yml` admite ejecución manual y
@@ -49,6 +64,7 @@ Los archivos se entregan como artefactos privados por 90 días:
 ```text
 artifacts/instagram-account-growth/YYYY-MM-DD.json
 artifacts/instagram-account-growth/latest.json
+artifacts/instagram-account-growth/reapplication-readiness.json
 ```
 
 ## Seguridad

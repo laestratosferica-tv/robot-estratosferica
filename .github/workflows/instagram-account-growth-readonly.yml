@@ -1,0 +1,36 @@
+name: Instagram Account Growth - Read Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Collect weekly account growth
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          GRAPH_VERSION: v25.0
+        run: python tools/collect_instagram_account_growth.py
+
+      - name: Assess sustained reapplication readiness
+        run: python tools/assess_amazon_influencer_readiness.py
+
+      - name: Upload redacted growth report
+        uses: actions/upload-artifact@v4
+        with:
+          name: instagram-account-growth
+          path: artifacts/instagram-account-growth/*.json
+          if-no-files-found: error
+          retention-days: 90

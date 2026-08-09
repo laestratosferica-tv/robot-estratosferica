@@ -1,0 +1,17 @@
+{
+  "schema": "contenido_divertido_license_evidence_v1",
+  "slug": "final-sin-frenos",
+  "category": "contenido_divertido",
+  "source_page": "https://commons.wikimedia.org/wiki/File:Xonotic_0-8-2_gameplay.webm",
+  "direct_asset": "https://upload.wikimedia.org/wikipedia/commons/b/b9/Xonotic_0-8-2_gameplay.webm",
+  "source_sha256": "36ef854b29293c027dd161185dc0a2e9d03ec7854ea9039800164b03956d3a83",
+  "game": "Xonotic 0.8.2",
+  "author": "Drummyfish and Xonotic developers",
+  "license": "GPL-3.0-or-later",
+  "license_url": "https://www.gnu.org/licenses/gpl-3.0.html",
+  "authorization": "The uploader releases the recording under GPLv3 or later; source page confirms own recording against bots and no extra rights reserved.",
+  "credit": "Xonotic 0.8.2 gameplay by Drummyfish and Xonotic developers, GPLv3+.",
+  "game_audio_retained": true,
+  "duration_seconds": 8,
+  "sha256": "9522cc0e45b77f23be12bf841dd0baa4838272f508d07782ffef931c9b940e74"
+}

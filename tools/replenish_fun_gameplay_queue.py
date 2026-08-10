@@ -23,6 +23,7 @@ PIECES = [
     ("combo-improbable", 105, "COMBO IMPROBABLE", "El rival pidió repetición."),
     ("giro-y-castigo", 128, "GIRO Y CASTIGO", "Miró atrás. Mala idea."),
     ("final-sin-frenos", 151, "FINAL SIN FRENOS", "El caos también tiene puntería."),
+    ("rebote-imprevisto", 174, "REBOTE IMPREVISTO", "La pared también quería jugar."),
 ]
 
 def run(*args): subprocess.run(args, check=True)
@@ -47,19 +48,59 @@ def manifest(slug, platform, video, digest, day, hook, payoff):
 
 def main():
     if not SOURCE.exists(): raise SystemExit("licensed_source_missing")
-    queue=json.loads(QUEUE.read_text()); start_day=date(2026,8,10)
-    keep=[]
-    for item in queue["items"]:
-        if item.get("category")=="contenido_divertido" and item.get("experiment")=="contenido-divertido-daily-2am-v1" and item.get("publish_at","") >= start_day.isoformat(): continue
-        keep.append(item)
-    for offset,(slug,clip_start,hook,payoff) in enumerate(PIECES):
+    queue=json.loads(QUEUE.read_text())
+    now=datetime.now(TZ)
+    future_items=[
+        item for item in queue["items"]
+        if item.get("category")=="contenido_divertido"
+        and item.get("experiment")=="contenido-divertido-daily-2am-v1"
+        and item.get("status")=="approved"
+        and item.get("enabled")
+        and datetime.fromisoformat(item["publish_at"]) > now
+    ]
+    future_days={datetime.fromisoformat(item["publish_at"]).date() for item in future_items}
+    scheduled_slugs=set()
+    duplicate_days=set()
+    for day in sorted(future_days):
+        representative=next(item for item in future_items if datetime.fromisoformat(item["publish_at"]).date()==day)
+        slug=Path(representative["license_evidence_path"]).parent.name[11:]
+        if slug in scheduled_slugs:
+            duplicate_days.add(day)
+        else:
+            scheduled_slugs.add(slug)
+    if duplicate_days:
+        queue["items"]=[
+            item for item in queue["items"]
+            if not (
+                item.get("category")=="contenido_divertido"
+                and item.get("experiment")=="contenido-divertido-daily-2am-v1"
+                and datetime.fromisoformat(item.get("publish_at", "1900-01-01T00:00:00-05:00")).date() in duplicate_days
+            )
+        ]
+        future_days-=duplicate_days
+    scheduled_slugs.update(
+        Path(item["license_evidence_path"]).parent.name[11:]
+        for item in queue["items"]
+        if item.get("category")=="contenido_divertido"
+        and item.get("experiment")=="contenido-divertido-daily-2am-v1"
+        and datetime.fromisoformat(item["publish_at"]).date() <= now.date()
+    )
+    needed=max(0, 7-len(future_days))
+    if not needed:
+        return
+    start_day=(max(future_days) if future_days else now.date())+timedelta(days=1)
+    for offset in range(needed):
+        choices=[piece for piece in PIECES if piece[0] not in scheduled_slugs]
+        if not choices: choices=PIECES
+        slug,clip_start,hook,payoff=choices[offset % len(choices)]
+        scheduled_slugs.add(slug)
         day=start_day+timedelta(days=offset); folder=OUT/f"{day.isoformat()}-{slug}"; folder.mkdir(parents=True,exist_ok=True)
         video=render(folder,slug,clip_start,hook,payoff); digest=sha(video)
         evidence={"schema":"contenido_divertido_license_evidence_v1","slug":slug,"category":"contenido_divertido","source_page":SOURCE_PAGE,"direct_asset":SOURCE_URL,"source_sha256":sha(SOURCE),"game":"Xonotic 0.8.2","author":"Drummyfish and Xonotic developers","license":"GPL-3.0-or-later","license_url":"https://www.gnu.org/licenses/gpl-3.0.html","authorization":"The uploader releases the recording under GPLv3 or later; source page confirms own recording against bots and no extra rights reserved.","credit":"Xonotic 0.8.2 gameplay by Drummyfish and Xonotic developers, GPLv3+.","game_audio_retained":True,"duration_seconds":8,"sha256":digest}
         (folder/"SOURCE_AND_LICENSE.json").write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+"\n")
         for platform in ("instagram","facebook","threads","youtube"):
             path=manifest(slug,platform,video,digest,day,hook,payoff); ident=f"contenido-divertido-{slug}-{platform}-{day.isoformat()}"
-            keep.append({"content_id":ident,"manifest_path":path.relative_to(ROOT).as_posix(),"approval_id":ident,"publish_at":datetime.combine(day,time(2),TZ).isoformat(),"status":"approved","enabled":True,"experiment":"contenido-divertido-daily-2am-v1","category":"contenido_divertido","category_label":"Contenido divertido","license_evidence_path":(folder/"SOURCE_AND_LICENSE.json").relative_to(ROOT).as_posix()})
-    queue["items"]=keep; QUEUE.write_text(json.dumps(queue,ensure_ascii=False,indent=2)+"\n")
+            queue["items"].append({"content_id":ident,"manifest_path":path.relative_to(ROOT).as_posix(),"approval_id":ident,"publish_at":datetime.combine(day,time(2),TZ).isoformat(),"status":"approved","enabled":True,"experiment":"contenido-divertido-daily-2am-v1","category":"contenido_divertido","category_label":"Contenido divertido","license_evidence_path":(folder/"SOURCE_AND_LICENSE.json").relative_to(ROOT).as_posix()})
+    QUEUE.write_text(json.dumps(queue,ensure_ascii=False,indent=2)+"\n")
 
 if __name__ == "__main__": main()

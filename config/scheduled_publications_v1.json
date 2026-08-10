@@ -1885,6 +1885,54 @@
       "category": "contenido_divertido",
       "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/contenido_divertido-2026-08/2026-08-16-final-sin-frenos/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "contenido-divertido-rebote-imprevisto-instagram-2026-08-17",
+      "manifest_path": "artifacts/publication-manifests/contenido-divertido-rebote-imprevisto-instagram-2026-08-17.json",
+      "approval_id": "contenido-divertido-rebote-imprevisto-instagram-2026-08-17",
+      "publish_at": "2026-08-17T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "contenido-divertido-daily-2am-v1",
+      "category": "contenido_divertido",
+      "category_label": "Contenido divertido",
+      "license_evidence_path": "artifacts/approved/scheduled/contenido_divertido-2026-08/2026-08-17-rebote-imprevisto/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "contenido-divertido-rebote-imprevisto-facebook-2026-08-17",
+      "manifest_path": "artifacts/publication-manifests/contenido-divertido-rebote-imprevisto-facebook-2026-08-17.json",
+      "approval_id": "contenido-divertido-rebote-imprevisto-facebook-2026-08-17",
+      "publish_at": "2026-08-17T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "contenido-divertido-daily-2am-v1",
+      "category": "contenido_divertido",
+      "category_label": "Contenido divertido",
+      "license_evidence_path": "artifacts/approved/scheduled/contenido_divertido-2026-08/2026-08-17-rebote-imprevisto/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "contenido-divertido-rebote-imprevisto-threads-2026-08-17",
+      "manifest_path": "artifacts/publication-manifests/contenido-divertido-rebote-imprevisto-threads-2026-08-17.json",
+      "approval_id": "contenido-divertido-rebote-imprevisto-threads-2026-08-17",
+      "publish_at": "2026-08-17T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "contenido-divertido-daily-2am-v1",
+      "category": "contenido_divertido",
+      "category_label": "Contenido divertido",
+      "license_evidence_path": "artifacts/approved/scheduled/contenido_divertido-2026-08/2026-08-17-rebote-imprevisto/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "contenido-divertido-rebote-imprevisto-youtube-2026-08-17",
+      "manifest_path": "artifacts/publication-manifests/contenido-divertido-rebote-imprevisto-youtube-2026-08-17.json",
+      "approval_id": "contenido-divertido-rebote-imprevisto-youtube-2026-08-17",
+      "publish_at": "2026-08-17T02:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "contenido-divertido-daily-2am-v1",
+      "category": "contenido_divertido",
+      "category_label": "Contenido divertido",
+      "license_evidence_path": "artifacts/approved/scheduled/contenido_divertido-2026-08/2026-08-17-rebote-imprevisto/SOURCE_AND_LICENSE.json"
     }
   ]
 }

@@ -12,6 +12,10 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout: |
+            cloudflare/whatsapp-intelligence-radar
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

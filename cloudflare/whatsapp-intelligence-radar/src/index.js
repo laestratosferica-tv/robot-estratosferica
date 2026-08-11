@@ -5,6 +5,17 @@ const COMMANDS = new Map([
   ["APRENDIZAJE", "learning"], ["IDEA", "idea"],
 ]);
 
+const CATEGORY_RULES = [
+  ["character", ["personaje", "avatar", "mascota", "apariencia", "skin", "diseno de personaje"]],
+  ["visual_effect", ["efecto", "transicion", "animacion", "filtro", "vfx", "overlay"]],
+  ["robot_knowledge", ["robot", "agente", "automatizacion", "memoria", "conocimiento del proyecto"]],
+  ["tool", ["herramienta", "aplicacion", "plataforma", "software", "plugin", "servicio"]],
+  ["learning", ["aprendizaje", "tutorial", "curso", "guia", "como hacer", "explica"]],
+  ["editorial_news", ["noticia", "anuncio", "anuncia", "lanzamiento", "actualizacion", "confirmado", "ultima hora"]],
+  ["editorial_trend", ["tendencia", "viral", "trend", "tiktok", "reels", "shorts"]],
+  ["idea", ["idea", "propuesta", "podriamos", "opcion", "concepto", "inspiracion"]],
+];
+
 const SIGNAL_RETENTION_SECONDS = 90 * 24 * 60 * 60;
 
 const PRIVACY_NOTICE = `<!doctype html>
@@ -45,9 +56,32 @@ async function digest(value) {
 function classify(text) {
   const trimmed = text.trim();
   const [first = ""] = trimmed.split(/\s+/u);
-  const category = COMMANDS.get(first.replace(/:$/u, "").toUpperCase()) || "unclassified";
   const links = [...trimmed.matchAll(/https?:\/\/[^\s]+/gu)].map((match) => match[0]).slice(0, 5);
-  return { category, text: trimmed.slice(0, 4000), links, confidence: category === "unclassified" ? "needs_triage" : "submitted_signal" };
+  const submittedCategory = COMMANDS.get(first.replace(/:$/u, "").toUpperCase());
+  if (submittedCategory) return { category: submittedCategory, text: trimmed.slice(0, 4000), links, confidence: "high", classification_method: "submitted_label" };
+
+  const normalized = trimmed.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/gu, "");
+  const scored = CATEGORY_RULES.map(([category, terms], index) => ({
+    category,
+    index,
+    score: terms.reduce((total, term) => total + (normalized.includes(term) ? 1 : 0), 0),
+  })).sort((left, right) => right.score - left.score || left.index - right.index);
+  let category = scored[0].score > 0 ? scored[0].category : "unclassified";
+  let method = scored[0].score > 0 ? "natural_language_rules" : "needs_triage";
+
+  if ((category === "unclassified" || (links.length === 1 && trimmed === links[0])) && links.some((link) => {
+    try { return /(?:^|\.)tiktok\.com$/iu.test(new URL(link).hostname); } catch { return false; }
+  })) {
+    category = "editorial_trend";
+    method = "source_domain";
+  }
+  return {
+    category,
+    text: trimmed.slice(0, 4000),
+    links,
+    confidence: category === "unclassified" ? "low" : "medium",
+    classification_method: method,
+  };
 }
 
 function messages(payload) {

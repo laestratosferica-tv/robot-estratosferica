@@ -45,6 +45,28 @@ test("stores a structured knowledge signal only after a signed webhook", async (
   assert.deepEqual(retention, { expirationTtl: 7776000 });
 });
 
+test("classifies a bare TikTok share automatically without requiring a title", async () => {
+  const records = new Map();
+  const body = JSON.stringify({ entry: [{ changes: [{ value: { messages: [{ id: "wamid.tiktok", from: "573001112233", type: "text", text: { body: "https://www.tiktok.com/@demo/video/123" } }] } }] }] });
+  const env = { ENABLE_WHATSAPP_RADAR: "true", WHATSAPP_APP_SECRET: secret, RADAR_KV: { put: async (key, value) => records.set(key, JSON.parse(value)) } };
+  const response = await worker.fetch(new Request("https://example.com/webhooks/whatsapp", { method: "POST", headers: { "x-hub-signature-256": await signature(body) }, body }), env);
+  assert.equal(response.status, 200);
+  const item = records.get("radar:received:wamid.tiktok");
+  assert.equal(item.category, "editorial_trend");
+  assert.equal(item.classification_method, "source_domain");
+  assert.equal(item.confidence, "medium");
+});
+
+test("classifies natural Spanish messages without command prefixes", async () => {
+  const records = new Map();
+  const body = JSON.stringify({ entry: [{ changes: [{ value: { messages: [{ id: "wamid.character", from: "573001112233", type: "text", text: { body: "Nueva opción para crear personajes y probar su apariencia" } }] } }] }] });
+  const env = { ENABLE_WHATSAPP_RADAR: "true", WHATSAPP_APP_SECRET: secret, RADAR_KV: { put: async (key, value) => records.set(key, JSON.parse(value)) } };
+  await worker.fetch(new Request("https://example.com/webhooks/whatsapp", { method: "POST", headers: { "x-hub-signature-256": await signature(body) }, body }), env);
+  const item = records.get("radar:received:wamid.character");
+  assert.equal(item.category, "character");
+  assert.equal(item.classification_method, "natural_language_rules");
+});
+
 test("rejects unsigned messages", async () => {
   const response = await worker.fetch(new Request("https://example.com/webhooks/whatsapp", { method: "POST", body: "{}" }), { ENABLE_WHATSAPP_RADAR: "true", WHATSAPP_APP_SECRET: secret, RADAR_KV: { put: async () => assert.fail("must not write") } });
   assert.equal(response.status, 401);

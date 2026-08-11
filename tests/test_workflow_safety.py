@@ -81,7 +81,10 @@ class WorkflowSafetyTests(unittest.TestCase):
     def test_safety_report_is_green(self):
         report = build_safety_report()
         self.assertTrue(report["safe"], report["errors"])
-        self.assertEqual(report["scheduled_workflows"], ["scheduled-meta-publisher.yml"])
+        self.assertEqual(
+            report["scheduled_workflows"],
+            ["promodetector-seo-radar.yml", "scheduled-meta-publisher.yml"],
+        )
         self.assertFalse(report["publishing_enabled"])
         self.assertFalse(report["external_writes_enabled"])
         self.assertFalse(report["paid_generation_enabled"])

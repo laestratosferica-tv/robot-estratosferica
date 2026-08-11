@@ -71,15 +71,23 @@ def build_safety_report() -> dict[str, Any]:
         if production_gate not in content:
             errors.append(f"{filename} is missing the production gate")
 
-    allowed_scheduled = sorted(
+    allowed_publish_scheduled = sorted(
         filename
         for filename, role in inventory.items()
         if role == "controlled_scheduled_publisher"
     )
+    allowed_validation_scheduled = sorted(
+        filename
+        for filename, role in inventory.items()
+        if role == "controlled_scheduled_validator"
+    )
+    allowed_scheduled = sorted(
+        set(allowed_publish_scheduled) | set(allowed_validation_scheduled)
+    )
     unexpected_scheduled = sorted(set(scheduled) - set(allowed_scheduled))
     if unexpected_scheduled:
         errors.append(f"unexpected scheduled workflows enabled: {unexpected_scheduled}")
-    for filename in allowed_scheduled:
+    for filename in allowed_publish_scheduled:
         content = (WORKFLOWS / filename).read_text(encoding="utf-8")
         if "schedule:" not in content:
             errors.append(f"{filename} is missing its controlled schedule")
@@ -87,6 +95,14 @@ def build_safety_report() -> dict[str, Any]:
             errors.append(f"{filename} is missing the production gate")
         if "vars.SCHEDULED_PUBLISHING_ARMED == 'true'" not in content:
             errors.append(f"{filename} is missing the scheduled publishing gate")
+    for filename in allowed_validation_scheduled:
+        content = (WORKFLOWS / filename).read_text(encoding="utf-8")
+        if "schedule:" not in content:
+            errors.append(f"{filename} is missing its controlled schedule")
+        if "contents: read" not in content:
+            errors.append(f"{filename} must remain read-only")
+        if "deploy_site_version" in content or "git push" in content:
+            errors.append(f"{filename} cannot deploy or push")
 
     editorial = load_json(EDITORIAL_CONFIG)["safe_mode"]
     if editorial.get("dry_run") is not True:

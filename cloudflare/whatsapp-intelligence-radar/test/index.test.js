@@ -49,3 +49,16 @@ test("rejects unsigned messages", async () => {
   const response = await worker.fetch(new Request("https://example.com/webhooks/whatsapp", { method: "POST", body: "{}" }), { ENABLE_WHATSAPP_RADAR: "true", WHATSAPP_APP_SECRET: secret, RADAR_KV: { put: async () => assert.fail("must not write") } });
   assert.equal(response.status, 401);
 });
+
+test("protects and returns recent signals without sender identifiers", async () => {
+  const record = { id: "radar:received:wamid.1", received_at: "2026-08-11T16:54:00.000Z", category: "idea", text: "IDEA prueba del Radar", links: [], status: "received", sender_hash: "hidden" };
+  const env = { RADAR_ADMIN_TOKEN: "admin", RADAR_KV: { list: async () => ({ keys: [{ name: record.id }] }), get: async () => record } };
+  const denied = await worker.fetch(new Request("https://example.com/internal/recent"), env);
+  assert.equal(denied.status, 401);
+  const allowed = await worker.fetch(new Request("https://example.com/internal/recent", { headers: { authorization: "Bearer admin" } }), env);
+  assert.equal(allowed.status, 200);
+  const result = await allowed.json();
+  assert.equal(result.count, 1);
+  assert.equal(result.signals[0].text, "IDEA prueba del Radar");
+  assert.equal("sender_hash" in result.signals[0], false);
+});

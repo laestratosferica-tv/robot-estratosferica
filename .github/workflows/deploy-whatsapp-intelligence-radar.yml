@@ -32,6 +32,8 @@ jobs:
           secrets: |
             WHATSAPP_APP_SECRET
             WHATSAPP_WEBHOOK_VERIFY_TOKEN
+            RADAR_ADMIN_TOKEN
         env:
           WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_RADAR_APP_SECRET }}
           WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${{ secrets.WHATSAPP_RADAR_VERIFY_TOKEN }}
+          RADAR_ADMIN_TOKEN: ${{ secrets.WHATSAPP_RADAR_ADMIN_TOKEN }}

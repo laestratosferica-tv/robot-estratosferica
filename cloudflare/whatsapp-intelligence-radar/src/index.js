@@ -78,11 +78,26 @@ async function acceptWebhook(request, env) {
   return response(200, "EVENT_RECEIVED");
 }
 
+async function recentSignals(request, env) {
+  const authorization = request.headers.get("authorization") || "";
+  const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  if (!sameValue(token, env.RADAR_ADMIN_TOKEN || "")) return response(401, "No autorizado.");
+  if (!env.RADAR_KV) return response(503, "Almacenamiento no disponible.");
+  const listed = await env.RADAR_KV.list({ prefix: "radar:received:", limit: 20 });
+  const records = await Promise.all((listed.keys || []).map(async ({ name }) => {
+    const record = await env.RADAR_KV.get(name, "json");
+    if (!record) return null;
+    return { id: record.id, received_at: record.received_at, category: record.category, text: record.text, links: record.links, status: record.status };
+  }));
+  return Response.json({ count: records.filter(Boolean).length, signals: records.filter(Boolean).sort((a, b) => String(b.received_at).localeCompare(String(a.received_at))) }, { headers: { "cache-control": "no-store" } });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/privacy") return new Response(PRIVACY_NOTICE, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=3600" } });
     if (url.pathname === "/health") return Response.json({ ok: true, whatsapp_radar_enabled: env.ENABLE_WHATSAPP_RADAR === "true", automatic_publication: false, automatic_knowledge_approval: false });
+    if (url.pathname === "/internal/recent" && request.method === "GET") return recentSignals(request, env);
     if (url.pathname !== "/webhooks/whatsapp") return response(404, "No encontrado.");
     if (request.method === "GET") {
       if (url.searchParams.get("hub.mode") !== "subscribe" || !sameValue(url.searchParams.get("hub.verify_token") || "", env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "")) return response(403, "Verificación no válida.");

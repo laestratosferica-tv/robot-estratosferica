@@ -21,6 +21,12 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            media_factory
+            tools/generate_joseverso_voice.py
+            tests/test_elevenlabs_tts.py
+          sparse-checkout-cone-mode: false
 
       - uses: actions/setup-python@v5
         with:

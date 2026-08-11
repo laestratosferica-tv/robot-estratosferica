@@ -42,6 +42,7 @@ jobs:
       - name: Generate private voice test
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          PYTHONPATH: .
         run: >-
           python tools/generate_joseverso_voice.py
           --script-file artifacts/private-review/script.txt

@@ -1,0 +1,38 @@
+name: PromoDetector SEO Radar
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 11,17,23 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: sites/promodetector
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sites/promodetector/package-lock.json
+      - run: npm ci
+      - name: Build crawlable site and evaluate freshness
+        run: npm run seo:build
+      - name: Run SEO and fail-closed tests
+        run: node --test tests/seo.test.mjs
+      - name: Export diagnostic artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: promodetector-seo-diagnostic
+          path: |
+            sites/promodetector/public/catalog-status.json
+            sites/promodetector/public/sitemap.xml
+            sites/promodetector/public/robots.txt
+          retention-days: 14

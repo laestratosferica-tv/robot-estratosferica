@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /batch-review.html
+Sitemap: https://promodetector.co/sitemap.xml

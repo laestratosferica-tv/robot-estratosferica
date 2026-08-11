@@ -46,6 +46,7 @@
     "media_engine.yml": "legacy_quarantine",
     "meta-supervised-publisher.yml": "controlled_supervised_publisher",
     "platform-credential-diagnostic.yml": "controlled_diagnostic",
+    "promodetector-seo-radar.yml": "controlled_scheduled_validator",
     "publisher.yml": "legacy_quarantine",
     "reddit-gamer-radar.yml": "legacy_quarantine",
     "scheduled-meta-publisher.yml": "controlled_scheduled_publisher",

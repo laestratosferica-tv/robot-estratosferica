@@ -1,0 +1,57 @@
+name: Joseverso - Private Voice Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: Guion previamente aprobado por Jose Luis
+        required: true
+        type: string
+      approval_id:
+        description: Identificador de aprobacion editorial
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  voice-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependency
+        run: python -m pip install requests==2.32.3
+
+      - name: Run safe tests
+        run: python -m unittest tests.test_elevenlabs_tts -v
+
+      - name: Prepare approved script
+        env:
+          APPROVED_SCRIPT: ${{ inputs.script }}
+        run: |
+          mkdir -p artifacts/private-review
+          printf '%s' "$APPROVED_SCRIPT" > artifacts/private-review/script.txt
+
+      - name: Generate private voice test
+        run: >-
+          python tools/generate_joseverso_voice.py
+          --script-file artifacts/private-review/script.txt
+          --approval-id "${{ inputs.approval_id }}"
+          --output artifacts/private-review/joseverso-voice-test.mp3
+
+      - name: Upload private review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: joseverso-private-voice-test
+          path: artifacts/private-review/joseverso-voice-test.mp3
+          retention-days: 3
+          if-no-files-found: error

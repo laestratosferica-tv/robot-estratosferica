@@ -34,6 +34,7 @@
     "hype-packer.yml": "legacy_quarantine",
     "instagram-account-growth-readonly.yml": "controlled_readonly",
     "instagram-reel-insights-readonly.yml": "controlled_readonly",
+    "joseverso-voice-test.yml": "controlled_paid_generation",
     "deploy-tiktok-creator-sandbox.yml": "controlled_deployment",
     "deploy-cloudflare-publisher-scheduler.yml": "controlled_deployment",
     "deploy-facebook-oauth-callback.yml": "controlled_deployment",

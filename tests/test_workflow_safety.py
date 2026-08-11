@@ -68,6 +68,16 @@ class WorkflowSafetyTests(unittest.TestCase):
         actual = {path.name for path in WORKFLOWS.glob("*.yml")}
         self.assertEqual(actual, set(OPERATIONS["workflow_inventory"]))
 
+    def test_joseverso_voice_test_is_manual_private_and_never_publishes(self):
+        content = (WORKFLOWS / "joseverso-voice-test.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("schedule:", content)
+        self.assertNotIn("PRODUCTION_ARMED", content)
+        self.assertNotIn("publish", content.lower())
+        self.assertIn("retention-days: 3", content)
+
     def test_safety_report_is_green(self):
         report = build_safety_report()
         self.assertTrue(report["safe"], report["errors"])

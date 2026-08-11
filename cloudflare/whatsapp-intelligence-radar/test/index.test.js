@@ -1,0 +1,39 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import worker from "../src/index.js";
+
+const secret = "test-app-secret";
+async function signature(body) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const bytes = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body)));
+  return `sha256=${[...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+test("is inert and cannot publish by default", async () => {
+  const response = await worker.fetch(new Request("https://example.com/health"), {});
+  assert.deepEqual(await response.json(), { ok: true, whatsapp_radar_enabled: false, automatic_publication: false, automatic_knowledge_approval: false });
+});
+
+test("verifies Meta's handshake without revealing secrets", async () => {
+  const ok = await worker.fetch(new Request("https://example.com/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=verify&hub.challenge=challenge"), { WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify" });
+  assert.equal(ok.status, 200); assert.equal(await ok.text(), "challenge");
+  const rejected = await worker.fetch(new Request("https://example.com/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=wrong"), { WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify" });
+  assert.equal(rejected.status, 403);
+});
+
+test("stores a structured knowledge signal only after a signed webhook", async () => {
+  const records = new Map();
+  const body = JSON.stringify({ entry: [{ changes: [{ value: { messages: [{ id: "wamid.1", from: "573001112233", type: "text", text: { body: "PERSONAJE https://tiktok.com/@demo/video/1 Robot archivista con casco de neón" } }] } }] }] });
+  const env = { ENABLE_WHATSAPP_RADAR: "true", WHATSAPP_APP_SECRET: secret, RADAR_KV: { put: async (key, value) => records.set(key, JSON.parse(value)) } };
+  const response = await worker.fetch(new Request("https://example.com/webhooks/whatsapp", { method: "POST", headers: { "x-hub-signature-256": await signature(body) }, body }), env);
+  assert.equal(response.status, 200); assert.equal(records.size, 1);
+  const item = records.get("radar:received:wamid.1");
+  assert.equal(item.category, "character"); assert.equal(item.status, "received");
+  assert.equal(item.rights_status, "not_verified"); assert.equal(item.editorial_status, "not_eligible");
+  assert.notEqual(item.sender_hash, "573001112233");
+});
+
+test("rejects unsigned messages", async () => {
+  const response = await worker.fetch(new Request("https://example.com/webhooks/whatsapp", { method: "POST", body: "{}" }), { ENABLE_WHATSAPP_RADAR: "true", WHATSAPP_APP_SECRET: secret, RADAR_KV: { put: async () => assert.fail("must not write") } });
+  assert.equal(response.status, 401);
+});

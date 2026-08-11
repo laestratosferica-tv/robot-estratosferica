@@ -1,0 +1,6 @@
+{
+  "name": "estratosferica-whatsapp-intelligence-radar",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test" }
+}

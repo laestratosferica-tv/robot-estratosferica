@@ -1,0 +1,32 @@
+name: Deploy WhatsApp Intelligence Radar
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test safe intake contract
+        working-directory: cloudflare/whatsapp-intelligence-radar
+        run: npm test
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: cloudflare/whatsapp-intelligence-radar
+          command: deploy
+          secrets: |
+            WHATSAPP_APP_SECRET
+            WHATSAPP_WEBHOOK_VERIFY_TOKEN
+        env:
+          WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_RADAR_APP_SECRET }}
+          WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${{ secrets.WHATSAPP_RADAR_VERIFY_TOKEN }}

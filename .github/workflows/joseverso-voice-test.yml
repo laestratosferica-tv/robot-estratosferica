@@ -19,8 +19,6 @@ jobs:
   voice-test:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -42,6 +40,8 @@ jobs:
           printf '%s' "$APPROVED_SCRIPT" > artifacts/private-review/script.txt
 
       - name: Generate private voice test
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         run: >-
           python tools/generate_joseverso_voice.py
           --script-file artifacts/private-review/script.txt

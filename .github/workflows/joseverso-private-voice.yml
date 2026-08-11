@@ -1,0 +1,68 @@
+name: Joseverso Private Voice
+
+on:
+  workflow_dispatch:
+    inputs:
+      approved_script:
+        description: "Guion aprobado"
+        required: true
+        type: string
+      approval_id:
+        description: "Identificador de aprobación"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      approved_script:
+        required: true
+        type: string
+      approval_id:
+        required: true
+        type: string
+    secrets:
+      ELEVENLABS_API_KEY:
+        required: true
+
+jobs:
+  generate-private-voice:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install voice dependency
+        run: python -m pip install requests
+
+      - name: Generate approved private voice
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          APPROVED_SCRIPT: ${{ inputs.approved_script }}
+          APPROVAL_ID: ${{ inputs.approval_id }}
+        run: |
+          mkdir -p output
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from media_factory.elevenlabs_tts import ElevenLabsTTS
+
+          audio = ElevenLabsTTS().synthesize_approved_script(
+              os.environ["APPROVED_SCRIPT"],
+              approval_id=os.environ["APPROVAL_ID"],
+          )
+          Path("output/voz-joseverso.mp3").write_bytes(audio)
+          PY
+
+      - name: Upload private production artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: joseverso-private-voice
+          path: output/voz-joseverso.mp3
+          retention-days: 3
+          if-no-files-found: error

@@ -6,9 +6,6 @@ workers_dev = true
 [[kv_namespaces]]
 binding = "RADAR_KV"
 
-[secrets]
-required = [ "WHATSAPP_APP_SECRET", "WHATSAPP_WEBHOOK_VERIFY_TOKEN" ]
-
 [vars]
 # Receives signed test signals. It still cannot publish or approve knowledge.
 ENABLE_WHATSAPP_RADAR = "true"

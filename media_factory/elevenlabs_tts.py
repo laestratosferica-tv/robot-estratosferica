@@ -18,10 +18,11 @@ class ElevenLabsConfigurationError(RuntimeError):
 
 @dataclass(frozen=True)
 class VoiceSettings:
-    speed: float = 1.0
-    stability: float = 0.5
-    similarity_boost: float = 0.75
-    style: float = 0.0
+    # Joseverso V2: ritmo conversacional y acento más estable para público LATAM.
+    speed: float = 0.88
+    stability: float = 0.68
+    similarity_boost: float = 0.82
+    style: float = 0.08
     use_speaker_boost: bool = True
 
     def as_payload(self) -> dict[str, Any]:
@@ -99,6 +100,7 @@ class ElevenLabsTTS:
             json={
                 "text": clean_text,
                 "model_id": model_id,
+                "language_code": "es",
                 "voice_settings": settings.as_payload(),
             },
             timeout=self._timeout,

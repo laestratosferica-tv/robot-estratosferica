@@ -50,6 +50,7 @@ class ElevenLabsTTSTests(unittest.TestCase):
         self.assertEqual(audio, b"approved-audio")
         _, request = session.posts[0]
         self.assertEqual(request["json"]["model_id"], "eleven_multilingual_v2")
+        self.assertEqual(request["json"]["language_code"], "es")
         self.assertEqual(request["json"]["voice_settings"], VoiceSettings().as_payload())
         self.assertNotIn("approval_id", request["json"])
 

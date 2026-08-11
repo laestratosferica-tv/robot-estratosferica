@@ -38,6 +38,7 @@
     "deploy-tiktok-creator-sandbox.yml": "controlled_deployment",
     "deploy-cloudflare-publisher-scheduler.yml": "controlled_deployment",
     "deploy-facebook-oauth-callback.yml": "controlled_deployment",
+    "deploy-whatsapp-intelligence-radar.yml": "controlled_deployment",
     "facebook-page-token-rotation.yml": "controlled_token_rotation",
     "gaming-worlds-carousel-publisher.yml": "controlled_supervised_publisher",
     "media_engine.yml": "legacy_quarantine",

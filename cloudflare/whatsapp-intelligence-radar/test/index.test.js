@@ -21,16 +21,28 @@ test("verifies Meta's handshake without revealing secrets", async () => {
   assert.equal(rejected.status, 403);
 });
 
+test("publishes a factual privacy notice", async () => {
+  const response = await worker.fetch(new Request("https://example.com/privacy"), {});
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  const html = await response.text();
+  assert.match(html, /90 días/);
+  assert.match(html, /laestratosferica@gmail.com/);
+  assert.match(html, /No almacenamos el número telefónico en texto claro/);
+});
+
 test("stores a structured knowledge signal only after a signed webhook", async () => {
   const records = new Map();
   const body = JSON.stringify({ entry: [{ changes: [{ value: { messages: [{ id: "wamid.1", from: "573001112233", type: "text", text: { body: "PERSONAJE https://tiktok.com/@demo/video/1 Robot archivista con casco de neón" } }] } }] }] });
-  const env = { ENABLE_WHATSAPP_RADAR: "true", WHATSAPP_APP_SECRET: secret, RADAR_KV: { put: async (key, value) => records.set(key, JSON.parse(value)) } };
+  let retention;
+  const env = { ENABLE_WHATSAPP_RADAR: "true", WHATSAPP_APP_SECRET: secret, RADAR_KV: { put: async (key, value, options) => { records.set(key, JSON.parse(value)); retention = options; } } };
   const response = await worker.fetch(new Request("https://example.com/webhooks/whatsapp", { method: "POST", headers: { "x-hub-signature-256": await signature(body) }, body }), env);
   assert.equal(response.status, 200); assert.equal(records.size, 1);
   const item = records.get("radar:received:wamid.1");
   assert.equal(item.category, "character"); assert.equal(item.status, "received");
   assert.equal(item.rights_status, "not_verified"); assert.equal(item.editorial_status, "not_eligible");
   assert.notEqual(item.sender_hash, "573001112233");
+  assert.deepEqual(retention, { expirationTtl: 7776000 });
 });
 
 test("rejects unsigned messages", async () => {

@@ -18,6 +18,18 @@ const CATEGORY_RULES = [
 
 const SIGNAL_RETENTION_SECONDS = 90 * 24 * 60 * 60;
 
+const CATEGORY_DECISIONS = {
+  editorial_news: { label: "Noticia", contribution: "Posible dato editorial actual para investigar.", take: "Verificar la fuente original, la fecha y el contexto.", discard: "Afirmaciones sin fuente y publicación directa.", action: "Investigar", priority: "alta" },
+  editorial_trend: { label: "Tendencia", contribution: "Señal de formato, conversación o comportamiento que puede estar creciendo.", take: "Analizar el patrón y adaptarlo con una ejecución propia.", discard: "Copiar el clip o asumir que es tendencia sin métricas.", action: "Investigar", priority: "alta" },
+  character: { label: "Personaje", contribution: "Referencia creativa para ampliar el universo de personajes.", take: "Guardar rasgos útiles y desarrollar una versión original.", discard: "Imitar identidad, voz o diseño protegido.", action: "Guardar", priority: "media" },
+  visual_effect: { label: "Efecto", contribution: "Recurso visual que puede mejorar claridad, impacto o retención.", take: "Probar una versión propia en un entorno controlado.", discard: "Reutilizar archivos sin licencia verificable.", action: "Probar", priority: "media" },
+  robot_knowledge: { label: "Robot", contribution: "Conocimiento potencial para mejorar automatización o capacidades del proyecto.", take: "Documentar y validar antes de incorporarlo al robot.", discard: "Integrarlo como conocimiento verdadero sin verificación.", action: "Investigar", priority: "alta" },
+  tool: { label: "Herramienta", contribution: "Posible mejora operativa, creativa o tecnológica.", take: "Evaluar seguridad, costo, integración y retorno.", discard: "Conectar cuentas o pagar sin una prueba segura.", action: "Evaluar", priority: "media" },
+  learning: { label: "Aprendizaje", contribution: "Método o explicación que puede fortalecer el conocimiento interno.", take: "Contrastar el método y guardar lo comprobable.", discard: "Consejos no demostrados o desactualizados.", action: "Aprender", priority: "media" },
+  idea: { label: "Idea", contribution: "Punto de partida para contenido, producto o automatización.", take: "Convertirla en una hipótesis pequeña y comprobable.", discard: "Ejecutarla completa sin validar utilidad ni costo.", action: "Diseñar prueba", priority: "media" },
+  unclassified: { label: "Sin clasificar", contribution: "Todavía no hay contexto suficiente para determinar su valor.", take: "Revisar manualmente el contenido y su fuente.", discard: "Tomar decisiones o publicar con información incompleta.", action: "Revisar", priority: "baja" },
+};
+
 const PRIVACY_NOTICE = `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Política de privacidad | La Estratosférica</title>
@@ -84,6 +96,20 @@ function classify(text) {
   };
 }
 
+function assess(entry) {
+  const rule = CATEGORY_DECISIONS[entry.category] || CATEGORY_DECISIONS.unclassified;
+  return {
+    category_label: rule.label,
+    contribution: rule.contribution,
+    take: rule.take,
+    discard: rule.discard,
+    action: rule.action,
+    priority: entry.confidence === "low" ? "baja" : rule.priority,
+    verification: entry.links?.length ? "Fuente y derechos pendientes de verificar." : "Contexto y evidencia pendientes de verificar.",
+    decision_status: entry.category === "unclassified" ? "needs_review" : "candidate",
+  };
+}
+
 function messages(payload) {
   const changes = payload?.entry?.flatMap((entry) => entry.changes || []) || [];
   return changes.flatMap((change) => change?.value?.messages || []).filter((message) => message.type === "text" && message.text?.body);
@@ -101,29 +127,62 @@ async function acceptWebhook(request, env) {
   const incoming = messages(payload);
   for (const message of incoming) {
     const entry = classify(message.text.body);
+    const assessment = assess(entry);
     const id = `radar:received:${message.id}`;
     await env.RADAR_KV.put(id, JSON.stringify({
       schema: "estratosferica_intelligence_signal_v1", id, status: "received",
       source: "whatsapp", received_at: new Date().toISOString(), sender_hash: await digest(message.from || ""),
       source_message_id: message.id, rights_status: "not_verified", editorial_status: "not_eligible",
       knowledge_status: "not_verified", recommended_action: "triage", ...entry,
+      assessment,
     }), { expirationTtl: SIGNAL_RETENTION_SECONDS });
   }
   return response(200, "EVENT_RECEIVED");
 }
 
-async function recentSignals(request, env) {
+function authorized(request, env) {
   const authorization = request.headers.get("authorization") || "";
-  const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
-  if (!sameValue(token, env.RADAR_ADMIN_TOKEN || "")) return response(401, "No autorizado.");
+  if (authorization.startsWith("Bearer ")) return sameValue(authorization.slice(7), env.RADAR_ADMIN_TOKEN || "");
+  if (!authorization.startsWith("Basic ")) return false;
+  try {
+    const decoded = atob(authorization.slice(6));
+    const separator = decoded.indexOf(":");
+    return separator >= 0 && sameValue(decoded.slice(separator + 1), env.RADAR_ADMIN_TOKEN || "");
+  } catch { return false; }
+}
+
+async function loadRecent(env, limit = 50) {
+  if (!env.RADAR_KV) return [];
+  const listed = await env.RADAR_KV.list({ prefix: "radar:received:", limit });
+  const records = await Promise.all((listed.keys || []).map(async ({ name }) => env.RADAR_KV.get(name, "json")));
+  return records.filter(Boolean).sort((a, b) => String(b.received_at).localeCompare(String(a.received_at)));
+}
+
+async function recentSignals(request, env) {
+  if (!authorized(request, env)) return response(401, "No autorizado.");
   if (!env.RADAR_KV) return response(503, "Almacenamiento no disponible.");
-  const listed = await env.RADAR_KV.list({ prefix: "radar:received:", limit: 20 });
-  const records = await Promise.all((listed.keys || []).map(async ({ name }) => {
-    const record = await env.RADAR_KV.get(name, "json");
-    if (!record) return null;
-    return { id: record.id, received_at: record.received_at, category: record.category, text: record.text, links: record.links, status: record.status };
-  }));
-  return Response.json({ count: records.filter(Boolean).length, signals: records.filter(Boolean).sort((a, b) => String(b.received_at).localeCompare(String(a.received_at))) }, { headers: { "cache-control": "no-store" } });
+  const records = await loadRecent(env, 20);
+  const signals = records.map((record) => ({ id: record.id, received_at: record.received_at, category: record.category, text: record.text, links: record.links, status: record.status, assessment: record.assessment || assess(record) }));
+  return Response.json({ count: signals.length, signals }, { headers: { "cache-control": "no-store" } });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character]));
+}
+
+async function dashboard(request, env) {
+  if (!authorized(request, env)) return new Response("Acceso privado", { status: 401, headers: { "www-authenticate": "Basic realm=\"Radar La Estratosférica\"", "cache-control": "no-store" } });
+  const records = await loadRecent(env);
+  const cards = records.map((record) => {
+    const result = record.assessment || assess(record);
+    const link = record.links?.[0] ? `<a href="${escapeHtml(record.links[0])}" target="_blank" rel="noopener noreferrer">Abrir fuente</a>` : "Sin enlace";
+    return `<article><div class="top"><span class="tag">${escapeHtml(result.category_label)}</span><span class="priority ${escapeHtml(result.priority)}">${escapeHtml(result.priority)}</span></div><p class="source">${escapeHtml(record.text)}</p><dl><dt>Qué aporta</dt><dd>${escapeHtml(result.contribution)}</dd><dt>Qué tomamos</dt><dd>${escapeHtml(result.take)}</dd><dt>Qué descartamos</dt><dd>${escapeHtml(result.discard)}</dd><dt>Acción</dt><dd>${escapeHtml(result.action)}</dd><dt>Verificación</dt><dd>${escapeHtml(result.verification)}</dd></dl><footer>${link}<time>${escapeHtml(record.received_at)}</time></footer></article>`;
+  }).join("");
+  const today = records.filter((record) => Date.now() - new Date(record.received_at).getTime() <= 24 * 60 * 60 * 1000);
+  const candidates = today.filter((record) => (record.assessment || assess(record)).decision_status === "candidate").length;
+  const reviews = today.length - candidates;
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Radar WhatsApp | La Estratosférica</title><style>:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#080a12;color:#f6f7fb;font:15px/1.5 system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:32px 18px 64px}header{padding:24px 0 18px}h1{font-size:clamp(30px,6vw,54px);margin:0}.lead{color:#adb5d1}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}.summary div,article{background:#111525;border:1px solid #252c48;border-radius:18px;padding:18px}.summary strong{display:block;font-size:30px;color:#79f2c0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}.top,footer{display:flex;justify-content:space-between;gap:12px;align-items:center}.tag{color:#79f2c0;font-weight:750}.priority{font-size:12px;text-transform:uppercase;padding:4px 9px;border-radius:99px;background:#30364b}.alta{background:#7d2636}.media{background:#66521f}.baja{background:#30425c}.source{min-height:48px;color:#dfe3f3;overflow-wrap:anywhere}dl{margin:0}dt{margin-top:12px;font-weight:750;color:#a4acd0}dd{margin:2px 0}footer{border-top:1px solid #252c48;margin-top:18px;padding-top:14px;font-size:12px;color:#8991ae}a{color:#79f2c0}time{text-align:right}@media(max-width:560px){.summary{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}</style></head><body><main><header><div class="tag">LA ESTRATOSFÉRICA</div><h1>Radar WhatsApp</h1><p class="lead">Qué aporta, qué tomamos y qué descartamos. Nada se publica automáticamente.</p></header><section class="summary"><div><strong>${today.length}</strong>recibidos en 24 horas</div><div><strong>${candidates}</strong>candidatos</div><div><strong>${reviews}</strong>por revisar</div></section><h2>Plan del día</h2><p class="lead">Priorizar ${candidates} candidato(s), verificar sus fuentes y revisar ${reviews} señal(es) sin contexto suficiente.</p><section class="grid">${cards || "<article>Aún no hay señales recibidas.</article>"}</section></main></body></html>`;
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'" } });
 }
 
 export default {
@@ -131,6 +190,7 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/privacy") return new Response(PRIVACY_NOTICE, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=3600" } });
     if (url.pathname === "/health") return Response.json({ ok: true, whatsapp_radar_enabled: env.ENABLE_WHATSAPP_RADAR === "true", automatic_publication: false, automatic_knowledge_approval: false });
+    if (url.pathname === "/dashboard" && request.method === "GET") return dashboard(request, env);
     if (url.pathname === "/internal/recent" && request.method === "GET") return recentSignals(request, env);
     if (url.pathname !== "/webhooks/whatsapp") return response(404, "No encontrado.");
     if (request.method === "GET") {

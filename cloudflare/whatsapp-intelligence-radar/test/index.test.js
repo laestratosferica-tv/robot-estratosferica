@@ -55,6 +55,8 @@ test("classifies a bare TikTok share automatically without requiring a title", a
   assert.equal(item.category, "editorial_trend");
   assert.equal(item.classification_method, "source_domain");
   assert.equal(item.confidence, "medium");
+  assert.equal(item.assessment.action, "Investigar");
+  assert.match(item.assessment.contribution, /tendencia|Señal/iu);
 });
 
 test("classifies natural Spanish messages without command prefixes", async () => {
@@ -82,5 +84,22 @@ test("protects and returns recent signals without sender identifiers", async () 
   const result = await allowed.json();
   assert.equal(result.count, 1);
   assert.equal(result.signals[0].text, "IDEA prueba del Radar");
+  assert.equal(result.signals[0].assessment.action, "Diseñar prueba");
   assert.equal("sender_hash" in result.signals[0], false);
+});
+
+test("renders a private results dashboard with decisions and a daily plan", async () => {
+  const record = { id: "radar:received:wamid.2", received_at: new Date().toISOString(), category: "tool", confidence: "medium", text: "Mira esta herramienta", links: ["https://example.com/tool"], status: "received" };
+  const env = { RADAR_ADMIN_TOKEN: "admin", RADAR_KV: { list: async () => ({ keys: [{ name: record.id }] }), get: async () => record } };
+  const denied = await worker.fetch(new Request("https://example.com/dashboard"), env);
+  assert.equal(denied.status, 401);
+  assert.match(denied.headers.get("www-authenticate"), /Basic/);
+  const allowed = await worker.fetch(new Request("https://example.com/dashboard", { headers: { authorization: `Basic ${btoa("radar:admin")}` } }), env);
+  assert.equal(allowed.status, 200);
+  const html = await allowed.text();
+  assert.match(html, /Qué aporta/);
+  assert.match(html, /Qué tomamos/);
+  assert.match(html, /Qué descartamos/);
+  assert.match(html, /Plan del día/);
+  assert.doesNotMatch(html, /sender_hash/);
 });

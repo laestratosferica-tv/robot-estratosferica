@@ -40,9 +40,12 @@ class WanPrivateWorkerTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             harden_worker.harden_text("def handler(job): pass")
 
-    def test_dockerfile_uses_pinned_validated_base(self):
+    def test_dockerfile_uses_pinned_public_sources(self):
         dockerfile = (ROOT / "wan/private_worker/Dockerfile").read_text()
-        self.assertIn("a9247705c", dockerfile)
+        self.assertNotIn("registry.runpod.net", dockerfile)
+        self.assertIn("FROM wlsdml1114/engui_genai-base_blackwell:1.1", dockerfile)
+        self.assertIn("UPSTREAM_WORKER_COMMIT=4b6d5ec27dae6409bd2011a96d8e819e67d4ebaa", dockerfile)
+        self.assertIn("COMFYUI_COMMIT=ddbaa8752874c275290d054ee4fddd6e004f5fdf", dockerfile)
         self.assertIn("py_compile", dockerfile)
         self.assertNotIn(":latest", dockerfile)
 

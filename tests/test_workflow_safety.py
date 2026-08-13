@@ -87,6 +87,8 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertNotIn("RUNPOD_API_KEY", content)
         self.assertNotIn("api.runpod", content)
         self.assertNotIn("PRODUCTION_ARMED", content)
+        self.assertIn("driver: docker", content)
+        self.assertNotIn("cache-to: type=gha", content)
 
     def test_safety_report_is_green(self):
         report = build_safety_report()

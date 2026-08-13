@@ -6,6 +6,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from wan.client import ComfyClient, load_json, prepare_workflow
+from wan.prepare_package import build_package
+from wan.runpod_client import RunpodWanClient
+from wan.runpod_generate import build_payload
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -89,6 +92,49 @@ class WanPocTests(unittest.TestCase):
             output = client.find_output(history)
             destination = client.download_output(output, Path(temp_dir) / "result.webm")
             self.assertEqual(destination.read_bytes(), b"fake-webm")
+
+    def test_character_profiles_are_complete(self):
+        profiles = load_json(ROOT / "wan/config/characters.json")["characters"]
+        self.assertEqual(set(profiles), {"nova", "joseverso", "rami"})
+        for profile in profiles.values():
+            self.assertIn("identity drift", profile["negative"])
+            self.assertTrue(profile["prompt"])
+            self.assertTrue(profile["reference"].startswith("wan/inputs/"))
+
+    def test_prepare_package_never_enables_remote_execution(self):
+        inputs = ROOT / "wan/inputs"
+        inputs.mkdir(parents=True, exist_ok=True)
+        reference = inputs / "nova-master.png"
+        original = reference.read_bytes() if reference.exists() else None
+        try:
+            reference.write_bytes(b"private-reference")
+            package = build_package("nova")
+            self.assertFalse(package["remote_execution"])
+            self.assertEqual(package["authorization_required"], "AUTORIZO RUNPOD")
+            self.assertEqual(package["workflow"]["57"]["inputs"]["image"], "nova-master.png")
+        finally:
+            if original is None:
+                reference.unlink(missing_ok=True)
+            else:
+                reference.write_bytes(original)
+
+    def test_runpod_payload_uses_raw_base64_and_character_profile(self):
+        payload, reference = build_payload("nova", seed=7)
+        self.assertEqual(reference.name, "nova-master.png")
+        self.assertNotIn("data:image", payload["image_base64"])
+        self.assertEqual(payload["seed"], 7)
+        self.assertIn("Nova", payload["prompt"])
+        self.assertIn("identity drift", payload["negative_prompt"])
+
+    def test_runpod_output_is_decoded_without_shell(self):
+        import base64
+        with tempfile.TemporaryDirectory() as temp_dir:
+            destination = Path(temp_dir) / "result.mp4"
+            RunpodWanClient.save_video(
+                {"output": {"video": base64.b64encode(b"mp4-test").decode()}},
+                destination,
+            )
+            self.assertEqual(destination.read_bytes(), b"mp4-test")
 
 
 if __name__ == "__main__":

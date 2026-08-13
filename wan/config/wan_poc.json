@@ -12,5 +12,13 @@
     "steps": 20,
     "cfg": 5.0,
     "seed": 42
+  },
+  "runpod_defaults": {
+    "width": 480,
+    "height": 832,
+    "frames": 33,
+    "steps": 8,
+    "cfg": 2.0,
+    "seed": 72993276
   }
 }

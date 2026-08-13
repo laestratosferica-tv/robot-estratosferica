@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "production_enabled": false,
+  "master": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "video_codec": "libx264",
+    "pixel_format": "yuv420p",
+    "audio_codec": "aac",
+    "audio_lufs": -16,
+    "max_duration_seconds": 60
+  },
+  "layers": ["heygen_presenter", "context_video", "wan_scene", "hyperframes_graphics", "captions", "music", "effects"],
+  "required_layers": ["heygen_presenter", "captions"],
+  "optional_layers": ["context_video", "wan_scene", "hyperframes_graphics", "music", "effects"],
+  "qa": {
+    "require_audio": true,
+    "require_source_credit": true,
+    "reject_black_tail_seconds": 0.5,
+    "reject_silence_tail_seconds": 1.0,
+    "require_spanish_audio_review": true
+  }
+}

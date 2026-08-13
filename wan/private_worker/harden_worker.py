@@ -52,6 +52,40 @@ SAFE_DECODE = '''        max_base64_chars = int(os.getenv("MAX_IMAGE_BASE64_CHAR
         if len(decoded_data) > 9 * 1024 * 1024:
             raise ValueError("Decoded image exceeds 9 MiB")'''
 
+V014_UNSAFE_IMAGE_INPUT = '''    if "image_path" in inp and inp["image_path"]:
+        src = inp["image_path"]
+        ext = os.path.splitext(src)[1] or ".png"
+        name = f"input_{uuid.uuid4().hex}{ext}"
+        dst = os.path.join(INPUT_DIR, name)
+        shutil.copyfile(src, dst)
+        return name
+
+    if "image_url" in inp and inp["image_url"]:
+        resp = requests.get(inp["image_url"], timeout=30)
+        resp.raise_for_status()
+        data = resp.content
+    elif "image_base64" in inp and inp["image_base64"]:
+        raw = inp["image_base64"]
+        if raw.startswith("data:"):
+            raw = raw.split(",", 1)[1]
+        data = base64.b64decode(raw)
+    else:
+        return None'''
+
+V014_SAFE_IMAGE_INPUT = '''    if "image_base64" not in inp or not inp["image_base64"]:
+        return None
+    raw = inp["image_base64"]
+    if not isinstance(raw, str):
+        raise ValueError("image_base64 must be a string")
+    if raw.startswith("data:"):
+        raw = raw.split(",", 1)[1]
+    max_base64_chars = int(os.getenv("MAX_IMAGE_BASE64_CHARS", "12582912"))
+    if len(raw) > max_base64_chars:
+        raise ValueError("Base64 input exceeds the configured limit")
+    data = base64.b64decode(raw, validate=True)
+    if len(data) > 9 * 1024 * 1024:
+        raise ValueError("Decoded image exceeds 9 MiB")'''
+
 
 def replace_once(source: str, old: str, new: str, label: str) -> str:
     count = source.count(old)
@@ -61,6 +95,13 @@ def replace_once(source: str, old: str, new: str, label: str) -> str:
 
 
 def harden_text(source: str) -> str:
+    if V014_UNSAFE_IMAGE_INPUT in source:
+        return replace_once(
+            source,
+            V014_UNSAFE_IMAGE_INPUT,
+            V014_SAFE_IMAGE_INPUT,
+            "v0.1.4 image input block",
+        )
     source = replace_once(source, UNSAFE_LOG, SAFE_LOG, "unsafe input log")
     source = replace_once(source, UNSAFE_IMAGE_INPUT, SAFE_IMAGE_INPUT, "image input block")
     source = replace_once(source, UNSAFE_END_INPUT, SAFE_END_INPUT, "end-image input block")
@@ -81,4 +122,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

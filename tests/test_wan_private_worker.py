@@ -40,14 +40,26 @@ class WanPrivateWorkerTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             harden_worker.harden_text("def handler(job): pass")
 
-    def test_dockerfile_uses_pinned_public_sources(self):
+    def test_dockerfile_uses_pinned_validated_hub_base(self):
         dockerfile = (ROOT / "wan/private_worker/Dockerfile").read_text()
-        self.assertNotIn("registry.runpod.net", dockerfile)
-        self.assertIn("FROM wlsdml1114/engui_genai-base_blackwell:1.1", dockerfile)
-        self.assertIn("UPSTREAM_WORKER_COMMIT=4b6d5ec27dae6409bd2011a96d8e819e67d4ebaa", dockerfile)
-        self.assertIn("COMFYUI_COMMIT=ddbaa8752874c275290d054ee4fddd6e004f5fdf", dockerfile)
+        self.assertIn("81fc2044f", dockerfile)
+        self.assertIn("wan22_t2v_api.json", dockerfile)
         self.assertIn("py_compile", dockerfile)
         self.assertNotIn(":latest", dockerfile)
+
+    def test_hardening_supports_current_hub_handler(self):
+        source = "\n".join(
+            [
+                "def save_input_image(inp):",
+                "    os.makedirs(INPUT_DIR, exist_ok=True)",
+                "",
+                harden_worker.V014_UNSAFE_IMAGE_INPUT,
+            ]
+        )
+        result = harden_worker.harden_text(source)
+        self.assertNotIn('"image_url" in inp', result)
+        self.assertNotIn('"image_path" in inp', result)
+        self.assertIn("validate=True", result)
 
     def test_script_writes_only_target_handler(self):
         with tempfile.TemporaryDirectory() as temp_dir:

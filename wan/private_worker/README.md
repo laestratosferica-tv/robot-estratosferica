@@ -18,3 +18,4 @@ docker build -t estratosferica/wan-private-worker:wan22-a9247705c .
 
 La imagen base está fijada en `registry.runpod.net/wlsdml1114-generate-video-ksampler-dockerfile:a9247705c`. Antes de distribuir públicamente la imagen derivada debe revisarse la licencia del proveedor base; el uso previsto aquí es interno y privado.
 
+El workflow manual `Build Wan Private Worker` publica dos etiquetas inmutables en GHCR. No ejecuta trabajos de video ni activa GPUs de RunPod.

@@ -1,0 +1,34 @@
+{
+  "version": "2.0.0",
+  "default_language": "es-CO",
+  "production_enabled": false,
+  "characters": {
+    "nova": {
+      "display_name": "Nova",
+      "content_types": ["noticia", "articulo", "dato"],
+      "editorial_voice": "clara, tecnológica, precisa y cercana",
+      "heygen_group_env": "HEYGEN_NOVA_GROUP_ID",
+      "heygen_voice_env": "HEYGEN_NOVA_VOICE_ID",
+      "required_voice_language": "Spanish",
+      "current_voice_status": "blocked_wrong_language"
+    },
+    "rami": {
+      "display_name": "Rami",
+      "content_types": ["cuento", "relato"],
+      "editorial_voice": "misterioso, observador y narrativo",
+      "heygen_group_env": "HEYGEN_RAMI_GROUP_ID",
+      "heygen_voice_env": "HEYGEN_RAMI_VOICE_ID",
+      "required_voice_language": "Spanish",
+      "current_voice_status": "blocked_wrong_language"
+    },
+    "joseverso": {
+      "display_name": "Joseverso",
+      "content_types": ["chisme", "polemica", "humor", "gameplay"],
+      "editorial_voice": "pícaro, directo, conocedor y con humor colombiano neutro",
+      "heygen_group_env": "HEYGEN_JOSEVERSO_GROUP_ID",
+      "heygen_voice_env": "HEYGEN_JOSEVERSO_VOICE_ID",
+      "required_voice_language": "Spanish",
+      "current_voice_status": "ready"
+    }
+  }
+}

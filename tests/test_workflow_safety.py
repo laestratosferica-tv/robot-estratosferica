@@ -78,6 +78,16 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertNotIn("publish", content.lower())
         self.assertIn("retention-days: 3", content)
 
+    def test_wan_private_worker_build_is_manual_and_does_not_run_gpu_jobs(self):
+        content = (WORKFLOWS / "build-wan-private-worker.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("schedule:", content)
+        self.assertNotIn("RUNPOD_API_KEY", content)
+        self.assertNotIn("api.runpod", content)
+        self.assertNotIn("PRODUCTION_ARMED", content)
+
     def test_safety_report_is_green(self):
         report = build_safety_report()
         self.assertTrue(report["safe"], report["errors"])

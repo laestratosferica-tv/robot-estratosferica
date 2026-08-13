@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "characters": {
+    "nova": {
+      "role": "presentadora de noticias gamer y tecnología",
+      "reference": "wan/inputs/nova-master.png",
+      "prompt": "Nova, presentadora humanoide adulta, conserva exactamente su rostro, peinado asimétrico negro con mechón magenta, traje tecnológico negro y blanco con líneas magenta. Movimiento corporal sutil y natural, respiración leve, mirada segura a cámara, iluminación cinematográfica gamer premium, cámara estable con micro desplazamiento lateral.",
+      "negative": "identity drift, different face, different hairstyle, different clothes, childlike, exaggerated body movement, deformed hands, extra fingers, melting details, warped eyes, camera shake, text, watermark"
+    },
+    "joseverso": {
+      "role": "narrador gamer, chisme, polémica y humor con autoridad",
+      "reference": "wan/inputs/joseverso-master.png",
+      "prompt": "Joseverso conserva exactamente rostro, gafas redondas, barba entrecana, cabello oscuro peinado hacia atrás y ropa negra con acento morado. Gesto cómplice, movimiento natural de hombros y manos, energía de streamer latino, cámara con recorrido suave, estudio gamer premium, identidad facial constante.",
+      "negative": "identity drift, different person, no glasses, different beard, different clothes, young face, deformed hands, extra fingers, facial warping, exaggerated motion, camera shake, text, watermark"
+    },
+    "rami": {
+      "role": "cronista reptiliano de misterios, lore y relatos tecnológicos",
+      "reference": "wan/inputs/rami-master.png",
+      "prompt": "Rami conserva exactamente su rostro reptiliano verde oscuro, ojos ámbar, línea luminosa cian central y abrigo tecnológico negro morado. Movimiento contenido, elegante y misterioso, respiración ligera, mirada intensa a cámara, laboratorio alienígena premium, cámara lenta con acercamiento sutil.",
+      "negative": "identity drift, human face, different scales, different eyes, different clothes, cartoon, childish, deformed hands, extra fingers, melting face, excessive motion, camera shake, text, watermark"
+    }
+  }
+}

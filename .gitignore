@@ -1,3 +1,10 @@
 __pycache__/
 *.py[cod]
 artifacts/scheduled-publication-run.json
+.env
+wan/inputs/*
+!wan/inputs/.gitkeep
+wan/outputs/*
+!wan/outputs/.gitkeep
+wan/logs/*
+!wan/logs/.gitkeep

@@ -36,11 +36,9 @@ def build_payload(
         "image_base64": RunpodWanClient.encode_image(reference),
         "prompt": profile["prompt"],
         "negative_prompt": profile["negative"],
-        "width": defaults["width"],
-        "height": defaults["height"],
-        "length": defaults["frames"],
-        "steps": defaults["steps"],
-        "cfg": defaults["cfg"],
+        "size": "704*1280",
+        "frame_num": defaults["frames"],
+        "sample_steps": defaults["steps"],
         "seed": defaults["seed"] if seed is None else seed,
     }, reference
 

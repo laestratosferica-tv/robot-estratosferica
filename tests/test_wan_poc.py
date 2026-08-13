@@ -128,6 +128,11 @@ class WanPocTests(unittest.TestCase):
             self.assertEqual(selected, reference)
             self.assertNotIn("data:image", payload["image_base64"])
             self.assertEqual(payload["seed"], 7)
+            self.assertEqual(payload["size"], "704*1280")
+            self.assertEqual(payload["frame_num"], 17)
+            self.assertEqual(payload["sample_steps"], 10)
+            self.assertNotIn("width", payload)
+            self.assertNotIn("height", payload)
             self.assertIn("Nova", payload["prompt"])
             self.assertIn("identity drift", payload["negative_prompt"])
 

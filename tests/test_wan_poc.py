@@ -119,12 +119,17 @@ class WanPocTests(unittest.TestCase):
                 reference.write_bytes(original)
 
     def test_runpod_payload_uses_raw_base64_and_character_profile(self):
-        payload, reference = build_payload("nova", seed=7)
-        self.assertEqual(reference.name, "nova-master.png")
-        self.assertNotIn("data:image", payload["image_base64"])
-        self.assertEqual(payload["seed"], 7)
-        self.assertIn("Nova", payload["prompt"])
-        self.assertIn("identity drift", payload["negative_prompt"])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            reference = Path(temp_dir) / "nova-master.png"
+            reference.write_bytes(b"private-reference-fixture")
+            payload, selected = build_payload(
+                "nova", seed=7, reference_path=reference
+            )
+            self.assertEqual(selected, reference)
+            self.assertNotIn("data:image", payload["image_base64"])
+            self.assertEqual(payload["seed"], 7)
+            self.assertIn("Nova", payload["prompt"])
+            self.assertIn("identity drift", payload["negative_prompt"])
 
     def test_runpod_output_is_decoded_without_shell(self):
         import base64

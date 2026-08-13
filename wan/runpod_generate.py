@@ -21,10 +21,14 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_payload(character: str, seed: int | None = None) -> tuple[dict, Path]:
+def build_payload(
+    character: str,
+    seed: int | None = None,
+    reference_path: Path | None = None,
+) -> tuple[dict, Path]:
     config = load_json(ROOT / "wan/config/wan_poc.json")
     profile = load_json(ROOT / "wan/config/characters.json")["characters"][character]
-    reference = ROOT / profile["reference"]
+    reference = reference_path or (ROOT / profile["reference"])
     if not reference.is_file():
         raise SystemExit(f"Falta referencia privada: {reference}")
     defaults = config["runpod_defaults"]

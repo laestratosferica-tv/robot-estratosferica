@@ -23,6 +23,7 @@
     "state": "ugc/state"
   },
   "workflow_inventory": {
+    "build-wan-private-worker.yml": "controlled_build",
     "community-radar-readonly.yml": "controlled_readonly",
     "drive-sync.yml": "legacy_quarantine",
     "editorial.yml": "legacy_quarantine",

@@ -10,7 +10,8 @@
       "heygen_group_env": "HEYGEN_NOVA_GROUP_ID",
       "heygen_voice_env": "HEYGEN_NOVA_VOICE_ID",
       "required_voice_language": "Spanish",
-      "current_voice_status": "blocked_wrong_language"
+      "current_voice_status": "ready_multilingual",
+      "audio_qa_required": true
     },
     "rami": {
       "display_name": "Rami",
@@ -19,7 +20,8 @@
       "heygen_group_env": "HEYGEN_RAMI_GROUP_ID",
       "heygen_voice_env": "HEYGEN_RAMI_VOICE_ID",
       "required_voice_language": "Spanish",
-      "current_voice_status": "blocked_wrong_language"
+      "current_voice_status": "ready_multilingual",
+      "audio_qa_required": true
     },
     "joseverso": {
       "display_name": "Joseverso",
@@ -28,7 +30,8 @@
       "heygen_group_env": "HEYGEN_JOSEVERSO_GROUP_ID",
       "heygen_voice_env": "HEYGEN_JOSEVERSO_VOICE_ID",
       "required_voice_language": "Spanish",
-      "current_voice_status": "ready"
+      "current_voice_status": "ready",
+      "audio_qa_required": true
     }
   }
 }

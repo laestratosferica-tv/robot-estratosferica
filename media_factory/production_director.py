@@ -77,8 +77,8 @@ def build_production_request(
         blockers.append("missing_heygen_group_id")
     if not voice_id:
         blockers.append("missing_heygen_voice_id")
-    if character["current_voice_status"] != "ready":
-        blockers.append("voice_language_not_ready")
+    if not str(character["current_voice_status"]).startswith("ready"):
+        blockers.append("voice_not_ready")
     duration = int(payload.get("duration_seconds", 25))
     if not 8 <= duration <= 60:
         blockers.append("duration_out_of_range")

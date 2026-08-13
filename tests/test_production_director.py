@@ -26,16 +26,16 @@ class ProductionDirectorTests(unittest.TestCase):
                 request = build_production_request({**self.base, "content_type": content_type}, self.cast, {})
                 self.assertEqual(request.character_id, expected)
 
-    def test_nova_and_rami_are_blocked_until_spanish_voice_exists(self):
+    def test_multilingual_nova_voice_is_accepted(self):
         env = {"HEYGEN_NOVA_GROUP_ID": "group", "HEYGEN_NOVA_VOICE_ID": "voice"}
         request = build_production_request({**self.base, "content_type": "noticia"}, self.cast, env)
-        self.assertIn("voice_language_not_ready", request.blockers)
+        self.assertNotIn("voice_not_ready", request.blockers)
         self.assertEqual(request.state, "blocked")
 
     def test_joseverso_can_pass_identity_checks_but_render_stays_disabled(self):
         env = {"HEYGEN_JOSEVERSO_GROUP_ID": "group", "HEYGEN_JOSEVERSO_VOICE_ID": "voice"}
         request = build_production_request({**self.base, "content_type": "chisme"}, self.cast, env)
-        self.assertNotIn("voice_language_not_ready", request.blockers)
+        self.assertNotIn("voice_not_ready", request.blockers)
         self.assertEqual(request.state, "blocked")
         self.assertFalse(request.external_actions_enabled)
 

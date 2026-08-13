@@ -19,6 +19,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Create large build volume
+        uses: easimon/maximize-build-space@fc881a613ad2a34aca9c9624518214ebc21dfc0c
+        with:
+          root-reserve-mb: 12288
+          swap-size-mb: 2048
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+          build-mount-path: /var/lib/docker
+
       - name: Show build capacity
         run: |
           df -h
@@ -26,7 +37,6 @@ jobs:
 
       - name: Reclaim runner disk
         run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
           sudo apt-get clean
           docker system prune --all --force
           df -h

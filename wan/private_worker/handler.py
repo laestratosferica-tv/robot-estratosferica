@@ -123,7 +123,21 @@ def handler(job: dict[str, Any]) -> dict[str, Any]:
         image_path = _decode_image(validated["image_base64"], temp / "reference.png")
         output_path = temp / "result.mp4"
         command = build_command(validated, image_path, output_path)
-        subprocess.run(command, check=True, cwd=os.getenv("WAN_SOURCE_DIR", "/opt/Wan2.2"))
+        completed = subprocess.run(
+            command,
+            check=False,
+            cwd=os.getenv("WAN_SOURCE_DIR", "/opt/Wan2.2"),
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode != 0:
+            stderr_tail = (completed.stderr or "")[-12000:]
+            stdout_tail = (completed.stdout or "")[-4000:]
+            raise RuntimeError(
+                "Wan generation failed.\n"
+                f"stdout tail:\n{stdout_tail}\n"
+                f"stderr tail:\n{stderr_tail}"
+            )
         if not output_path.is_file():
             raise RuntimeError("Wan completed without an output video")
         max_output = int(os.getenv("WAN_MAX_OUTPUT_BYTES", str(50 * 1024 * 1024)))

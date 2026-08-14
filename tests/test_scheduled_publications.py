@@ -146,6 +146,53 @@ class ScheduledPublicationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "commercial_resolver_evidence_missing"):
             load_queue(self.queue_path)
 
+    def test_fun_source_reused_on_different_days_is_blocked(self):
+        evidence = {
+            "source_page": "https://example.test/gameplay.webm",
+            "license": "CC0-1.0",
+        }
+        (self.root / "source.json").write_text(json.dumps(evidence), encoding="utf-8")
+        payload = json.loads(self.queue_path.read_text(encoding="utf-8"))
+        payload["items"][0].update({
+            "category": "contenido_divertido",
+            "license_evidence_path": "source.json",
+        })
+        second = {
+            **payload["items"][0],
+            "content_id": "content-2",
+            "publish_at": "2026-08-04T12:30:00-05:00",
+        }
+        payload["items"].append(second)
+        self.queue_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        queue = load_queue(self.queue_path)
+        now = datetime(2026, 8, 5, 18, 0, tzinfo=timezone.utc)
+
+        self.assertEqual(due_items(queue, {"items": {}}, now=now), [])
+        self.assertEqual(queue["repeat_guard"]["blocked_items"], 2)
+        self.assertEqual(
+            queue["repeat_guard"]["blocked_sources"],
+            ["https://example.test/gameplay.webm"],
+        )
+
+    def test_fun_source_can_publish_to_multiple_platforms_same_day(self):
+        evidence = {"source_page": "https://example.test/unique.webm"}
+        (self.root / "source.json").write_text(json.dumps(evidence), encoding="utf-8")
+        payload = json.loads(self.queue_path.read_text(encoding="utf-8"))
+        payload["items"][0].update({
+            "category": "contenido_divertido",
+            "license_evidence_path": "source.json",
+        })
+        second = {**payload["items"][0], "content_id": "content-2"}
+        payload["items"].append(second)
+        self.queue_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        queue = load_queue(self.queue_path)
+        now = datetime(2026, 8, 3, 18, 0, tzinfo=timezone.utc)
+
+        self.assertEqual(len(due_items(queue, {"items": {}}, now=now)), 2)
+        self.assertEqual(queue["repeat_guard"]["blocked_items"], 0)
+
     def test_one_failed_item_does_not_block_later_due_items(self):
         payload = json.loads(self.queue_path.read_text(encoding="utf-8"))
         second = {**payload["items"][0], "content_id": "content-2"}

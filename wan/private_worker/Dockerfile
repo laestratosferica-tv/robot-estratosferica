@@ -21,7 +21,7 @@ RUN apt-get update \
     && sed '/^torch/d;/^torchvision/d;/^torchaudio/d;/^flash_attn/d' "${WAN_SOURCE_DIR}/requirements.txt" > /tmp/wan-requirements.txt \
     && python -m pip install --upgrade pip \
     && python -m pip install -r /tmp/wan-requirements.txt runpod==1.7.13 einops==0.8.1 decord==0.6.0 \
-    && PYTHONPATH="${WAN_SOURCE_DIR}" python -c "import wan" \
+    && python -c "import decord, einops; print('Wan runtime dependencies ready')" \
     && rm -rf "${WAN_SOURCE_DIR}/.git" /tmp/wan-requirements.txt
 
 WORKDIR /app

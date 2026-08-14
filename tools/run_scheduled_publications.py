@@ -49,6 +49,7 @@ def load_queue(path: Path) -> dict[str, Any]:
     if not isinstance(items, list):
         raise ValueError("queue_items_invalid")
     seen: set[str] = set()
+    fun_sources: dict[str, set[str]] = {}
     for item in items:
         content_id = str(item.get("content_id", "")).strip()
         if not content_id or content_id in seen:
@@ -69,6 +70,31 @@ def load_queue(path: Path) -> dict[str, Any]:
                 raise ValueError("commercial_publication_checks_incomplete")
             if not str(item.get("resolver_evidence_path", "")).strip():
                 raise ValueError("commercial_resolver_evidence_missing")
+        if item.get("category") == "contenido_divertido" and item.get("enabled", True):
+            repository_root = path.parent.parent if path.parent.name == "config" else path.parent
+            evidence_path = repository_root / str(item.get("license_evidence_path", ""))
+            if not evidence_path.is_file():
+                raise ValueError("fun_content_license_evidence_missing")
+            evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+            source = str(evidence.get("source_page", "")).strip()
+            if not source:
+                raise ValueError("fun_content_source_page_missing")
+            publish_day = parse_time(str(item["publish_at"])).date().isoformat()
+            fun_sources.setdefault(source, set()).add(publish_day)
+            item["_fun_source_page"] = source
+
+    repeated_sources = {
+        source for source, publish_days in fun_sources.items() if len(publish_days) > 1
+    }
+    for item in items:
+        if item.get("_fun_source_page") in repeated_sources:
+            item["_blocked_by_repeat_guard"] = True
+    queue["repeat_guard"] = {
+        "blocked_sources": sorted(repeated_sources),
+        "blocked_items": sum(
+            1 for item in items if item.get("_blocked_by_repeat_guard") is True
+        ),
+    }
     return queue
 
 
@@ -122,6 +148,7 @@ def due_items(
         item
         for item in queue["items"]
         if item.get("enabled", True)
+        and item.get("_blocked_by_repeat_guard") is not True
         and parse_time(item["publish_at"]) <= now
         and completed.get(item["content_id"], {}).get("status")
         not in {"publishing", "published"}
@@ -239,6 +266,7 @@ def execute_queue(
         "due_count": len(selected),
         "results": [],
         "failed_count": 0,
+        "repeat_guard": queue.get("repeat_guard", {}),
         "secret_values_exposed": False,
     }
     for item in selected:

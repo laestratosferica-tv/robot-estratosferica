@@ -57,7 +57,9 @@ jobs:
           if [[ "$EVENT_NAME" == "schedule" || "$MANUAL_LIVE" == "true" ]]; then
             args+=(--live)
           fi
-          python tools/run_scheduled_publications.py "${args[@]}"
+          # Procesa toda la parrilla vencida para que fallos históricos no
+          # bloqueen piezas nuevas aprobadas que vencen en la misma ejecución.
+          python tools/run_scheduled_publications.py "${args[@]}" --max-items 100
       - uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:

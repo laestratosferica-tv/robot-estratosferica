@@ -21,7 +21,8 @@ RUN apt-get update \
     && sed '/^torch/d;/^torchvision/d;/^torchaudio/d;/^flash_attn/d' "${WAN_SOURCE_DIR}/requirements.txt" > /tmp/wan-requirements.txt \
     && python -m pip install --upgrade pip \
     && python -m pip install -r /tmp/wan-requirements.txt runpod==1.7.13 einops==0.8.1 decord==0.6.0 librosa==0.11.0 peft==0.17.1 \
-    && python -c "import decord, einops, librosa, peft; print('Wan runtime dependencies ready')" \
+    && python -m pip install "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3.post1/flash_attn-2.8.3.post1%2Bcu12torch2.5cxx11abiFALSE-cp311-cp311-linux_x86_64.whl" \
+    && python -c "import decord, einops, librosa, peft, flash_attn; print('Wan GPU runtime dependencies ready')" \
     && rm -rf "${WAN_SOURCE_DIR}/.git" /tmp/wan-requirements.txt
 
 WORKDIR /app

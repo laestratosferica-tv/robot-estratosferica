@@ -20,7 +20,7 @@ RUN apt-get update \
     && test "$(git -C "${WAN_SOURCE_DIR}" rev-parse HEAD)" = "${WAN_REVISION}" \
     && sed '/^torch/d;/^torchvision/d;/^torchaudio/d;/^flash_attn/d' "${WAN_SOURCE_DIR}/requirements.txt" > /tmp/wan-requirements.txt \
     && python -m pip install --upgrade pip \
-    && python -m pip install -r /tmp/wan-requirements.txt runpod==1.7.13 \
+    && python -m pip install -r /tmp/wan-requirements.txt runpod==1.7.13 einops==0.8.1 \
     && rm -rf "${WAN_SOURCE_DIR}/.git" /tmp/wan-requirements.txt
 
 WORKDIR /app

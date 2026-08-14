@@ -1933,6 +1933,46 @@
       "category": "contenido_divertido",
       "category_label": "Contenido divertido",
       "license_evidence_path": "artifacts/approved/scheduled/contenido_divertido-2026-08/2026-08-17-rebote-imprevisto/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "nova-gamescom-2026-08-14-instagram",
+      "manifest_path": "artifacts/publication-manifests/nova-gamescom-2026-08-14-instagram.json",
+      "approval_id": "nova-gamescom-approved-2026-08-14-instagram",
+      "publish_at": "2026-08-14T19:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "category": "novedades_y_lanzamientos",
+      "category_label": "Novedades y lanzamientos"
+    },
+    {
+      "content_id": "nova-gamescom-2026-08-14-facebook",
+      "manifest_path": "artifacts/publication-manifests/nova-gamescom-2026-08-14-facebook.json",
+      "approval_id": "nova-gamescom-approved-2026-08-14-facebook",
+      "publish_at": "2026-08-14T19:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "category": "novedades_y_lanzamientos",
+      "category_label": "Novedades y lanzamientos"
+    },
+    {
+      "content_id": "nova-gamescom-2026-08-14-threads",
+      "manifest_path": "artifacts/publication-manifests/nova-gamescom-2026-08-14-threads.json",
+      "approval_id": "nova-gamescom-approved-2026-08-14-threads",
+      "publish_at": "2026-08-14T19:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "category": "novedades_y_lanzamientos",
+      "category_label": "Novedades y lanzamientos"
+    },
+    {
+      "content_id": "nova-gamescom-2026-08-14-youtube",
+      "manifest_path": "artifacts/publication-manifests/nova-gamescom-2026-08-14-youtube.json",
+      "approval_id": "nova-gamescom-approved-2026-08-14-youtube",
+      "publish_at": "2026-08-14T19:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "category": "novedades_y_lanzamientos",
+      "category_label": "Novedades y lanzamientos"
     }
   ]
 }

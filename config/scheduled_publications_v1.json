@@ -2021,6 +2021,50 @@
       "category": "opinion_comunidad_cultura_digital",
       "category_label": "Humor gamer con personaje",
       "license_evidence_path": "artifacts/approved/scheduled/joseverso-2026-08/2026-08-17-amistad-en-terapia/SOURCE_AND_LICENSE.json"
+    },
+    {
+      "content_id": "rami-townfall-instagram-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/rami-townfall-instagram-2026-08-18.json",
+      "approval_id": "rami-townfall-instagram-2026-08-18",
+      "publish_at": "2026-08-18T21:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-led-rami-v1",
+      "category": "horror_gaming",
+      "category_label": "Rami — relatos y horror gamer"
+    },
+    {
+      "content_id": "rami-townfall-facebook-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/rami-townfall-facebook-2026-08-18.json",
+      "approval_id": "rami-townfall-facebook-2026-08-18",
+      "publish_at": "2026-08-18T21:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-led-rami-v1",
+      "category": "horror_gaming",
+      "category_label": "Rami — relatos y horror gamer"
+    },
+    {
+      "content_id": "rami-townfall-threads-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/rami-townfall-threads-2026-08-18.json",
+      "approval_id": "rami-townfall-threads-2026-08-18",
+      "publish_at": "2026-08-18T21:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-led-rami-v1",
+      "category": "horror_gaming",
+      "category_label": "Rami — relatos y horror gamer"
+    },
+    {
+      "content_id": "rami-townfall-youtube-2026-08-18",
+      "manifest_path": "artifacts/publication-manifests/rami-townfall-youtube-2026-08-18.json",
+      "approval_id": "rami-townfall-youtube-2026-08-18",
+      "publish_at": "2026-08-18T21:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-led-rami-v1",
+      "category": "horror_gaming",
+      "category_label": "Rami — relatos y horror gamer"
     }
   ]
 }

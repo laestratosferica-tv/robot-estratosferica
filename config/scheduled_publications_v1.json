@@ -2109,6 +2109,50 @@
       "experiment": "character-led-rami-v1",
       "category": "lore_nostalgia_gamer",
       "category_label": "Rami — relatos y horror gamer"
+    },
+    {
+      "content_id": "haarp-coral-v8-instagram-2026-08-21",
+      "manifest_path": "artifacts/publication-manifests/haarp-coral-v8-instagram-2026-08-21.json",
+      "approval_id": "jose-luis-approved-haarp-coral-v8-instagram-2026-08-19",
+      "publish_at": "2026-08-21T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "minipodcast-coral-weekly-v1",
+      "category": "ia_tecnologia_cultura_digital",
+      "category_label": "Minipódcast coral — Joseverso, Rami y Nova"
+    },
+    {
+      "content_id": "haarp-coral-v8-facebook-2026-08-21",
+      "manifest_path": "artifacts/publication-manifests/haarp-coral-v8-facebook-2026-08-21.json",
+      "approval_id": "jose-luis-approved-haarp-coral-v8-facebook-2026-08-19",
+      "publish_at": "2026-08-21T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "minipodcast-coral-weekly-v1",
+      "category": "ia_tecnologia_cultura_digital",
+      "category_label": "Minipódcast coral — Joseverso, Rami y Nova"
+    },
+    {
+      "content_id": "haarp-coral-v8-threads-2026-08-21",
+      "manifest_path": "artifacts/publication-manifests/haarp-coral-v8-threads-2026-08-21.json",
+      "approval_id": "jose-luis-approved-haarp-coral-v8-threads-2026-08-19",
+      "publish_at": "2026-08-21T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "minipodcast-coral-weekly-v1",
+      "category": "ia_tecnologia_cultura_digital",
+      "category_label": "Minipódcast coral — Joseverso, Rami y Nova"
+    },
+    {
+      "content_id": "haarp-coral-v8-youtube-2026-08-21",
+      "manifest_path": "artifacts/publication-manifests/haarp-coral-v8-youtube-2026-08-21.json",
+      "approval_id": "jose-luis-approved-haarp-coral-v8-youtube-2026-08-19",
+      "publish_at": "2026-08-21T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "minipodcast-coral-weekly-v1",
+      "category": "ia_tecnologia_cultura_digital",
+      "category_label": "Minipódcast coral — Joseverso, Rami y Nova"
     }
   ]
 }

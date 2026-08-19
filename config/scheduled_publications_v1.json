@@ -2153,6 +2153,50 @@
       "experiment": "minipodcast-coral-weekly-v1",
       "category": "ia_tecnologia_cultura_digital",
       "category_label": "Minipódcast coral — Joseverso, Rami y Nova"
+    },
+    {
+      "content_id": "joseverso-hijo-gamer-instagram-2026-08-22",
+      "manifest_path": "artifacts/publication-manifests/joseverso-hijo-gamer-instagram-2026-08-22.json",
+      "approval_id": "jose-luis-approved-joseverso-hijo-gamer-instagram-2026-08-19",
+      "publish_at": "2026-08-22T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-human-story-joseverso-v1",
+      "category": "opinion_comunidad_cultura_digital",
+      "category_label": "Joseverso — historias humanas gamer"
+    },
+    {
+      "content_id": "joseverso-hijo-gamer-facebook-2026-08-22",
+      "manifest_path": "artifacts/publication-manifests/joseverso-hijo-gamer-facebook-2026-08-22.json",
+      "approval_id": "jose-luis-approved-joseverso-hijo-gamer-facebook-2026-08-19",
+      "publish_at": "2026-08-22T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-human-story-joseverso-v1",
+      "category": "opinion_comunidad_cultura_digital",
+      "category_label": "Joseverso — historias humanas gamer"
+    },
+    {
+      "content_id": "joseverso-hijo-gamer-threads-2026-08-22",
+      "manifest_path": "artifacts/publication-manifests/joseverso-hijo-gamer-threads-2026-08-22.json",
+      "approval_id": "jose-luis-approved-joseverso-hijo-gamer-threads-2026-08-19",
+      "publish_at": "2026-08-22T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-human-story-joseverso-v1",
+      "category": "opinion_comunidad_cultura_digital",
+      "category_label": "Joseverso — historias humanas gamer"
+    },
+    {
+      "content_id": "joseverso-hijo-gamer-youtube-2026-08-22",
+      "manifest_path": "artifacts/publication-manifests/joseverso-hijo-gamer-youtube-2026-08-22.json",
+      "approval_id": "jose-luis-approved-joseverso-hijo-gamer-youtube-2026-08-19",
+      "publish_at": "2026-08-22T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-human-story-joseverso-v1",
+      "category": "opinion_comunidad_cultura_digital",
+      "category_label": "Joseverso — historias humanas gamer"
     }
   ]
 }

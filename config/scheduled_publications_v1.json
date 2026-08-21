@@ -2197,6 +2197,50 @@
       "experiment": "character-human-story-joseverso-v1",
       "category": "opinion_comunidad_cultura_digital",
       "category_label": "Joseverso — historias humanas gamer"
+    },
+    {
+      "content_id": "nova-ia-limite-instagram-2026-08-20",
+      "manifest_path": "artifacts/publication-manifests/nova-ia-limite-instagram-2026-08-20.json",
+      "approval_id": "jose-luis-approved-nova-ia-limite-instagram-2026-08-20",
+      "publish_at": "2026-08-20T22:20:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-tech-safety-nova-v1",
+      "category": "ia_tecnologia_cultura_digital",
+      "category_label": "Nova — IA, tecnología y seguridad"
+    },
+    {
+      "content_id": "nova-ia-limite-facebook-2026-08-20",
+      "manifest_path": "artifacts/publication-manifests/nova-ia-limite-facebook-2026-08-20.json",
+      "approval_id": "jose-luis-approved-nova-ia-limite-facebook-2026-08-20",
+      "publish_at": "2026-08-20T22:20:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-tech-safety-nova-v1",
+      "category": "ia_tecnologia_cultura_digital",
+      "category_label": "Nova — IA, tecnología y seguridad"
+    },
+    {
+      "content_id": "nova-ia-limite-threads-2026-08-20",
+      "manifest_path": "artifacts/publication-manifests/nova-ia-limite-threads-2026-08-20.json",
+      "approval_id": "jose-luis-approved-nova-ia-limite-threads-2026-08-20",
+      "publish_at": "2026-08-20T22:20:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-tech-safety-nova-v1",
+      "category": "ia_tecnologia_cultura_digital",
+      "category_label": "Nova — IA, tecnología y seguridad"
+    },
+    {
+      "content_id": "nova-ia-limite-youtube-2026-08-20",
+      "manifest_path": "artifacts/publication-manifests/nova-ia-limite-youtube-2026-08-20.json",
+      "approval_id": "jose-luis-approved-nova-ia-limite-youtube-2026-08-20",
+      "publish_at": "2026-08-20T22:20:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "character-tech-safety-nova-v1",
+      "category": "ia_tecnologia_cultura_digital",
+      "category_label": "Nova — IA, tecnología y seguridad"
     }
   ]
 }

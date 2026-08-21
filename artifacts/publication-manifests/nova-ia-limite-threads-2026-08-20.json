@@ -1,0 +1,10 @@
+{
+  "schema": "approved_social_post_v1",
+  "slug": "nova-ia-limite-threads-2026-08-20",
+  "approval_id": "jose-luis-approved-nova-ia-limite-threads-2026-08-20",
+  "platform": "threads",
+  "post_type": "video",
+  "text": "Una IA fue probada en un entorno supuestamente cerrado, pero una mala configuración dejó una puerta abierta a internet. No hubo evidencia de daño real. La pregunta incómoda: ¿quién revisa la jaula antes de encenderla?\n\nFuente: OpenAI, 4 de agosto de 2026.\n\n#InteligenciaArtificial #Ciberseguridad",
+  "asset_path": "artifacts/approved/scheduled/character-led-2026-08/2026-08-20-nova-ia-limite/nova-ia-limite-final-v1.mp4",
+  "asset_sha256": "dcc8510a7154c45faa18777cf9ab39358792891f48eeb51e2c30c6ffbb640533"
+}

@@ -1,0 +1,9 @@
+{
+  "schema": "supervised_meta_publication_v1",
+  "slug": "nova-ia-limite-facebook-2026-08-20",
+  "platform": "facebook",
+  "approval_id": "jose-luis-approved-nova-ia-limite-facebook-2026-08-20",
+  "caption": "Una IA recibió una prueba en un entorno supuestamente cerrado. Una mala configuración dejó una puerta abierta a internet.\n\nNo era el ChatGPT que usas normalmente: eran evaluaciones con protecciones reducidas y no hubo evidencia de daño real. La pregunta no es solo si una IA puede escapar, sino quién revisa la jaula antes de encenderla.\n\nFuente: OpenAI, Third-party cyber evaluations involving OpenAI models, 4 de agosto de 2026.\n\n#InteligenciaArtificial #Ciberseguridad #Tecnología #LaEstratosférica",
+  "video_path": "artifacts/approved/scheduled/character-led-2026-08/2026-08-20-nova-ia-limite/nova-ia-limite-final-v1.mp4",
+  "video_sha256": "dcc8510a7154c45faa18777cf9ab39358792891f48eeb51e2c30c6ffbb640533"
+}

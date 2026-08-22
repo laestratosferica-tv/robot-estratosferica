@@ -2241,6 +2241,50 @@
       "experiment": "character-tech-safety-nova-v1",
       "category": "ia_tecnologia_cultura_digital",
       "category_label": "Nova — IA, tecnología y seguridad"
+    },
+    {
+      "content_id": "joseverso-vagancia-instagram-2026-08-25",
+      "manifest_path": "artifacts/publication-manifests/joseverso-vagancia-instagram-2026-08-25.json",
+      "approval_id": "jose-luis-approved-joseverso-vagancia-instagram-2026-08-21",
+      "publish_at": "2026-08-25T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4-gancho-tension-recompensa-joseverso-v1",
+      "category": "familia_tecnologia_cultura_digital",
+      "category_label": "Estratosférica 4.0 — familia, videojuegos y criterio"
+    },
+    {
+      "content_id": "joseverso-vagancia-facebook-2026-08-25",
+      "manifest_path": "artifacts/publication-manifests/joseverso-vagancia-facebook-2026-08-25.json",
+      "approval_id": "jose-luis-approved-joseverso-vagancia-facebook-2026-08-21",
+      "publish_at": "2026-08-25T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4-gancho-tension-recompensa-joseverso-v1",
+      "category": "familia_tecnologia_cultura_digital",
+      "category_label": "Estratosférica 4.0 — familia, videojuegos y criterio"
+    },
+    {
+      "content_id": "joseverso-vagancia-threads-2026-08-25",
+      "manifest_path": "artifacts/publication-manifests/joseverso-vagancia-threads-2026-08-25.json",
+      "approval_id": "jose-luis-approved-joseverso-vagancia-threads-2026-08-21",
+      "publish_at": "2026-08-25T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4-gancho-tension-recompensa-joseverso-v1",
+      "category": "familia_tecnologia_cultura_digital",
+      "category_label": "Estratosférica 4.0 — familia, videojuegos y criterio"
+    },
+    {
+      "content_id": "joseverso-vagancia-youtube-2026-08-25",
+      "manifest_path": "artifacts/publication-manifests/joseverso-vagancia-youtube-2026-08-25.json",
+      "approval_id": "jose-luis-approved-joseverso-vagancia-youtube-2026-08-21",
+      "publish_at": "2026-08-25T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4-gancho-tension-recompensa-joseverso-v1",
+      "category": "familia_tecnologia_cultura_digital",
+      "category_label": "Estratosférica 4.0 — familia, videojuegos y criterio"
     }
   ]
 }

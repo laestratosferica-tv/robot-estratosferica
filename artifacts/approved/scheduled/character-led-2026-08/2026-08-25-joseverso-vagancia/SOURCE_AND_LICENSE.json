@@ -1,0 +1,31 @@
+{
+  "slug": "joseverso-vagancia",
+  "asset": "joseverso-vagancia-final-v4.mp4",
+  "sha256": "44ca2c84e52f703adcf80b20b22ee017b52fe951e7b2c487b9db84dd7e5ba5f9",
+  "duration_seconds": 23.381016,
+  "resolution": "1080x1920",
+  "character": "Joseverso",
+  "character_authorization": "Identidad virtual autorizada y bloqueada por el proyecto",
+  "visual_origin": "Composición original de La Estratosférica con imágenes voxel originales generadas para la pieza; sin gameplay ni clips de terceros",
+  "voice_origin": "Voz autorizada y bloqueada de Joseverso",
+  "editorial_claim": "Los videojuegos pueden involucrar estrategia, creatividad y práctica ante la frustración; la evaluación familiar debe considerar si desplazan sueño, movimiento, responsabilidades o convivencia y si el menor puede detener el juego",
+  "editorial_sources": [
+    {
+      "title": "The Family Media Plan",
+      "publisher": "American Academy of Pediatrics",
+      "url": "https://publications.aap.org/pediatrics/article/154/6/e2024067417/199968/The-Family-Media-Plan"
+    },
+    {
+      "title": "Digital Ecosystems, Children, and Adolescents: Policy Statement",
+      "publisher": "American Academy of Pediatrics",
+      "url": "https://publications.aap.org/pediatrics/article/157/2/e2025075320/206129/Digital-Ecosystems-Children-and-Adolescents-Policy"
+    },
+    {
+      "title": "Therapeutic and Preventive Use of Video Games in Child and Adolescent Psychiatry: A Systematic Review",
+      "publisher": "Frontiers in Psychiatry",
+      "url": "https://doi.org/10.3389/fpsyt.2020.00036"
+    }
+  ],
+  "claim_limits": "La pieza no diagnostica adicción, no prescribe un límite universal de tiempo y usa lenguaje condicional",
+  "publication_approval": "Aprobación expresa del director en Codex el 21 de agosto de 2026 para publicación simultánea el 25 de agosto de 2026 a las 20:00 America/Bogota"
+}

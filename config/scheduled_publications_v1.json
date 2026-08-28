@@ -2197,6 +2197,50 @@
       "experiment": "character-human-story-joseverso-v1",
       "category": "opinion_comunidad_cultura_digital",
       "category_label": "Joseverso — historias humanas gamer"
+    },
+    {
+      "content_id": "joseverso-tdah-instagram-2026-09-05",
+      "manifest_path": "artifacts/publication-manifests/joseverso-tdah-instagram-2026-09-05.json",
+      "approval_id": "jose-luis-approved-joseverso-tdah-instagram-2026-08-28",
+      "publish_at": "2026-09-05T19:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-familia-tdah-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — familia, videojuegos y criterio"
+    },
+    {
+      "content_id": "joseverso-tdah-facebook-2026-09-05",
+      "manifest_path": "artifacts/publication-manifests/joseverso-tdah-facebook-2026-09-05.json",
+      "approval_id": "jose-luis-approved-joseverso-tdah-facebook-2026-08-28",
+      "publish_at": "2026-09-05T19:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-familia-tdah-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — familia, videojuegos y criterio"
+    },
+    {
+      "content_id": "joseverso-tdah-threads-2026-09-05",
+      "manifest_path": "artifacts/publication-manifests/joseverso-tdah-threads-2026-09-05.json",
+      "approval_id": "jose-luis-approved-joseverso-tdah-threads-2026-08-28",
+      "publish_at": "2026-09-05T19:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-familia-tdah-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — familia, videojuegos y criterio"
+    },
+    {
+      "content_id": "joseverso-tdah-youtube-2026-09-05",
+      "manifest_path": "artifacts/publication-manifests/joseverso-tdah-youtube-2026-09-05.json",
+      "approval_id": "jose-luis-approved-joseverso-tdah-youtube-2026-08-28",
+      "publish_at": "2026-09-05T19:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-familia-tdah-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — familia, videojuegos y criterio"
     }
   ]
 }

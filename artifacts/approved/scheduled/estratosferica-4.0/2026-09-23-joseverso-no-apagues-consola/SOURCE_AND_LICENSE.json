@@ -1,0 +1,29 @@
+{
+  "publishing_enabled": false,
+  "status": "private_review",
+  "avatar": {
+    "provider": "HeyGen",
+    "look_id": "63b998e85db94d2fb84797eb2a3fc1f0",
+    "voice_id": "7f413ee4ac6f43818b58bb7cb08e8616"
+  },
+  "stock_video": [
+    {
+      "file": "controller-macro-pexels-8128417.mp4",
+      "creator": "Alena Darmel",
+      "source": "https://www.pexels.com/video/close-up-video-of-a-game-controller-8128417/",
+      "license_page": "https://www.pexels.com/license/"
+    },
+    {
+      "file": "mother-son-pexels-10103782.mp4",
+      "creator": "Jonathan R. Holeton",
+      "source": "https://www.pexels.com/video/mother-talking-to-son-playing-video-games-10103782/",
+      "license_page": "https://www.pexels.com/license/"
+    },
+    {
+      "file": "father-son-pexels-6557556.mp4",
+      "creator": "cottonbro studio",
+      "source": "https://www.pexels.com/video/a-father-and-son-playing-video-game-6557556/",
+      "license_page": "https://www.pexels.com/license/"
+    }
+  ]
+}

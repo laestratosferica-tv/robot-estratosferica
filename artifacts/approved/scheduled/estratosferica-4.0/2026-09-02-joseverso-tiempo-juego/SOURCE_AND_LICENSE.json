@@ -1,0 +1,23 @@
+{
+  "publication_enabled": false,
+  "avatar": {
+    "provider": "HeyGen",
+    "identity_group_id": "937607685dc64f73a3a3eaa7ee847e98",
+    "look_id": "22650bf0d2884f2cb6a5ebab00c8ea3a",
+    "voice_id": "7f413ee4ac6f43818b58bb7cb08e8616"
+  },
+  "stock": [
+    {"file": "child-gaming-pc-7047265.mp4", "source": "https://www.pexels.com/video/a-child-playing-on-a-computer-7047265/", "creator": "Tima Miroshnichenko", "license": "Pexels License"},
+    {"file": "kids-pc-8174316.mp4", "source": "https://www.pexels.com/video/a-little-boy-playing-a-video-game-on-a-pc-8174316/", "creator": "Kampus Production", "license": "Pexels License"},
+    {"file": "kids-handheld-8681321.mp4", "source": "https://www.pexels.com/video/kids-playing-a-gaming-console-8681321/", "creator": "Ron Lach", "license": "Pexels License"},
+    {"file": "father-son-console-6557564.mp4", "source": "https://www.pexels.com/video/father-and-son-playing-video-games-6557564/", "creator": "cottonbro studio", "license": "Pexels License"},
+    {"file": "father-son-pc-6157310.mp4", "source": "https://www.pexels.com/video/dad-and-son-playing-a-computer-game-6157310/", "creator": "KoolShooters", "license": "Pexels License"},
+    {"file": "family-meal-pexels-8051382.mp4", "source": "https://www.pexels.com/video/a-family-having-a-conversation-over-a-meal-8051382/", "creator": "Annushka Ahuja", "license": "Pexels License"},
+    {"file": "homework-pexels-5301812.mp4", "source": "https://www.pexels.com/video/boy-doing-his-homeworks-5301812/", "creator": "Tima Miroshnichenko", "license": "Pexels License"},
+    {"file": "sleep-pexels-8375468.mp4", "source": "https://www.pexels.com/video/a-kid-sleeping-on-the-bed-8375468/", "creator": "Tima Miroshnichenko", "license": "Pexels License"},
+    {"file": "soccer-pexels-4961524.mp4", "source": "https://www.pexels.com/video/man-playing-with-kid-4961524/", "creator": "Ketut Subiyanto", "license": "Pexels License"},
+    {"file": "controller-macro-pexels-8128417.mp4", "source": "reused from joseverso-no-apagues-consola-v1", "license": "Pexels License"}
+  ],
+  "audio": "Original dialogue plus procedurally generated low pulse and impacts.",
+  "notes": "Private review master. No publishing workflow enabled."
+}

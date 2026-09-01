@@ -1,0 +1,30 @@
+{
+  "schema": "estratosferica_source_and_license_v1",
+  "status": "approved_for_scheduled_publication",
+  "approval_id": "jose-luis-approved-joseverso-pasion-adiccion-2026-09-01",
+  "final_asset": "joseverso-pasion-o-adiccion-final-v1.mp4",
+  "final_sha256": "123398337ef25227b349c35285d277a70d99d8c3c131f7562e6bbbac9cfa2a43",
+  "audiovisual_sources": [
+    {
+      "source_page": "https://www.pexels.com/video/man-gaming-on-computer-at-night-10620280/",
+      "creator": "Artem Shutkin",
+      "license": "Pexels License"
+    },
+    {
+      "source_page": "https://www.pexels.com/video/a-father-and-son-playing-a-video-game-4554228/",
+      "creator": "Ketut Subiyanto",
+      "license": "Pexels License"
+    },
+    {
+      "source_page": "https://www.pexels.com/video/teenagers-playing-basketball-on-outdoor-court-29117387/",
+      "creator": "Paul Bill",
+      "license": "Pexels License"
+    }
+  ],
+  "scientific_sources": [
+    "https://www.who.int/standards/classifications/frequently-asked-questions/gaming-disorder",
+    "https://www.psychiatry.org/news-room/apa-blogs/gaming-and-mental-health-internet-gaming",
+    "https://www.psychiatry.org/patients-families/internet-gaming"
+  ],
+  "editorial_note": "Contenido informativo; no diagnostica. Ante deterioro persistente se recomienda consulta profesional."
+}

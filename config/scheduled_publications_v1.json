@@ -2417,6 +2417,50 @@
       "experiment": "estratosferica-4.0-familia-limites-v1",
       "category": "familia_tecnologia_bienestar",
       "category_label": "Joseverso — familia, videojuegos y criterio"
+    },
+    {
+      "content_id": "joseverso-pasion-adiccion-instagram-2026-10-03",
+      "manifest_path": "artifacts/publication-manifests/joseverso-pasion-adiccion-instagram-2026-10-03.json",
+      "approval_id": "jose-luis-approved-joseverso-pasion-adiccion-2026-09-01",
+      "publish_at": "2026-10-03T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-familia-pasion-adiccion-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — familia, videojuegos y criterio"
+    },
+    {
+      "content_id": "joseverso-pasion-adiccion-facebook-2026-10-03",
+      "manifest_path": "artifacts/publication-manifests/joseverso-pasion-adiccion-facebook-2026-10-03.json",
+      "approval_id": "jose-luis-approved-joseverso-pasion-adiccion-2026-09-01",
+      "publish_at": "2026-10-03T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-familia-pasion-adiccion-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — familia, videojuegos y criterio"
+    },
+    {
+      "content_id": "joseverso-pasion-adiccion-threads-2026-10-03",
+      "manifest_path": "artifacts/publication-manifests/joseverso-pasion-adiccion-threads-2026-10-03.json",
+      "approval_id": "jose-luis-approved-joseverso-pasion-adiccion-2026-09-01",
+      "publish_at": "2026-10-03T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-familia-pasion-adiccion-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — familia, videojuegos y criterio"
+    },
+    {
+      "content_id": "joseverso-pasion-adiccion-youtube-2026-10-03",
+      "manifest_path": "artifacts/publication-manifests/joseverso-pasion-adiccion-youtube-2026-10-03.json",
+      "approval_id": "jose-luis-approved-joseverso-pasion-adiccion-2026-09-01",
+      "publish_at": "2026-10-03T20:00:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-familia-pasion-adiccion-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — familia, videojuegos y criterio"
     }
   ]
 }

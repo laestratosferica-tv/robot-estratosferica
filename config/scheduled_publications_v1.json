@@ -2461,6 +2461,50 @@
       "experiment": "estratosferica-4.0-familia-pasion-adiccion-v1",
       "category": "familia_tecnologia_bienestar",
       "category_label": "Joseverso — familia, videojuegos y criterio"
+    },
+    {
+      "content_id": "joseverso-videojuego-vida-real-instagram-2026-09-06",
+      "manifest_path": "artifacts/publication-manifests/joseverso-videojuego-vida-real-instagram-2026-09-06.json",
+      "approval_id": "jose-luis-approved-joseverso-videojuego-vida-real-2026-09-03",
+      "publish_at": "2026-09-06T19:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-juego-vida-real-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — del juego a la vida real"
+    },
+    {
+      "content_id": "joseverso-videojuego-vida-real-facebook-2026-09-06",
+      "manifest_path": "artifacts/publication-manifests/joseverso-videojuego-vida-real-facebook-2026-09-06.json",
+      "approval_id": "jose-luis-approved-joseverso-videojuego-vida-real-2026-09-03",
+      "publish_at": "2026-09-06T19:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-juego-vida-real-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — del juego a la vida real"
+    },
+    {
+      "content_id": "joseverso-videojuego-vida-real-threads-2026-09-06",
+      "manifest_path": "artifacts/publication-manifests/joseverso-videojuego-vida-real-threads-2026-09-06.json",
+      "approval_id": "jose-luis-approved-joseverso-videojuego-vida-real-2026-09-03",
+      "publish_at": "2026-09-06T19:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-juego-vida-real-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — del juego a la vida real"
+    },
+    {
+      "content_id": "joseverso-videojuego-vida-real-youtube-2026-09-06",
+      "manifest_path": "artifacts/publication-manifests/joseverso-videojuego-vida-real-youtube-2026-09-06.json",
+      "approval_id": "jose-luis-approved-joseverso-videojuego-vida-real-2026-09-03",
+      "publish_at": "2026-09-06T19:30:00-05:00",
+      "status": "approved",
+      "enabled": true,
+      "experiment": "estratosferica-4.0-juego-vida-real-v1",
+      "category": "familia_tecnologia_bienestar",
+      "category_label": "Joseverso — del juego a la vida real"
     }
   ]
 }

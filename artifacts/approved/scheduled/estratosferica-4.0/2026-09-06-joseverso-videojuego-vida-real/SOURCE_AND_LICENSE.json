@@ -1,0 +1,27 @@
+{
+  "schema": "estratosferica_source_evidence_v1",
+  "asset_sha256": "15764da5937aec7ec1d56125f253057b4ddaba21e961603fa5bae1dd9fd6158e",
+  "approval_id": "jose-luis-approved-joseverso-videojuego-vida-real-2026-09-03",
+  "approved_on": "2026-09-03",
+  "editorial_use": "Citas audiovisuales oficiales breves, mudas, transformadas y subordinadas al análisis narrado por Joseverso.",
+  "sources": [
+    {
+      "publisher": "Minecraft",
+      "url": "https://www.youtube.com/watch?v=qNMfF9TYETM",
+      "use": "Referencia visual breve sobre construcción y planificación.",
+      "rights_basis": "Cita audiovisual editorial transformada; no se presenta como material propio."
+    },
+    {
+      "publisher": "Fortnite",
+      "url": "https://www.youtube.com/watch?v=Tv2zM8jI4gU",
+      "use": "Referencia visual breve sobre lectura de equipo y decisiones bajo presión.",
+      "rights_basis": "Cita audiovisual editorial transformada; no se presenta como material propio."
+    },
+    {
+      "publisher": "EA SPORTS FC",
+      "url": "https://www.youtube.com/watch?v=XhP3Xh4LMA8",
+      "use": "Referencia visual breve sobre estrategia deportiva y repetición.",
+      "rights_basis": "Cita audiovisual editorial transformada; no se presenta como material propio."
+    }
+  ]
+}
